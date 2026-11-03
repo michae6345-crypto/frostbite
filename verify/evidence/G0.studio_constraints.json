@@ -1,0 +1,44 @@
+{
+  "check": "G0.studio_constraints",
+  "gate": "G0",
+  "title": "Studio unit tests: node studio/test/constraints.test.js",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "node",
+        "test/constraints.test.js"
+      ],
+      "cwd": "~/Documents/frostbite/verify/.cache/work/studio_copy",
+      "exit_code": 0,
+      "duration_s": 0.06,
+      "stdout_tail": [
+        "presets: 37; preset warning codes seen: clear-caps, few-commands, graphite-not-kit, icon-caps, insert-boss, led-count, smoke-glow, xda-not-kit",
+        "rules: bad-value, not-printed, pins, pcb-size, shell-size, shell-height, oled-count, glow-gap-plate, screws-top-bezel, deep-dish-bezel, corner-clip, switches-extra, encoders-extra, smoke-glow, clear-caps, led-count, xda-not-kit, graphite-not-kit, icon-caps, thin-tilt, side-screws-thin, insert-boss, few-commands, wordmark-empty, wordmark-long",
+        "default stats: {\"pins\":11,\"pinsMax\":11,\"switches\":9,\"encoders\":1,\"leds\":13,\"ledsKit\":16,\"oled\":1,\"pcb\":{\"w\":61.2,\"h\":83.2},\"shell\":{\"w\":75.2,\"h\":97.2,\"height\":43.4},\"agentKeys\":6,\"commandKeys\":3}",
+        "",
+        "All 57048 assertions passed."
+      ],
+      "stderr_tail": []
+    }
+  ],
+  "inputs_sha256": {
+    "studio/app.js": "9b9a4d8716406d13f8f6f6b354fcddc7c4d7b1cbd863f783466859ec29537fbc",
+    "studio/catalog.js": "d6447da292a036cb21c4b7589803dd1b16ae9db3851265a91448559cfee57eb9",
+    "studio/constraints.js": "a1cb8daf0f1e83922e25b2a72411cbea2b2e51f6c0cfb7b949beb06e17da6403",
+    "studio/dims.js": "1ba219362756dc58a8a52eda753f8c91cc0c4ea2822699fe77d0a14a1927ac9c",
+    "studio/layouts.js": "d07cc0019ffb93eb64cd6e7d6c90a2c406b73facc6af907d088fcd409f503221",
+    "studio/render-side.js": "c6a0da54bdfe4138bc7db7a23e37c5ad211544a0c0c7bf7150e7faf3b1cc3669",
+    "studio/render-top.js": "6ebe46d3912d8bb91e673dc08021e7a5ac0f0516cc8fe312c7ba74ac087eb9f4",
+    "studio/test/constraints.test.js": "aa35399475ab7f4f3b3b0f33880b6dcb04cdfe17d0760b0b220355a6690b1aa7",
+    "studio/tools/export-images.js": "c694b32c73b53a93be05bd8246ccf83c69fae0805c54b730798d8e435c973412",
+    "studio/tools/export-media.js": "5888b50f9fbb33248d5422eb45842e9334b179c7a5c2b4c337a717fde37d8324",
+    "studio/verify/run.js": "f6a823e3ed1bf2f54762ce3fd5ce591c9e19718be76c38838c8d74fbc865c438"
+  },
+  "details": {},
+  "timestamp": "2026-11-03T20:22:02+00:00",
+  "duration_s": 0.06
+}

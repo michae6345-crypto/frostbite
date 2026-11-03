@@ -1,0 +1,488 @@
+<title>Agent Pad Permutations</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a hardware design-review sheet. Configurator up top, then every layout in the chosen finish, renders, and sources. */
+:root {
+  --bg: #eceeec;
+  --panel: #f7f8f7;
+  --ink: #15181a;
+  --muted: #5b6467;
+  --line: #cfd5d4;
+  --accent: #0b8577;
+  --accent-ink: #ffffff;
+  --stage: #dfe3e2;
+  --warn: #a35a00;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1113; --panel: #161a1d; --ink: #e5e9e8; --muted: #8e989b; --line: #283035;
+    --accent: #3fd6c2; --accent-ink: #062521; --stage: #1b2024; --warn: #f0a640; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1113; --panel: #161a1d; --ink: #e5e9e8; --muted: #8e989b; --line: #283035;
+  --accent: #3fd6c2; --accent-ink: #062521; --stage: #1b2024; --warn: #f0a640; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 44px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 50px); font-stretch: 72%; font-weight: 800; letter-spacing: -0.01em; line-height: 1.02; }
+h2 { font-size: 22px; font-stretch: 80%; font-weight: 750; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; }
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+header { display: grid; gap: 14px; }
+header p.lede { max-width: 66ch; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; background: var(--panel); }
+section { display: grid; gap: 16px; }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+
+.config { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 860px) { .config { grid-template-columns: 1fr; } }
+.stage { background: var(--stage); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.stage .top svg { width: 100%; height: auto; max-height: 470px; display: block; }
+.stage .side svg { width: 100%; height: auto; display: block; }
+.stage-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.controls { display: grid; gap: 18px; align-content: start; min-width: 0; }
+.group { display: grid; gap: 8px; }
+.opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.opt:hover { border-color: var(--muted); }
+.opt[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.opt:focus-visible, .btn:focus-visible, .thumb:focus-visible, .load:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(0,0,0,.25); display: inline-block; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { font: inherit; font-weight: 650; font-size: 14px; padding: 9px 14px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.readout { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 14px; display: grid; gap: 12px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pins { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+.pin { height: 22px; border-radius: 2px; font-family: var(--mono); font-size: 10px; display: grid; place-items: center; color: #fff; }
+.pin.spare { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.buy { margin: 0; padding-left: 18px; font-size: 13px; display: grid; gap: 2px; }
+.note { font-size: 13px; color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.thumb { all: unset; cursor: pointer; background: var(--stage); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+.thumb[aria-current="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.thumb svg { width: 100%; height: 170px; display: block; }
+.thumb .t-name { font-weight: 700; font-size: 14px; }
+.thumb .t-spec { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.renders { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.render { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
+.render img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; background: var(--stage); }
+.render .body { padding: 12px 14px 14px; display: grid; gap: 6px; align-content: start; }
+.render .combo { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.render .caveat { font-size: 12px; color: var(--warn); }
+.load { font: inherit; font-size: 12px; justify-self: start; margin-top: 4px; padding: 4px 9px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+
+.insp { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.insp a { color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; background: var(--panel); display: grid; gap: 4px; }
+.insp a:hover { border-color: var(--muted); }
+.insp .who { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.insp .took { font-size: 13px; }
+.insp .took b { color: var(--accent); font-weight: 650; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">Hackpad · Stardance · design exploration</span>
+    <h1>Agent Pad permutations</h1>
+    <p class="lede">A status macropad for watching training runs, worked through 8 layouts, 6 finishes and 6 case forms: 288 combinations. Every layout fits the 11 pins on the XIAO RP2040 and the kit's parts. Pick a combination below or hit shuffle. Drawings are to scale in millimetres.</p>
+    <div class="chips">
+      <span class="chip">PCB ≤ 100 × 100 mm</span>
+      <span class="chip">2-layer</span>
+      <span class="chip">case ≤ 200 × 200 × 100</span>
+      <span class="chip">3D printed only</span>
+      <span class="chip">XIAO RP2040 · 11 GPIO</span>
+      <span class="chip">kit: 16 switches · 2 EC11 · 1 OLED · 16 SK6812</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="cfg-h">
+    <div class="sec-head"><h2 id="cfg-h">Configurator</h2><span class="label" id="combo-code">—</span></div>
+    <div class="config">
+      <div class="stage">
+        <div class="stage-meta"><span class="label">Top view</span><span class="label mono" id="dims">—</span></div>
+        <div class="top" id="top"></div>
+        <div class="stage-meta"><span class="label">Side profile · front on the left</span></div>
+        <div class="side" id="side"></div>
+      </div>
+      <div class="controls">
+        <div class="group"><span class="label">Layout</span><div class="opts" id="opt-layout" role="group" aria-label="Layout"></div><p class="note" id="layout-blurb"></p></div>
+        <div class="group"><span class="label">Finish</span><div class="opts" id="opt-finish" role="group" aria-label="Finish"></div></div>
+        <div class="group"><span class="label">Case form</span><div class="opts" id="opt-form" role="group" aria-label="Case form"></div></div>
+        <div class="row">
+          <button class="btn" id="shuffle" type="button">Shuffle</button>
+          <button class="btn ghost" id="animate" type="button" aria-pressed="false">Simulate runs</button>
+        </div>
+        <div class="readout">
+          <dl class="kv" id="kv"></dl>
+          <div class="group">
+            <span class="label">Pin budget</span>
+            <div class="pins" id="pins"></div>
+            <div class="legend" id="pin-legend"></div>
+          </div>
+          <div class="group">
+            <span class="label">Buy on top of the kit</span>
+            <ul class="buy" id="buy"></ul>
+          </div>
+        </div>
+        <div class="legend" id="status-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="all-h">
+    <div class="sec-head"><h2 id="all-h">Every layout in this finish</h2><span class="label" id="all-sub">—</span></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section aria-labelledby="rend-h">
+    <div class="sec-head"><h2 id="rend-h">AI concept renders</h2><span class="label">mood only · key counts can be off</span></div>
+    <div class="renders" id="renders"></div>
+  </section>
+
+  <section aria-labelledby="insp-h">
+    <div class="sec-head"><h2 id="insp-h">Where the ideas came from</h2><span class="label">gallery + web</span></div>
+    <div class="insp" id="insp"></div>
+  </section>
+</div>
+
+<script>
+const P = 19.05, CAP = 18;
+const STATUS = {
+  idle:  { c: "#eef2f5", n: "Idle" },
+  run:   { c: "#3d8bff", n: "Running" },
+  done:  { c: "#2fbf5b", n: "Done" },
+  needs: { c: "#ffb020", n: "Needs you" },
+  error: { c: "#ff4d4f", n: "Error / NaN" }
+};
+const PATTERN = ["run", "done", "run", "needs", "idle", "error", "run", "done"];
+const PIN_COLORS = { matrix: "#5b6cff", dial: "#e0703a", oled: "#2aa198", led: "#c03fbf" };
+
+function grid(cols, rows, x0, y0, typeFn, skip) {
+  const out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (skip && skip(c, r)) continue;
+    out.push({ x: x0 + c * P, y: y0 + r * P, t: typeFn(c, r) });
+  }
+  return out;
+}
+const W3 = 3 * P, W4 = 4 * P, STRIP = 22;
+
+const LAYOUTS = [
+  { id: "stratum", name: "Stratum 9", blurb: "Stratum's 3×3 with the OLED and dial up top. Six agent keys, three command keys. Uses every pin.",
+    W: W3, H: STRIP + 3 * P, strip: STRIP,
+    keys: grid(3, 3, 0, STRIP, (c, r) => r < 2 ? "a" : "c"),
+    dials: [{ x: W3 - 10, y: 11 }], oled: { x: 0, y: 5, w: 32, h: 12 },
+    pins: { matrix: 6, dial: 2, oled: 2, led: 1 }, matrix: "3×3", push: false },
+  { id: "twin", name: "Twin dial", blurb: "Same 3×3, but the OLED is swapped for the kit's second encoder. One dial scrubs runs, the other sets volume or brightness.",
+    W: W3, H: STRIP + 3 * P, strip: STRIP,
+    keys: grid(3, 3, 0, STRIP, (c, r) => r < 2 ? "a" : "c"),
+    dials: [{ x: 10, y: 11 }, { x: W3 - 10, y: 11 }], oled: null,
+    pins: { matrix: 6, dial: 4, oled: 0, led: 1 }, matrix: "3×3", push: false },
+  { id: "codex12", name: "Codex 12", blurb: "6 agent keys over 6 command keys with a side dial. Closest to the Codex Micro's 6 + 6 split. No room left for the OLED.",
+    W: W3 + 24, H: 4 * P + 3, strip: 0,
+    keys: grid(3, 2, 0, 0, () => "a").concat(grid(3, 2, 0, 2 * P + 3, () => "c")),
+    dials: [{ x: W3 + 12, y: P / 2 + 2 }], oled: null,
+    pins: { matrix: 8, dial: 2, oled: 0, led: 1 }, matrix: "4×4 (13 used)", push: true },
+  { id: "deck", name: "Wide deck", blurb: "Landscape. A control column on the left holds the OLED and dial, with a 2×3 block of agent keys beside it. Sits flat in front of a laptop.",
+    W: 36 + W3, H: 2 * P, strip: 0, leftPanel: 36,
+    keys: grid(3, 2, 36, 0, () => "a"),
+    dials: [{ x: 17, y: 27 }], oled: { x: 1, y: 0, w: 32, h: 12 },
+    pins: { matrix: 6, dial: 2, oled: 2, led: 1 }, matrix: "2×4 (7 used)", push: true },
+  { id: "pocket", name: "Pocket 6", blurb: "Just the 6 agent keys under an OLED and dial. The smallest and cleanest. The dial press works as a seventh key.",
+    W: W3, H: STRIP + 2 * P, strip: STRIP,
+    keys: grid(3, 2, 0, STRIP, () => "a"),
+    dials: [{ x: W3 - 10, y: 11 }], oled: { x: 0, y: 5, w: 32, h: 12 },
+    pins: { matrix: 6, dial: 2, oled: 2, led: 1 }, matrix: "2×4 (7 used)", push: true },
+  { id: "stagger", name: "Stagger 9", blurb: "Stratum's parts with the columns staggered like a split keyboard. Gives a hand-shaped, less boxy look.",
+    W: W3, H: STRIP + 3 * P + 7, strip: STRIP,
+    keys: grid(3, 3, 0, STRIP, (c, r) => r < 2 ? "a" : "c").map(k => ({ ...k, y: k.y + [7, 0, 3.5][Math.round(k.x / P)] })),
+    dials: [{ x: W3 - 10, y: 11 }], oled: { x: 0, y: 5, w: 32, h: 12 },
+    pins: { matrix: 6, dial: 2, oled: 2, led: 1 }, matrix: "3×3", push: false },
+  { id: "numpad", name: "Grid 15", blurb: "4×4 with the dial in the top-right cell: 7 agent keys and 8 command keys. Uses almost every switch in the kit.",
+    W: W4, H: 4 * P + 3, strip: 0,
+    keys: grid(4, 2, 0, 0, () => "a", (c, r) => c === 3 && r === 0).concat(grid(4, 2, 0, 2 * P + 3, () => "c")),
+    dials: [{ x: 3 * P + P / 2, y: P / 2 }], oled: null,
+    pins: { matrix: 8, dial: 2, oled: 0, led: 1 }, matrix: "4×4 (16 used)", push: true },
+  { id: "bar", name: "Console bar", blurb: "Two dials either side of the OLED, with four big agent keys underneath. Reads like a small mixing console.",
+    W: W4, H: STRIP + P, strip: STRIP,
+    keys: grid(4, 1, 0, STRIP, () => "a"),
+    dials: [{ x: 10, y: 11 }, { x: W4 - 10, y: 11 }], oled: { x: W4 / 2 - 16, y: 5, w: 32, h: 12 },
+    pins: { matrix: 4, dial: 4, oled: 2, led: 1 }, matrix: "4 direct", push: false }
+];
+
+const FINISHES = [
+  { id: "frost", name: "Frost", top: "#e7ecee", base: "#d3dadd", edge: "#4fdbe6", cap: "#f8f8f5", capEdge: "#c9cfd2", knob: "#f1f2f2", knobRing: "#c5cacc", ink: "#55636b", note: "Iced or natural PETG top" },
+  { id: "stealth", name: "Stealth", top: "#202126", base: "#141518", edge: "#8b6cff", cap: "#34363d", capEdge: "#4a4d55", knob: "#2b2d33", knobRing: "#4a4d55", ink: "#8d8fa0", note: "Matte black PLA, smoke caps" },
+  { id: "lab", name: "Lab", top: "#d9d5cd", base: "#bcb7ad", edge: "#ff6a1a", cap: "#f2efe8", capEdge: "#c9c3b8", knob: "#ff6a1a", knobRing: "#c94f0e", ink: "#6a645a", note: "Warm grey, orange accents" },
+  { id: "sage", name: "Sage", top: "#9cb099", base: "#ece4d3", edge: "#ffe5b8", cap: "#efe7d6", capEdge: "#c8bea9", knob: "#efe7d6", knobRing: "#c8bea9", ink: "#4f5f4d", note: "Sage top, cream base" },
+  { id: "glass", name: "Glass", top: "rgba(205,228,238,0.32)", base: "rgba(190,215,226,0.5)", edge: "#bfefff", cap: "#f8f8f5", capEdge: "#c9cfd2", knob: "#d3d7da", knobRing: "#a8afb3", ink: "#4d6470", note: "Clear PETG all round", pcb: true },
+  { id: "concrete", name: "Concrete", top: "#8f908c", base: "#6e6f6b", edge: "#ff5a3c", cap: "#f1f1ee", capEdge: "#c4c4bf", knob: "#1f1f1f", knobRing: "#444", ink: "#3c3d3a", note: "Grey PLA, thick bezel, screws showing", thick: true }
+];
+
+const FORMS = [
+  { id: "slab", name: "Slab", r: 8, hf: 14, hb: 18 },
+  { id: "wedge", name: "Wedge", r: 6, hf: 8, hb: 30 },
+  { id: "deck", name: "Stepped deck", r: 7, hf: 13, hb: 15, step: 26 },
+  { id: "float", name: "Floating plate", r: 9, hf: 15, hb: 17, float: true },
+  { id: "chamfer", name: "Chamfer", r: 0, hf: 15, hb: 18, chamfer: 6 },
+  { id: "diagonal", name: "Diagonal edge", r: 5, hf: 14, hb: 18, diag: 12 }
+];
+
+const state = { layout: "stratum", finish: "frost", form: "float", t: 0, anim: false };
+const byId = (arr, id) => arr.find(x => x.id === id);
+let uid = 0;
+
+function caseShape(x, y, w, h, form) {
+  if (form.chamfer) {
+    const c = form.chamfer;
+    return `<path d="M${x + c},${y} H${x + w - c} L${x + w},${y + c} V${y + h - c} L${x + w - c},${y + h} H${x + c} L${x},${y + h - c} V${y + c} Z"`;
+  }
+  if (form.diag) {
+    const d = form.diag, r = form.r;
+    return `<path d="M${x + d + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} H${x + r} Q${x},${y + h} ${x},${y + h - r} L${x + d},${y + r * 0.6} Q${x + d + 0.8},${y} ${x + d + r},${y} Z"`;
+  }
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${form.r}"`;
+}
+
+function renderTop(L, F, Fm, opts = {}) {
+  const id = "g" + (uid++);
+  const m = F.thick ? 12 : 8;
+  const cw = L.W + 2 * m, ch = L.H + 2 * m;
+  const pad = 6;
+  const vb = `${-m - pad} ${-m - pad} ${cw + 2 * pad} ${ch + 2 * pad}`;
+  const statusAt = i => PATTERN[(i + (opts.t || 0)) % PATTERN.length];
+  let s = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${L.name}, ${F.name}, ${Fm.name}, top view">`;
+  s += `<defs><filter id="${id}b" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.6"/></filter><filter id="${id}e" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2"/></filter></defs>`;
+  s += caseShape(-m - 1.5, -m - 1.5, cw + 3, ch + 3, { ...Fm, r: Fm.r ? Fm.r + 1.5 : 0 }) + ` fill="none" stroke="${F.edge}" stroke-width="3" opacity="0.9" filter="url(#${id}e)"/>`;
+  s += caseShape(-m, -m, cw, ch, Fm) + ` fill="${F.base}"/>`;
+  if (Fm.float) {
+    s += caseShape(-m + 2.2, -m + 2.2, cw - 4.4, ch - 4.4, { ...Fm, r: Math.max(Fm.r - 2, 2) }) + ` fill="none" stroke="${F.edge}" stroke-width="1.6" filter="url(#${id}b)"/>`;
+    s += caseShape(-m + 3, -m + 3, cw - 6, ch - 6, { ...Fm, r: Math.max(Fm.r - 3, 2) }) + ` fill="${F.top}"/>`;
+  } else {
+    s += caseShape(-m + 1.2, -m + 1.2, cw - 2.4, ch - 2.4, { ...Fm, r: Math.max(Fm.r - 1, 0), chamfer: Fm.chamfer ? Fm.chamfer - 0.5 : 0 }) + ` fill="${F.top}"/>`;
+  }
+  if (F.pcb) {
+    s += `<rect x="-2" y="-2" width="${L.W + 4}" height="${L.H + 4}" rx="1.5" fill="#1d6b48" opacity="0.85"/>`;
+    for (let i = 0; i < 7; i++) s += `<path d="M${2 + i * L.W / 7},${L.H + 1} V${L.H - 6 - (i % 3) * 5} H${6 + i * L.W / 7}" fill="none" stroke="#c9a54a" stroke-width="0.5" opacity="0.8"/>`;
+  }
+  if (Fm.id === "deck") {
+    const d = L.strip || (L.leftPanel ? 0 : 20);
+    if (d) s += `<rect x="${-m + 1.2}" y="${-m + 1.2}" width="${cw - 2.4}" height="${d + m - 2}" rx="${Fm.r - 1}" fill="#000" opacity="0.08"/><line x1="${-m + 1.2}" x2="${L.W + m - 1.2}" y1="${d - 1}" y2="${d - 1}" stroke="#000" stroke-opacity="0.22" stroke-width="0.6"/>`;
+    if (L.leftPanel) s += `<rect x="${-m + 1.2}" y="${-m + 1.2}" width="${L.leftPanel + m - 2}" height="${ch - 2.4}" rx="${Fm.r - 1}" fill="#000" opacity="0.08"/>`;
+  }
+  if (F.thick) {
+    [[-m + 5, -m + 5], [L.W + m - 5, -m + 5], [-m + 5, L.H + m - 5], [L.W + m - 5, L.H + m - 5]].forEach(([x, y]) => {
+      if (Fm.diag && x < 0 && y < 0) x += Fm.diag * 0.7;
+      s += `<circle cx="${x}" cy="${y}" r="2.6" fill="#2a2a2a"/><polygon points="${[0, 1, 2, 3, 4, 5].map(k => `${x + 1.3 * Math.cos(k * Math.PI / 3)},${y + 1.3 * Math.sin(k * Math.PI / 3)}`).join(" ")}" fill="#555"/>`;
+    });
+  }
+  if (L.oled) {
+    const o = L.oled;
+    s += `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" rx="1" fill="#0a0b0c" stroke="${F.capEdge}" stroke-width="0.4"/>`;
+    s += `<rect x="${o.x + 3}" y="${o.y + 2}" width="${o.w - 6}" height="${o.h - 4}" fill="#000"/>`;
+    s += `<text x="${o.x + 4}" y="${o.y + 5.6}" font-family="JetBrains Mono, monospace" font-size="2.7" fill="#d7f6ff">run-07  4.2k</text>`;
+    s += `<text x="${o.x + 4}" y="${o.y + 9}" font-family="JetBrains Mono, monospace" font-size="2.7" fill="#7fe0f0">loss 0.418</text>`;
+  }
+  L.dials.forEach(d => {
+    s += `<circle cx="${d.x}" cy="${d.y}" r="9.5" fill="${F.knobRing}"/><circle cx="${d.x}" cy="${d.y}" r="8.3" fill="${F.knob}"/>`;
+    for (let k = 0; k < 24; k++) { const a = k * Math.PI / 12; s += `<line x1="${d.x + 8.3 * Math.cos(a)}" y1="${d.y + 8.3 * Math.sin(a)}" x2="${d.x + 9.4 * Math.cos(a)}" y2="${d.y + 9.4 * Math.sin(a)}" stroke="#000" stroke-opacity="0.18" stroke-width="0.35"/>`; }
+    s += `<line x1="${d.x}" y1="${d.y - 7.6}" x2="${d.x}" y2="${d.y - 4.6}" stroke="${F.ink}" stroke-width="0.8" stroke-linecap="round"/>`;
+    if (F.id === "lab") for (let k = -5; k <= 5; k++) { const a = -Math.PI / 2 + k * 0.26; s += `<line x1="${d.x + 10.6 * Math.cos(a)}" y1="${d.y + 10.6 * Math.sin(a)}" x2="${d.x + 11.8 * Math.cos(a)}" y2="${d.y + 11.8 * Math.sin(a)}" stroke="${F.ink}" stroke-width="0.35"/>`; }
+  });
+  let ai = 0;
+  L.keys.forEach(k => {
+    const x = k.x + (P - CAP) / 2, y = k.y + (P - CAP) / 2;
+    if (k.t === "a") {
+      const st = STATUS[statusAt(ai++)];
+      s += `<rect x="${x - 1.2}" y="${y - 1.2}" width="${CAP + 2.4}" height="${CAP + 2.4}" rx="3" fill="${st.c}" opacity="0.75" filter="url(#${id}b)"/>`;
+      s += `<rect x="${x}" y="${y}" width="${CAP}" height="${CAP}" rx="2.6" fill="#f4f7f8"/>`;
+      s += `<rect x="${x}" y="${y}" width="${CAP}" height="${CAP}" rx="2.6" fill="${st.c}" opacity="0.82"/>`;
+      s += `<rect x="${x + 3}" y="${y + 3}" width="${CAP - 6}" height="${CAP - 6}" rx="2" fill="#fff" opacity="0.28"/>`;
+    } else {
+      s += `<rect x="${x}" y="${y}" width="${CAP}" height="${CAP}" rx="2.6" fill="${F.cap}" stroke="${F.capEdge}" stroke-width="0.5"/>`;
+      s += `<rect x="${x + 3}" y="${y + 3}" width="${CAP - 6}" height="${CAP - 6}" rx="2.4" fill="#fff" opacity="${F.id === "stealth" ? 0.05 : 0.35}"/>`;
+    }
+  });
+  return s + `</svg>`;
+}
+
+function renderSide(L, F, Fm) {
+  const m = F.thick ? 12 : 8;
+  const D = L.H + 2 * m;
+  const baseH = 7, band = 1.6;
+  const topAt = x => {
+    if (Fm.step) { const deckFrom = D - ((L.strip || 20) + m); return x >= deckFrom ? Fm.step : Fm.hf + (Fm.hb - Fm.hf) * (x / deckFrom); }
+    return Fm.hf + (Fm.hb - Fm.hf) * (x / D);
+  };
+  const H = Math.max(Fm.hb, Fm.step || 0) + 16;
+  const pad = 6;
+  const Y = h => H - h;
+  let s = `<svg viewBox="${-pad} 0 ${D + 2 * pad} ${H + 4}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Side profile">`;
+  s += `<line x1="${-pad}" x2="${D + pad}" y1="${H}" y2="${H}" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.4"/>`;
+  const bandY = Fm.float ? 11 : baseH;
+  s += `<rect x="0" y="${Y(bandY)}" width="${D}" height="${bandY}" rx="1.5" fill="${F.base}"/>`;
+  s += `<rect x="0" y="${Y(bandY + band)}" width="${D}" height="${band}" fill="${F.edge}"/>`;
+  const pts = [];
+  const N = 40;
+  for (let i = 0; i <= N; i++) { const x = D * i / N; pts.push([x, topAt(x)]); }
+  if (Fm.step) { const deckFrom = D - ((L.strip || 20) + m); pts.push([deckFrom, Fm.step]); pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]); }
+  let d = `M0,${Y(bandY + band)} `;
+  if (Fm.chamfer) d += `L0,${Y(topAt(0) - 3)} L3,${Y(topAt(3))} `;
+  pts.forEach(([x, h]) => { if (!Fm.chamfer || (x > 3 && x < D - 3)) d += `L${x},${Y(h)} `; });
+  if (Fm.chamfer) d += `L${D - 3},${Y(topAt(D - 3))} L${D},${Y(topAt(D) - 3)} `;
+  d += `L${D},${Y(bandY + band)} Z`;
+  s += `<path d="${d}" fill="${F.top === "rgba(205,228,238,0.32)" ? "rgba(170,205,220,0.55)" : F.top}" stroke="#000" stroke-opacity="0.12" stroke-width="0.3"/>`;
+  const rows = [...new Set(L.keys.map(k => Math.round(k.y * 10) / 10))];
+  rows.forEach((ry, i) => {
+    const cx = D - (ry + P / 2 + m);
+    const h = topAt(cx);
+    const isA = L.keys.some(k => Math.round(k.y * 10) / 10 === ry && k.t === "a");
+    s += `<rect x="${cx - 6}" y="${Y(h + 5)}" width="12" height="5" fill="#9aa0a4"/>`;
+    s += `<rect x="${cx - 9}" y="${Y(h + 13)}" width="18" height="8" rx="2" fill="${isA ? "#cfe3ff" : F.cap}" stroke="${F.capEdge}" stroke-width="0.4"/>`;
+  });
+  L.dials.forEach(dl => {
+    const cx = D - (dl.y + m);
+    const h = topAt(cx);
+    s += `<rect x="${cx - 8}" y="${Y(h + 15)}" width="16" height="15" rx="1.5" fill="${F.knob}" stroke="${F.knobRing}" stroke-width="0.5"/>`;
+  });
+  return s + `</svg>`;
+}
+
+function pinsFor(L) { const p = L.pins; return p.matrix + p.dial + p.oled + p.led; }
+function agents(L) { return L.keys.filter(k => k.t === "a").length; }
+
+function buyList(L, F, Fm) {
+  const a = agents(L), c = L.keys.length - a;
+  const out = [`${a} frosted translucent MX keycaps (kit caps are opaque)`];
+  if (F.id === "stealth") out.push(`${c} smoke or black keycaps for the command keys`);
+  if (F.id === "sage") out.push(`${c} cream keycaps (optional, kit white works)`);
+  out.push(`${L.dials.length} knob${L.dials.length > 1 ? "s" : ""} for the EC11 (or 3D print ${L.dials.length > 1 ? "them" : "it"})`);
+  if (F.id === "glass") out.push("Clear PETG for the whole case: ask Printing Legion, or print it yourself");
+  else out.push("Clear or natural PETG for the edge band");
+  if (Fm.float) out.push("Nothing extra: the light gap is just a 2 mm printed recess");
+  return out;
+}
+
+function draw() {
+  const L = byId(LAYOUTS, state.layout), F = byId(FINISHES, state.finish), Fm = byId(FORMS, state.form);
+  document.getElementById("top").innerHTML = renderTop(L, F, Fm, { t: state.t });
+  document.getElementById("side").innerHTML = renderSide(L, F, Fm);
+  const m = F.thick ? 12 : 8;
+  const pcbW = (L.W + 4).toFixed(0), pcbH = (L.H + 4).toFixed(0);
+  document.getElementById("dims").textContent = `case ≈ ${(L.W + 2 * m).toFixed(0)} × ${(L.H + 2 * m).toFixed(0)} mm`;
+  document.getElementById("combo-code").textContent = `${L.name} · ${F.name} · ${Fm.name}`;
+  document.getElementById("layout-blurb").textContent = L.blurb;
+  const total = pinsFor(L);
+  document.getElementById("kv").innerHTML = [
+    ["Keys", `${L.keys.length}  (${agents(L)} agent · ${L.keys.length - agents(L)} command)`],
+    ["Dials", `${L.dials.length}${L.push ? " · press = key" : " · press unused"}`],
+    ["OLED", L.oled ? "0.91 in, 128×32" : "none"],
+    ["Matrix", L.matrix],
+    ["PCB est.", `${pcbW} × ${pcbH} mm  ✓ ≤ 100`],
+    ["LEDs", `${L.keys.length} under keys + 2–4 edge = ${L.keys.length + 4 <= 16 ? "fits" : "over"} the kit's 16`],
+    ["Finish", F.note],
+    ["Height", `${Fm.hf}–${Math.max(Fm.hb, Fm.step || 0)} mm case + caps`]
+  ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  const segs = [];
+  const add = (n, kind, lab) => { for (let i = 0; i < n; i++) segs.push(`<div class="pin" style="background:${PIN_COLORS[kind]}" title="${lab}">${lab}</div>`); };
+  add(L.pins.matrix, "matrix", "M"); add(L.pins.dial, "dial", "D"); add(L.pins.oled, "oled", "I²C"); add(L.pins.led, "led", "LED");
+  for (let i = total; i < 11; i++) segs.push(`<div class="pin spare">—</div>`);
+  document.getElementById("pins").innerHTML = segs.join("");
+  document.getElementById("pin-legend").innerHTML = `<span><i class="sw" style="background:${PIN_COLORS.matrix}"></i>key matrix ${L.pins.matrix}</span><span><i class="sw" style="background:${PIN_COLORS.dial}"></i>dials ${L.pins.dial}</span><span><i class="sw" style="background:${PIN_COLORS.oled}"></i>OLED ${L.pins.oled}</span><span><i class="sw" style="background:${PIN_COLORS.led}"></i>LED data 1</span><span class="mono">${total}/11 used</span>`;
+  document.getElementById("buy").innerHTML = buyList(L, F, Fm).map(x => `<li>${x}</li>`).join("");
+  ["layout", "finish", "form"].forEach(k => document.querySelectorAll(`#opt-${k} .opt`).forEach(b => b.setAttribute("aria-pressed", b.dataset.id === state[k] ? "true" : "false")));
+  drawGrid();
+}
+
+function drawGrid() {
+  const F = byId(FINISHES, state.finish), Fm = byId(FORMS, state.form);
+  document.getElementById("all-sub").textContent = `${F.name} · ${Fm.name}`;
+  document.getElementById("grid").innerHTML = LAYOUTS.map(L => `
+    <button class="thumb" type="button" data-id="${L.id}" aria-current="${L.id === state.layout}">
+      ${renderTop(L, F, Fm)}
+      <span class="t-name">${L.name}</span>
+      <span class="t-spec">${L.keys.length} keys · ${L.dials.length} dial${L.dials.length > 1 ? "s" : ""} · ${L.oled ? "OLED" : "no OLED"} · ${pinsFor(L)}/11 pins</span>
+    </button>`).join("");
+  document.querySelectorAll(".thumb").forEach(b => b.addEventListener("click", () => { state.layout = b.dataset.id; draw(); document.getElementById("cfg-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }));
+}
+
+function buildOpts() {
+  const mk = (arr, key, sw) => document.getElementById(`opt-${key}`).innerHTML = arr.map(o => `<button class="opt" type="button" data-id="${o.id}" aria-pressed="false">${sw ? `<i class="sw" style="background:${o.top};box-shadow:inset 0 -4px 0 ${o.edge}"></i>` : ""}${o.name}</button>`).join("");
+  mk(LAYOUTS, "layout"); mk(FINISHES, "finish", true); mk(FORMS, "form");
+  ["layout", "finish", "form"].forEach(k => document.querySelectorAll(`#opt-${k} .opt`).forEach(b => b.addEventListener("click", () => { state[k] = b.dataset.id; draw(); })));
+  document.getElementById("status-legend").innerHTML = Object.values(STATUS).map(s => `<span><i class="sw" style="background:${s.c}"></i>${s.n}</span>`).join("");
+}
+
+const RENDERS = [
+  { img: "img/4-frostbite.jpg", name: "Frostbite", combo: ["stratum", "frost", "float"], text: "Stratum's layout in iced PETG, with the top plate floating over a cyan light gap. The closest to the Codex look." },
+  { img: "img/5-night-shift.jpg", name: "Night shift", combo: ["pocket", "stealth", "wedge"], text: "Six smoke caps on a steep black wedge with a violet underline. Made for a dark desk setup." },
+  { img: "img/6-lab-bench.jpg", name: "Lab bench", combo: ["pocket", "lab", "deck"], text: "The OLED and an orange knob sit on a raised rear deck with dial ticks, like a bench instrument." },
+  { img: "img/7-sage-twin.jpg", name: "Sage twin", combo: ["twin", "sage", "slab"], text: "Soft sage and cream with two dials. Calm rather than gamer.", caveat: "The render shows a 10th key next to the dials. The buildable version is 9 keys + 2 dials." },
+  { img: "img/8-glass.jpg", name: "Glass", combo: ["codex12", "glass", "chamfer"], text: "A fully clear chamfered case that shows the PCB and diodes. Only looks good if your soldering is tidy.", caveat: "Clear PETG prints hazy rather than glass-clear, so expect frosted." },
+  { img: "img/9-monolith.jpg", name: "Monolith", combo: ["stagger", "concrete", "diagonal"], text: "Thick grey bezel, exposed hex screws, staggered columns and a cut corner." },
+  { img: "img/1-frosted-white.jpg", name: "Codex white", combo: ["codex12", "frost", "float"], text: "The earlier 6 + 6 concept: frosted shell, graphite base, cyan band." },
+  { img: "img/2-matte-black.jpg", name: "Codex black", combo: ["codex12", "stealth", "slab"], text: "The same 6 + 6 in matte black with a violet band." }
+];
+document.getElementById("renders").innerHTML = RENDERS.map((r, i) => `
+  <article class="render">
+    <img src="${r.img}" alt="AI concept render: ${r.name}" loading="lazy">
+    <div class="body">
+      <h3>${r.name}</h3>
+      <span class="combo">${byId(LAYOUTS, r.combo[0]).name} · ${byId(FINISHES, r.combo[1]).name} · ${byId(FORMS, r.combo[2]).name}</span>
+      <p class="note">${r.text}</p>
+      ${r.caveat ? `<p class="caveat">${r.caveat}</p>` : ""}
+      <button class="load" type="button" data-i="${i}">Load in configurator</button>
+    </div>
+  </article>`).join("");
+document.querySelectorAll(".load").forEach(b => b.addEventListener("click", () => {
+  const [l, f, fm] = RENDERS[+b.dataset.i].combo; Object.assign(state, { layout: l, finish: f, form: fm }); draw();
+  document.getElementById("cfg-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}));
+
+const INSP = [
+  { name: "Stratum", who: "reuthenetizen · Hackpad gallery", url: "https://github.com/ReuTheCoder/stratum-macropad", took: "<b>Stratum 9</b> layout. Also the idea of backlight color tied to state." },
+  { name: "froskeys", who: "Frosetrain · Hackpad gallery", url: "https://github.com/frosetrain/froskeys", took: "<b>Stagger 9</b> and the <b>Diagonal edge</b> form, plus translucent caps glowing from below." },
+  { name: "Matyas's Hackpad", who: "Matyas604 · Hackpad gallery", url: "https://github.com/Matyas604/Matyas-s-Hackpad", took: "<b>Stealth</b> finish: black case, light caps, colored underglow, layer name on the OLED." },
+  { name: "chinnyyy's hackpad", who: "chinnyyy · Hackpad gallery", url: "https://github.com/chinn-yyy/chinnyyys-hackpad", took: "<b>Twin dial</b>: 6 keys + 2 encoders is a proven Hackpad combo." },
+  { name: "Banchan BDN9 case", who: "MakerWorld", url: "https://makerworld.com/en/models/1008755", took: "<b>Floating plate</b>: a deep-dish plate with no visible screws." },
+  { name: "KatPad", who: "Tindie", url: "https://www.tindie.com/products/craftslab3d/katpad-the-smart-3d-printed-macropad-no-qmkvia", took: "<b>Frost</b>: iced PETG body for a soft, understated glow." },
+  { name: "Cyberpad 01", who: "kaipereira · Hack Club", url: "https://hardware.hackclub.com/projects/kaipereira/cyberpad-01", took: "Sketch the theme first, then build the production files." },
+  { name: "Codex Micro", who: "OpenAI × Work Louder", url: "https://www.yankodesign.com/2026/07/20/openai-and-work-louder-just-built-a-230-physical-remote-for-ai-agents/", took: "The status color language: <b>white idle, blue running, green done, amber needs input, red error</b>." }
+];
+document.getElementById("insp").innerHTML = INSP.map(i => `<a href="${i.url}" target="_blank" rel="noopener"><h3>${i.name}</h3><span class="who">${i.who}</span><span class="took">${i.took}</span></a>`).join("");
+
+let timer = null;
+document.getElementById("animate").addEventListener("click", e => {
+  state.anim = !state.anim;
+  e.currentTarget.setAttribute("aria-pressed", String(state.anim));
+  e.currentTarget.textContent = state.anim ? "Stop simulation" : "Simulate runs";
+  clearInterval(timer);
+  if (state.anim) timer = setInterval(() => { state.t++; const L = byId(LAYOUTS, state.layout), F = byId(FINISHES, state.finish), Fm = byId(FORMS, state.form); document.getElementById("top").innerHTML = renderTop(L, F, Fm, { t: state.t }); }, 1400);
+});
+document.getElementById("shuffle").addEventListener("click", () => {
+  const pick = a => a[Math.floor(Math.random() * a.length)].id;
+  state.layout = pick(LAYOUTS); state.finish = pick(FINISHES); state.form = pick(FORMS); draw();
+});
+
+buildOpts();
+draw();
+</script>

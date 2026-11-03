@@ -1,0 +1,82 @@
+{
+  "check": "G8.package",
+  "gate": "G8",
+  "title": "Hackpad submission structure and README sections",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "production/gerbers.zip": "6d1c8053bf24313027784e0376a7b05394db1f0571ec5fdda55ceca5d23b7f02",
+    "production/firmware.uf2": "66f0dad0cc6d43b860864c5425962b6420d4298d3c593ba9c668d81812fc812b",
+    "CAD/frostbite-assembly.step": "21386a8a336c7b9e40fcb22a008469c5bdf586a937a6db2084a253e6c6900138",
+    "production/Bottom.stl": "7d8a32a653696b6650289112d5660c59b82a6f8cda9dd568c909177366913038",
+    "production/GlowBand.step": "862ce2291985732b9b9e9b5a64917da3e1ad507d27c6a4aeeec86df647726c00",
+    "production/Top.step": "94e8d2e54376959ea3a7be846a5e88537d7fa13eb7b8c0a7cf2d25036615ec39",
+    "production/Bottom.step": "d1a648155587260b536a392d1ec3da0f172cd9f9876b22a9f31c70a5d107f54b",
+    "production/Knob.stl": "d68eec574d5be2f566610d77f9d3868ecef919aeeee7e773e9f25ca1e63caa9c",
+    "production/GlowBand.stl": "3059fc934e720395955371876ad886f0b40940056a128b3dad693a830ffecd9b",
+    "production/Top.stl": "3e4e95d41e6297365763895cd0eb121c18298495c299c80f9de9ed437129a45f",
+    "production/Knob.step": "ee58495df5e668d4e3691825ce771b6b0a1e2edc4a3d97086c49ea89c69f40c3",
+    "README.md": "a879163ca091a13ade398166f66e2e395275004e7a9cddd878f83a38c015169f"
+  },
+  "details": {
+    "images": [
+      {
+        "alt": "",
+        "src": "docs/renders/10-frostbite-halo.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/status-cycle.gif"
+      },
+      {
+        "alt": "",
+        "src": "CAD/previews/assembly-iso.svg.png"
+      },
+      {
+        "alt": "",
+        "src": "CAD/previews/exploded-iso.svg.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/top-dims.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/side.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/exploded.png"
+      },
+      {
+        "alt": "",
+        "src": "PCB/images/schematic.png"
+      },
+      {
+        "alt": "",
+        "src": "PCB/images/pcb_render_top.png"
+      },
+      {
+        "alt": "",
+        "src": "PCB/images/pcb_render_bottom.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/pinout.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/studio.png"
+      },
+      {
+        "alt": "",
+        "src": "docs/images/presets-grid.png"
+      }
+    ]
+  },
+  "timestamp": "2026-11-03T20:22:28+00:00",
+  "duration_s": 0.07
+}

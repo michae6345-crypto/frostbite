@@ -1,0 +1,77 @@
+{
+  "check": "X.cross_positions",
+  "gate": "X",
+  "title": "design.json vs PCB vs CAD: keys, encoder, OLED, USB",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [
+    "USB cutout position is only checked through a CAD positions file (not measured from the mesh)"
+  ],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "CAD/positions.json": "5620df54441e5e310bd5a6ceba0c60cdadaadd78243f9ca6130e6046cacf4807"
+  },
+  "details": {
+    "pcb": {
+      "SW1": [
+        11.525,
+        33.525
+      ],
+      "SW2": [
+        30.575,
+        33.525
+      ],
+      "SW3": [
+        49.625,
+        33.525
+      ],
+      "SW4": [
+        11.525,
+        52.575
+      ],
+      "SW5": [
+        30.575,
+        52.575
+      ],
+      "SW6": [
+        49.625,
+        52.575
+      ],
+      "SW7": [
+        11.525,
+        71.625
+      ],
+      "SW8": [
+        30.575,
+        71.625
+      ],
+      "SW9": [
+        49.625,
+        71.625
+      ],
+      "encoder": [
+        49.15,
+        13.0
+      ],
+      "oled_header": [
+        39.0,
+        13.0
+      ],
+      "xiao": [
+        21.0,
+        10.505
+      ]
+    },
+    "cad_encoder_pattern_dev_mm": 0.0,
+    "cad_oled_window_pattern_dev_mm": 0.0,
+    "comparisons_run": [
+      "design<->PCB",
+      "design<->CAD/positions.json",
+      "design<->Top STL"
+    ]
+  },
+  "timestamp": "2026-11-03T20:22:28+00:00",
+  "duration_s": 0.0
+}

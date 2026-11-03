@@ -1,0 +1,67 @@
+{
+  "check": "G3.drc_jlcpcb",
+  "gate": "G3",
+  "title": "kicad-cli pcb drc with pinned JLCPCB 2-layer rules",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [
+    "project .kicad_dru merged with the JLCPCB rules"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli",
+        "pcb",
+        "drc",
+        "--format",
+        "json",
+        "--severity-error",
+        "--exit-code-violations",
+        "--schematic-parity",
+        "-o",
+        "~/Documents/frostbite/verify/.cache/work/drc_jlc/drc.json",
+        "~/Documents/frostbite/verify/.cache/work/drc_jlc/frostbite.kicad_pcb"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 1.89,
+      "stdout_tail": [
+        "Found 0 violations",
+        "Found 0 unconnected items",
+        "Found 0 schematic parity issues",
+        "Saved DRC Report to ~/Documents/frostbite/verify/.cache/work/drc_jlc/drc.json"
+      ],
+      "stderr_tail": [
+        "Fontconfig error: Cannot load default config file: No such file: (null)"
+      ]
+    }
+  ],
+  "inputs_sha256": {
+    "PCB/frostbite.kicad_dru": "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2",
+    "PCB/frostbite.kicad_pcb": "b99cadff7e4148e1a4641d510bc795da955c26f145f794179ce756ca396ac062",
+    "PCB/frostbite.kicad_prl": "c99b6e681d204f9aae83f8bb89617a6d7a139efcfca526f4b1d7539fb2a0ff6f",
+    "PCB/frostbite.kicad_pro": "23bb0d59247877bd3e8d6c49e5115427a1bbdce6aa9127fe6513713dcb2f4528",
+    "PCB/frostbite.kicad_sch": "33c3afa1bfb154c2e2766b0c9f232650c1ac7a23c0bb36ffd947b3475cdca759",
+    "PCB/lib/SK6812MINI-E.kicad_sym": "89c091a16dcdda45f045031744a532a28014bf4abe51adadb9400ebcd8131f6d",
+    "PCB/lib/XIAO_RP2040.kicad_sym": "ed1c48cf717d973fcf227c3d535ecf03a262489f5e7892767310e7cfced9457d",
+    "PCB/lib/frostbite.pretty/SK6812MINI-E_glow_down.kicad_mod": "c9a9fa87383850d4e7eac9b6e82cbbceb2315964ec6be1af92d31282f4ba924d",
+    "PCB/lib/frostbite.pretty/SK6812MINI-E_key.kicad_mod": "cbf54419eb9db26d70be300f9b85468ba1ad6105f855482bd30ac3b820054413",
+    "PCB/lib/hackpad.pretty/MX-Solderable-1U.kicad_mod": "854206980130e706b28b675ab196b6d6372e5c331f616cc17b91b78c3ce111c5",
+    "PCB/lib/hackpad.pretty/SK6812MINI-E_fixed.kicad_mod": "c0f351015a44e8bfda2ea9ee3cb61b39ff06a541434566369ba894e583786135",
+    "PCB/lib/hackpad.pretty/XIAO-Generic-Hybrid-14P-2.54-21X17.8MM.kicad_mod": "1e621cb921b82a158bec41cde1e2d5bf1bd15015362de67f2a808c9073728ffa",
+    "verify/rules/JLCPCB-2L-1oz.kicad_dru": "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2"
+  },
+  "details": {
+    "violations": [],
+    "unconnected_items": [],
+    "schematic_parity": [],
+    "counts": {
+      "violations": 0,
+      "unconnected_items": 0,
+      "schematic_parity": 0
+    }
+  },
+  "timestamp": "2026-11-03T20:22:07+00:00",
+  "duration_s": 1.9
+}

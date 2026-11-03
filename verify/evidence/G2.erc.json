@@ -1,0 +1,43 @@
+{
+  "check": "G2.erc",
+  "gate": "G2",
+  "title": "kicad-cli sch erc --severity-error --exit-code-violations",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli",
+        "sch",
+        "erc",
+        "--format",
+        "json",
+        "--severity-error",
+        "--exit-code-violations",
+        "-o",
+        "~/Documents/frostbite/verify/.cache/work/erc.json",
+        "~/Documents/frostbite/PCB/frostbite.kicad_sch"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 0.43,
+      "stdout_tail": [
+        "Found 0 violations",
+        "Saved ERC Report to ~/Documents/frostbite/verify/.cache/work/erc.json"
+      ],
+      "stderr_tail": [
+        "Fontconfig error: Cannot load default config file: No such file: (null)"
+      ]
+    }
+  ],
+  "inputs_sha256": {
+    "PCB/frostbite.kicad_sch": "33c3afa1bfb154c2e2766b0c9f232650c1ac7a23c0bb36ffd947b3475cdca759"
+  },
+  "details": {
+    "violations": []
+  },
+  "timestamp": "2026-11-03T20:22:03+00:00",
+  "duration_s": 0.43
+}

@@ -1,0 +1,99 @@
+{
+  "check": "G3.gerbers_export",
+  "gate": "G3",
+  "title": "Fresh gerber + drill export parsed with gerbonara",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli",
+        "pcb",
+        "export",
+        "gerbers",
+        "-o",
+        "~/Documents/frostbite/verify/.cache/work/gerbers/",
+        "~/Documents/frostbite/PCB/frostbite.kicad_pcb"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 0.25,
+      "stdout_tail": [
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Cu.gtl'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Cu.gbl'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Adhesive.gta'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Adhesive.gba'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Paste.gtp'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Paste.gbp'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Silkscreen.gto'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Silkscreen.gbo'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Mask.gts'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Mask.gbs'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_Drawings.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_Comments.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_Eco1.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_Eco2.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-Edge_Cuts.gm1'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-Margin.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Courtyard.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Courtyard.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Fab.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Fab.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_1.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_2.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_3.gbr'.",
+        "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-User_4.gbr'."
+      ],
+      "stderr_tail": []
+    },
+    {
+      "argv": [
+        "~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli",
+        "pcb",
+        "export",
+        "drill",
+        "-o",
+        "~/Documents/frostbite/verify/.cache/work/gerbers/",
+        "~/Documents/frostbite/PCB/frostbite.kicad_pcb"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 0.19,
+      "stdout_tail": [
+        "Created file '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite.drl'",
+        "Done."
+      ],
+      "stderr_tail": []
+    }
+  ],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "PCB/frostbite.kicad_pcb": "b99cadff7e4148e1a4641d510bc795da955c26f145f794179ce756ca396ac062"
+  },
+  "details": {
+    "gerbonara_warnings": [
+      "frostbite.drl:26 \"G90\": G90 header statement found after end of header"
+    ],
+    "layers_found": {
+      "top copper": "frostbite-F_Cu.gtl",
+      "top mask": "frostbite-F_Mask.gts",
+      "top silk": "frostbite-F_Silkscreen.gto",
+      "top paste": "frostbite-F_Paste.gtp",
+      "bottom copper": "frostbite-B_Cu.gbl",
+      "bottom mask": "frostbite-B_Mask.gbs",
+      "bottom silk": "frostbite-B_Silkscreen.gbo",
+      "bottom paste": "frostbite-B_Paste.gbp",
+      "mechanical outline": "frostbite-Edge_Cuts.gm1"
+    },
+    "drill_files": 1,
+    "outline_mm": {
+      "w": 61.15,
+      "h": 83.15,
+      "stroke": 0.1
+    }
+  },
+  "timestamp": "2026-11-03T20:22:07+00:00",
+  "duration_s": 0.56
+}

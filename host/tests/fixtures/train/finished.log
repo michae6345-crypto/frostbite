@@ -1,0 +1,5 @@
+Epoch 5/5 | step 1490 | loss: 0.2210
+Epoch 5/5 | step 1500 | loss: 0.2187
+Epoch 5/5 | val_loss: 0.2950 | auc 0.88
+Saving final model to runs/my-model/final.pt
+Training complete in 41m12s

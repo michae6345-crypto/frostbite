@@ -1,0 +1,56 @@
+{
+  "check": "G6.production_uf2",
+  "gate": "G6",
+  "title": "production/firmware.uf2 valid and current (identical to fresh build or newer than sources)",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "production/firmware.uf2": "66f0dad0cc6d43b860864c5425962b6420d4298d3c593ba9c668d81812fc812b",
+    "production/led-test.uf2": "43dbac906fc5e300174cc498456a05ad1adaac4b54ed19fad37087df8523877c"
+  },
+  "details": {
+    "uf2_production/firmware.uf2": {
+      "ok": true,
+      "errors": [],
+      "n_errors": 0,
+      "blocks": 171,
+      "declared_blocks": [
+        171
+      ],
+      "family_ids": [
+        "0xe48bff56"
+      ],
+      "payload_bytes": 43776,
+      "size": 87552,
+      "flash_range": [
+        "0x10000000",
+        "0x1000aa00"
+      ]
+    },
+    "uf2_production/led-test.uf2": {
+      "ok": true,
+      "errors": [],
+      "n_errors": 0,
+      "blocks": 163,
+      "declared_blocks": [
+        163
+      ],
+      "family_ids": [
+        "0xe48bff56"
+      ],
+      "payload_bytes": 41728,
+      "size": 83456,
+      "flash_range": [
+        "0x10000000",
+        "0x1000a200"
+      ]
+    },
+    "identical_to_fresh_build": true,
+    "newer_than_all_firmware_sources": true
+  },
+  "timestamp": "2026-11-03T20:22:25+00:00",
+  "duration_s": 0.0
+}

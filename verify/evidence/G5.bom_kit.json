@@ -1,0 +1,66 @@
+{
+  "check": "G5.bom_kit",
+  "gate": "G5",
+  "title": "Part counts (design.json, PCB footprints) vs Hackpad kit",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "PCB/frostbite.kicad_pcb": "b99cadff7e4148e1a4641d510bc795da955c26f145f794179ce756ca396ac062"
+  },
+  "details": {
+    "kit": {
+      "switches": 16,
+      "keycaps": 16,
+      "diodes": 20,
+      "encoders": 2,
+      "oled": 1,
+      "leds": 16,
+      "screws": 6,
+      "inserts": 6,
+      "mcu_xiao_rp2040": 1
+    },
+    "design_needs": {
+      "switches": 9,
+      "keycaps": 9,
+      "diodes": 9,
+      "encoders": 1,
+      "oled": 1,
+      "leds": 13,
+      "screws": 4,
+      "inserts": 4,
+      "mcu_xiao_rp2040": 1
+    },
+    "pcb_counts": {
+      "switches": 9,
+      "diodes": 9,
+      "encoders": 1,
+      "oled": 1,
+      "leds": 13,
+      "mcu_xiao_rp2040": 1
+    },
+    "extras_to_buy": [
+      {
+        "item": "knob: 18 mm knurled aluminium, 6 mm D-shaft",
+        "qty": 1,
+        "why": "kit has no knob"
+      }
+    ],
+    "spare_in_kit": {
+      "switches": 7,
+      "keycaps": 7,
+      "diodes": 11,
+      "encoders": 1,
+      "oled": 0,
+      "leds": 3,
+      "screws": 2,
+      "inserts": 2,
+      "mcu_xiao_rp2040": 0
+    }
+  },
+  "timestamp": "2026-11-03T20:22:21+00:00",
+  "duration_s": 0.04
+}

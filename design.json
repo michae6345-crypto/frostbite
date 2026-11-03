@@ -1,0 +1,340 @@
+{
+  "_about": "Single source of truth for Frostbite 9. Firmware, PCB, case and host script must all match this file. Units mm, PCB coordinates: origin at the PCB top-left (back-left corner as seen from above), x to the right, y toward the user (KiCad convention). 'Back' = y=0 edge, where the USB cable exits.",
+  "name": "Frostbite",
+  "layout": "stratum9 (Frostbite 9)",
+  "mcu": {
+    "board": "Seeed XIAO RP2040",
+    "side": "bottom (underside of the PCB), soldered by its castellated pads so no pins poke through under the OLED",
+    "usb": "USB-C points to the back edge (y=0); XIAO board edge flush with the PCB edge so the receptacle overhangs ~1.4 mm",
+    "rect": {
+      "x": 12.1,
+      "y": 0,
+      "w": 17.8,
+      "h": 21.0
+    }
+  },
+  "pins": [
+    {
+      "xiao": "D0",
+      "gpio": "GP26",
+      "net": "ROW0"
+    },
+    {
+      "xiao": "D1",
+      "gpio": "GP27",
+      "net": "ROW1"
+    },
+    {
+      "xiao": "D2",
+      "gpio": "GP28",
+      "net": "ROW2"
+    },
+    {
+      "xiao": "D3",
+      "gpio": "GP29",
+      "net": "COL0"
+    },
+    {
+      "xiao": "D4",
+      "gpio": "GP6",
+      "net": "SDA",
+      "note": "I2C1 SDA"
+    },
+    {
+      "xiao": "D5",
+      "gpio": "GP7",
+      "net": "SCL",
+      "note": "I2C1 SCL"
+    },
+    {
+      "xiao": "D6",
+      "gpio": "GP0",
+      "net": "LED_DIN",
+      "note": "SK6812 data via PIO"
+    },
+    {
+      "xiao": "D7",
+      "gpio": "GP1",
+      "net": "ENC_A"
+    },
+    {
+      "xiao": "D8",
+      "gpio": "GP2",
+      "net": "ENC_B"
+    },
+    {
+      "xiao": "D9",
+      "gpio": "GP4",
+      "net": "COL1"
+    },
+    {
+      "xiao": "D10",
+      "gpio": "GP3",
+      "net": "COL2"
+    }
+  ],
+  "power": {
+    "5V": "XIAO 5V (VBUS) -> SK6812 VDD",
+    "3V3": "XIAO 3V3 -> OLED VCC",
+    "GND": "common",
+    "note": "LED data is 3.3 V into 5 V SK6812s; common on Hackpad builds and usually fine, flagged in docs/VERIFICATION.md. No decoupling caps in the kit."
+  },
+  "matrix": {
+    "rows": 3,
+    "cols": 3,
+    "diode_direction": "COL2ROW",
+    "diode": "1N4148 through-hole, cathode toward the row",
+    "encoder_push": "not wired (no free GPIO)"
+  },
+  "pcb": {
+    "w": 61.15,
+    "h": 83.15,
+    "layers": 2,
+    "content_offset": {
+      "x": 2.0,
+      "y": 2.0
+    },
+    "max": "100 x 100 (Hackpad)"
+  },
+  "keys": [
+    {
+      "ref": "SW1",
+      "id": "agent1",
+      "role": "agent",
+      "row": 0,
+      "col": 0,
+      "x": 11.525,
+      "y": 33.525,
+      "led": 0
+    },
+    {
+      "ref": "SW2",
+      "id": "agent2",
+      "role": "agent",
+      "row": 0,
+      "col": 1,
+      "x": 30.575,
+      "y": 33.525,
+      "led": 1
+    },
+    {
+      "ref": "SW3",
+      "id": "agent3",
+      "role": "agent",
+      "row": 0,
+      "col": 2,
+      "x": 49.625,
+      "y": 33.525,
+      "led": 2
+    },
+    {
+      "ref": "SW4",
+      "id": "agent4",
+      "role": "agent",
+      "row": 1,
+      "col": 0,
+      "x": 11.525,
+      "y": 52.575,
+      "led": 5
+    },
+    {
+      "ref": "SW5",
+      "id": "agent5",
+      "role": "agent",
+      "row": 1,
+      "col": 1,
+      "x": 30.575,
+      "y": 52.575,
+      "led": 4
+    },
+    {
+      "ref": "SW6",
+      "id": "agent6",
+      "role": "agent",
+      "row": 1,
+      "col": 2,
+      "x": 49.625,
+      "y": 52.575,
+      "led": 3
+    },
+    {
+      "ref": "SW7",
+      "id": "approve",
+      "role": "command",
+      "row": 2,
+      "col": 0,
+      "x": 11.525,
+      "y": 71.625,
+      "led": 6
+    },
+    {
+      "ref": "SW8",
+      "id": "talk",
+      "role": "command",
+      "row": 2,
+      "col": 1,
+      "x": 30.575,
+      "y": 71.625,
+      "led": 7
+    },
+    {
+      "ref": "SW9",
+      "id": "stop",
+      "role": "command",
+      "row": 2,
+      "col": 2,
+      "x": 49.625,
+      "y": 71.625,
+      "led": 8
+    }
+  ],
+  "key_led_offset": "SK6812 MINI-E reverse-mounted under each switch's LED window, at the position the MX footprint defines (typically switch centre + (0, +5.08))",
+  "leds": {
+    "type": "SK6812 MINI-E",
+    "count": 13,
+    "chain_order": "per-key 0-8 (serpentine, see keys[].led), then glow 9-12",
+    "glow": [
+      {
+        "led": 9,
+        "x": 5.0,
+        "y": 25.4,
+        "side": "bottom",
+        "note": "shines down into the clear PETG light-gap band"
+      },
+      {
+        "led": 10,
+        "x": 56.15,
+        "y": 25.4,
+        "side": "bottom"
+      },
+      {
+        "led": 11,
+        "x": 56.15,
+        "y": 80.6,
+        "side": "bottom"
+      },
+      {
+        "led": 12,
+        "x": 5.0,
+        "y": 80.6,
+        "side": "bottom"
+      }
+    ]
+  },
+  "encoder": {
+    "type": "Alps EC11E with switch",
+    "x": 49.15,
+    "y": 13.0,
+    "push": "unconnected",
+    "knob": "18 mm knurled aluminium, 6 mm D-shaft",
+    "note": "Footprint rotated 90 deg (shaft position unchanged) so the A/C/B pins sit at y 20.5, clear of J1."
+  },
+  "oled": {
+    "type": "0.91in 128x32 SSD1306 I2C module",
+    "address": "0x3C",
+    "window": {
+      "x": 6.0,
+      "y": 7.25,
+      "w": 30.0,
+      "h": 11.5
+    },
+    "module": {
+      "x": 2.5,
+      "y": 7.0,
+      "w": 38.0,
+      "h": 12.0
+    },
+    "header": {
+      "side": "right (+x) end",
+      "pin_row_x": 39.0,
+      "pins_top_to_bottom": [
+        "GND",
+        "VCC",
+        "SCL",
+        "SDA"
+      ],
+      "pitch": 2.54,
+      "centre_y": 13.0
+    },
+    "mount": "standard 2.5 mm header so the glass sits near plate level"
+  },
+  "case": {
+    "shell": {
+      "w": 75.15,
+      "h": 97.15,
+      "corner": 12,
+      "bezel": 9,
+      "tilt_deg": 4
+    },
+    "style": "iced PETG, floating top plate over a ~2 mm ice-blue light gap (clear PETG band), screws hidden underneath",
+    "inserts": "4 x M3 heat-set (OD 5, L 4, hole 4.7) in the Top part; M3x16 screws from underneath through Bottom and GlowBand",
+    "usb_cutout": {
+      "w": 13.5,
+      "h": 8.0,
+      "edge": "back, centred on the XIAO receptacle"
+    },
+    "tolerance": 0.3,
+    "screws": {
+      "_about": "M3 heat-set inserts in the Top, screws up from underneath; bosses tuck ~1 mm under the PCB edge, so these y bands must stay free of bottom-side pads (checked against PCB/build/bottom_pads.json)",
+      "positions": [
+        {
+          "x": -3.0,
+          "y": 9.0
+        },
+        {
+          "x": 64.15,
+          "y": 9.0
+        },
+        {
+          "x": -3.0,
+          "y": 62.1
+        },
+        {
+          "x": 64.15,
+          "y": 62.1
+        }
+      ],
+      "boss_od": 8.7
+    }
+  },
+  "firmware": {
+    "framework": "QMK",
+    "keyboard": "frostbite",
+    "output": "firmware.uf2",
+    "raw_hid": {
+      "usage_page": "0xFF60",
+      "usage": "0x61",
+      "report_bytes": 32
+    }
+  },
+  "protocol": {
+    "_about": "Raw HID, 32-byte reports. Byte 0 = command. Unused bytes zero.",
+    "status_codes": {
+      "idle": 0,
+      "run": 1,
+      "done": 2,
+      "needs": 3,
+      "error": 4
+    },
+    "status_colours": {
+      "idle": "#eef2f5 dim",
+      "run": "#3d8bff",
+      "done": "#2fbf5b",
+      "needs": "#ffb020 slow pulse",
+      "error": "#ff4d4f blink"
+    },
+    "host_to_device": {
+      "0x01 SET_SLOT": "[0x01, slot 0-5, status]",
+      "0x02 SET_ALL": "[0x02, s0, s1, s2, s3, s4, s5]",
+      "0x03 OLED_LINE": "[0x03, line 0-1, len, up to 21 ASCII bytes]",
+      "0x04 SET_GLOW": "[0x04, r, g, b, brightness 0-255]",
+      "0x05 PING": "[0x05] -> device answers [0x05, protocol_version=1, selected_slot]",
+      "0x06 SET_SELECTED": "[0x06, slot 0-5]"
+    },
+    "device_to_host": {
+      "0x81 KEY": "[0x81, key index 0-8 (keys[] order), action 1=tap 2=hold]",
+      "0x82 ENCODER": "[0x82, 1=clockwise 0xFF=counter-clockwise, selected_slot after the move]"
+    },
+    "fallback_without_host": "If no PING for 5 s, keys send keycodes instead: agent1-6 = F13-F18, approve = F19, talk = F20 (held while held), stop = Escape; encoder = volume. Status LEDs fade to idle."
+  }
+}

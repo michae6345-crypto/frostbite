@@ -1,0 +1,289 @@
+{
+  "check": "G4.switch_cutouts",
+  "gate": "G4",
+  "title": "Top part: 9 switch cutouts 14.0 +/-0.1 on the design.json key pattern",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "production/Top.stl": "3e4e95d41e6297365763895cd0eb121c18298495c299c80f9de9ed437129a45f"
+  },
+  "details": {
+    "section_levels": [
+      {
+        "frac": 0.05,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.1,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.15,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.2,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.25,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.3,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.35,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.4,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.45,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.5,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.55,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.6,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.65,
+        "holes": 4,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.7,
+        "holes": 5,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.75,
+        "holes": 5,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.8,
+        "holes": 1,
+        "switch_like": 0,
+        "round": 0,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.85,
+        "holes": 11,
+        "switch_like": 9,
+        "round": 1,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.9,
+        "holes": 11,
+        "switch_like": 9,
+        "round": 1,
+        "oled_window_like": 0
+      },
+      {
+        "frac": 0.95,
+        "holes": 11,
+        "switch_like": 9,
+        "round": 1,
+        "oled_window_like": 1
+      }
+    ],
+    "plate_normal": [
+      0.0,
+      -0.0,
+      -1.0
+    ],
+    "section_frac": 0.95,
+    "cutouts": [
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -19.05,
+          -30.05
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -19.05,
+          -11.0
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -0.0,
+          -30.05
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          19.05,
+          -30.05
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -0.0,
+          -11.0
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          19.05,
+          -11.0
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -19.05,
+          8.05
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          -0.0,
+          8.05
+        ]
+      },
+      {
+        "chords": [
+          14.0,
+          14.0
+        ],
+        "sides": [
+          14.0,
+          14.0
+        ],
+        "centre_2d": [
+          19.05,
+          8.05
+        ]
+      }
+    ],
+    "pattern_max_pairwise_dev_mm": 0.0,
+    "rigid_fit_max_residual_mm": 0.0
+  },
+  "timestamp": "2026-11-03T20:22:21+00:00",
+  "duration_s": 0.25
+}

@@ -1,0 +1,40 @@
+{
+  "check": "G6.qmk_lint",
+  "gate": "G6",
+  "title": "qmk lint -kb frostbite",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "qmk",
+        "lint",
+        "-kb",
+        "frostbite"
+      ],
+      "cwd": "~/qmk_firmware",
+      "exit_code": 0,
+      "duration_s": 0.44,
+      "stdout_tail": [],
+      "stderr_tail": [
+        "\u03a8 Lint check passed!"
+      ]
+    }
+  ],
+  "inputs_sha256": {
+    "Firmware/qmk/keyboards/frostbite/config.h": "6d965e12a75267ee20affd81e6f65a05ff720c2baf6d65b22fd490b389f08f83",
+    "Firmware/qmk/keyboards/frostbite/frostbite.c": "80c4189ce09d81637cd9085140f36c29f019ae9b01d4a259655ed71a46432efe",
+    "Firmware/qmk/keyboards/frostbite/halconf.h": "c4dc51661d0426b5266e4bd8ae14b29877af6717108041ad119d19821cf556c2",
+    "Firmware/qmk/keyboards/frostbite/keyboard.json": "4bf4d64c10f065c3f79badeb4d7586e2e11d37a3612245139265ac6ef2771e03",
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "ca464159d495164043f4e7a473d05b1b8750c8399ff0cc04b3f2651c5ec75ec6",
+    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "7c959162848aaf69a0f030fe9c789b0f742e3ea8be2c2d0ba3b1fbae36ff63e5",
+    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "6e97d1c02b04f6961ed3bffff9647c5fdc63ea34816b32db76e505f86b43b004"
+  },
+  "details": {
+    "qmk_link": "~/Documents/frostbite/Firmware/qmk/keyboards/frostbite"
+  },
+  "timestamp": "2026-11-03T20:22:21+00:00",
+  "duration_s": 0.44
+}

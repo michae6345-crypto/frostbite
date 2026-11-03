@@ -1,0 +1,66 @@
+{
+  "check": "G2.firmware_pins",
+  "gate": "G2",
+  "title": "Firmware keyboard.json / config.h pins vs design.json",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "Firmware/qmk/keyboards/frostbite/keyboard.json": "4bf4d64c10f065c3f79badeb4d7586e2e11d37a3612245139265ac6ef2771e03",
+    "Firmware/qmk/keyboards/frostbite/config.h": "6d965e12a75267ee20affd81e6f65a05ff720c2baf6d65b22fd490b389f08f83",
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "ca464159d495164043f4e7a473d05b1b8750c8399ff0cc04b3f2651c5ec75ec6",
+    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "7c959162848aaf69a0f030fe9c789b0f742e3ea8be2c2d0ba3b1fbae36ff63e5"
+  },
+  "details": {
+    "expected": {
+      "rows": [
+        "GP26",
+        "GP27",
+        "GP28"
+      ],
+      "cols": [
+        "GP29",
+        "GP4",
+        "GP3"
+      ],
+      "enc": [
+        "GP1",
+        "GP2"
+      ],
+      "ws2812": "GP0",
+      "sda_scl": [
+        "GP6",
+        "GP7"
+      ]
+    },
+    "found": {
+      "rows": [
+        "GP26",
+        "GP27",
+        "GP28"
+      ],
+      "cols": [
+        "GP29",
+        "GP4",
+        "GP3"
+      ],
+      "enc": [
+        {
+          "pin_a": "GP1",
+          "pin_b": "GP2",
+          "resolution": 4
+        }
+      ],
+      "ws2812": {
+        "pin": "GP0",
+        "driver": "vendor"
+      },
+      "led_count": 13
+    }
+  },
+  "timestamp": "2026-11-03T20:22:02+00:00",
+  "duration_s": 0.0
+}

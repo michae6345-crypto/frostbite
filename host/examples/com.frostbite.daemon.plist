@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Example LaunchAgent for frostbite-daemon. NOT installed automatically.
+  Replace YOUR_USER, then:
+    cp com.frostbite.daemon.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.frostbite.daemon.plist
+  Stop / remove:
+    launchctl bootout gui/$(id -u)/com.frostbite.daemon
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.frostbite.daemon</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/YOUR_USER/.local/bin/frostbite-daemon</string>
+    <!-- Optional: watch a training run from boot
+    <string>--watch-train</string>
+    <string>/Users/YOUR_USER/code/my-model/runs/latest/train.log</string>
+    <string>--name</string>
+    <string>my-model</string>
+    -->
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <!-- Needed so Return/Escape keystrokes reach your GUI session. -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin:/Users/YOUR_USER/.local/bin</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USER/Library/Logs/frostbite-daemon.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USER/Library/Logs/frostbite-daemon.log</string>
+</dict>
+</plist>

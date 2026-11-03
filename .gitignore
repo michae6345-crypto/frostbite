@@ -1,0 +1,22 @@
+.DS_Store
+node_modules/
+__pycache__/
+.venv/
+*.pyc
+
+# KiCad
+*-backups/
+fp-info-cache
+*.kicad_prl
+_autosave-*
+*.lck
+
+# QMK build output
+.build/
+
+# KiCad build outputs (regenerate with PCB/tools/build_all.sh); keep the check results
+PCB/build/*
+!PCB/build/erc.json
+!PCB/build/drc.json
+!PCB/build/bottom_pads.json
+!PCB/build/frostbite-pos.csv

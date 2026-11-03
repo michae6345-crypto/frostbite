@@ -1,0 +1,103 @@
+{
+  "check": "G2.netlist",
+  "gate": "G2",
+  "title": "Schematic netlist vs design.json (XIAO nets, matrix, OLED order, LED chain, power)",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli",
+        "sch",
+        "export",
+        "netlist",
+        "--format",
+        "kicadsexpr",
+        "-o",
+        "~/Documents/frostbite/verify/.cache/work/netlist.net",
+        "~/Documents/frostbite/PCB/frostbite.kicad_sch"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 0.33,
+      "stdout_tail": [],
+      "stderr_tail": [
+        "Fontconfig error: Cannot load default config file: No such file: (null)"
+      ]
+    }
+  ],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "PCB/frostbite.kicad_sch": "33c3afa1bfb154c2e2766b0c9f232650c1ac7a23c0bb36ffd947b3475cdca759"
+  },
+  "details": {
+    "netlist_sha256": "df02698ceee6824d3a0bfc24ce257fbac2e250da98ae376cc952c86e9180333f",
+    "led_chain": [
+      "LED1",
+      "LED2",
+      "LED3",
+      "LED4",
+      "LED5",
+      "LED6",
+      "LED7",
+      "LED8",
+      "LED9",
+      "LED10",
+      "LED11",
+      "LED12",
+      "LED13"
+    ],
+    "components": {
+      "oled": [
+        "J1"
+      ],
+      "xiao": [
+        "U1"
+      ],
+      "switch": [
+        "SW1",
+        "SW2",
+        "SW3",
+        "SW4",
+        "SW5",
+        "SW6",
+        "SW7",
+        "SW8",
+        "SW9"
+      ],
+      "enc": [
+        "ENC1"
+      ],
+      "diode": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9"
+      ],
+      "led": [
+        "LED1",
+        "LED10",
+        "LED11",
+        "LED12",
+        "LED13",
+        "LED2",
+        "LED3",
+        "LED4",
+        "LED5",
+        "LED6",
+        "LED7",
+        "LED8",
+        "LED9"
+      ]
+    }
+  },
+  "timestamp": "2026-11-03T20:22:02+00:00",
+  "duration_s": 0.33
+}

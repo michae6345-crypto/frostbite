@@ -1,0 +1,71 @@
+{
+  "check": "G6.compile_default",
+  "gate": "G6",
+  "title": "qmk compile -kb frostbite -km default + UF2 parse",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "qmk",
+        "compile",
+        "-kb",
+        "frostbite",
+        "-km",
+        "default"
+      ],
+      "cwd": "~/qmk_firmware",
+      "exit_code": 0,
+      "duration_s": 2.1,
+      "stdout_tail": [
+        "",
+        "",
+        "arm-none-eabi-gcc (crosstool-NG 1.27.0.82_7f9d704 - qmk/qmk_toolchains @ a55a2b0) 15.2.0",
+        "Copyright (C) 2025 Free Software Foundation, Inc.",
+        "This is free software; see the source for copying conditions.  There is NO",
+        "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+        "",
+        "Copying frostbite_default.uf2 to qmk_firmware folder                                                \u001b[32;01m[OK]\u001b[0m"
+      ],
+      "stderr_tail": [
+        "\u03a8 Compiling keymap with make -r -R -f builddefs/build_keyboard.mk KEYBOARD=frostbite KEYMAP=default KEYBOARD_FILESAFE=frostbite TARGET=frostbite_default VERBOSE=false COLOR=true SILENT=false QMK_BIN=\"qmk\""
+      ]
+    }
+  ],
+  "inputs_sha256": {
+    "Firmware/qmk/keyboards/frostbite/config.h": "6d965e12a75267ee20affd81e6f65a05ff720c2baf6d65b22fd490b389f08f83",
+    "Firmware/qmk/keyboards/frostbite/frostbite.c": "80c4189ce09d81637cd9085140f36c29f019ae9b01d4a259655ed71a46432efe",
+    "Firmware/qmk/keyboards/frostbite/halconf.h": "c4dc51661d0426b5266e4bd8ae14b29877af6717108041ad119d19821cf556c2",
+    "Firmware/qmk/keyboards/frostbite/keyboard.json": "4bf4d64c10f065c3f79badeb4d7586e2e11d37a3612245139265ac6ef2771e03",
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "ca464159d495164043f4e7a473d05b1b8750c8399ff0cc04b3f2651c5ec75ec6",
+    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "7c959162848aaf69a0f030fe9c789b0f742e3ea8be2c2d0ba3b1fbae36ff63e5",
+    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "6e97d1c02b04f6961ed3bffff9647c5fdc63ea34816b32db76e505f86b43b004"
+  },
+  "details": {
+    "qmk_link": "~/Documents/frostbite/Firmware/qmk/keyboards/frostbite",
+    "uf2_path": "~/qmk_firmware/frostbite_default.uf2",
+    "uf2_sha256": "66f0dad0cc6d43b860864c5425962b6420d4298d3c593ba9c668d81812fc812b",
+    "uf2_frostbite_default.uf2": {
+      "ok": true,
+      "errors": [],
+      "n_errors": 0,
+      "blocks": 171,
+      "declared_blocks": [
+        171
+      ],
+      "family_ids": [
+        "0xe48bff56"
+      ],
+      "payload_bytes": 43776,
+      "size": 87552,
+      "flash_range": [
+        "0x10000000",
+        "0x1000aa00"
+      ]
+    }
+  },
+  "timestamp": "2026-11-03T20:22:23+00:00",
+  "duration_s": 2.1
+}

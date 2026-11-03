@@ -1,0 +1,28 @@
+{
+  "check": "G3.outline_layers",
+  "gate": "G3",
+  "title": "Board outline vs design.json, copper layer count, silkscreen text",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "PCB/frostbite.kicad_pcb": "b99cadff7e4148e1a4641d510bc795da955c26f145f794179ce756ca396ac062"
+  },
+  "details": {
+    "copper": [
+      "F.Cu",
+      "B.Cu"
+    ],
+    "outline": {
+      "x0": 0.0,
+      "y0": 0.0,
+      "w": 61.15,
+      "h": 83.15
+    }
+  },
+  "timestamp": "2026-11-03T20:22:03+00:00",
+  "duration_s": 0.03
+}

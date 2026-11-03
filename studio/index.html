@@ -1,0 +1,215 @@
+<title>Frostbite Studio</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+
+<div class="page">
+  <a class="skip" href="#configurator">Skip to configurator</a>
+
+  <header class="masthead">
+    <div class="topbar">
+      <a class="brand" href="#top" aria-label="Frostbite Studio, back to top">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="2.5" y="2.5" width="19" height="19" rx="5" class="bm-shell"/>
+          <rect x="6" y="9" width="3.4" height="3.4" rx="0.8" class="bm-key a"/>
+          <rect x="10.3" y="9" width="3.4" height="3.4" rx="0.8" class="bm-key b"/>
+          <rect x="14.6" y="9" width="3.4" height="3.4" rx="0.8" class="bm-key c"/>
+          <rect x="6" y="13.6" width="3.4" height="3.4" rx="0.8" class="bm-key"/>
+          <rect x="10.3" y="13.6" width="3.4" height="3.4" rx="0.8" class="bm-key"/>
+          <rect x="14.6" y="13.6" width="3.4" height="3.4" rx="0.8" class="bm-key"/>
+          <rect x="6" y="5.2" width="6.5" height="2" rx="0.5" class="bm-oled"/>
+          <circle cx="16.3" cy="6.2" r="1.6" class="bm-knob"/>
+        </svg>
+        <span>Frostbite <em>Studio</em></span>
+      </a>
+      <nav class="topnav" aria-label="Sections">
+        <a href="#reference">Reference</a>
+        <a href="#configurator">Configurator</a>
+        <a href="#presets">Presets</a>
+        <a href="#permutations">Permutations</a>
+        <a href="#compare">Compare</a>
+      </nav>
+      <button type="button" id="theme-toggle" class="btn btn-quiet theme-toggle" aria-label="Colour theme: automatic. Click to change.">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor"/></svg>
+        <span id="theme-label">Auto</span>
+      </button>
+    </div>
+
+    <div class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow">Hack Club Hackpad &middot; design permutations</p>
+        <h1>Frostbite</h1>
+        <p class="lede">A frosted-PETG macropad whose glowing keys show what your AI coding agents and ML training runs are doing, with a dial and three command keys to approve, talk or stop them.</p>
+      </div>
+      <div class="hero-rules">
+        <p class="eyebrow">Build envelope</p>
+        <ul class="chips" aria-label="Hackpad constraints">
+          <li class="chip"><span class="chip-k">PCB</span> &le; 100 &times; 100 mm</li>
+          <li class="chip"><span class="chip-k">Board</span> 2-layer</li>
+          <li class="chip"><span class="chip-k">Case</span> &le; 200 &times; 200 &times; 100 mm</li>
+          <li class="chip"><span class="chip-k">Case</span> 3D printed only</li>
+          <li class="chip"><span class="chip-k">MCU</span> XIAO RP2040 &middot; 11 GPIO</li>
+          <li class="chip"><span class="chip-k">Parts</span> Kit parts</li>
+        </ul>
+        <p class="kit-line">Kit: 16 MX switches (Gateron Yellow KS-3) &middot; 16 white DSA caps &middot; 2 EC11E encoders &middot; 0.91&Prime; 128&times;32 OLED &middot; 16 SK6812 MINI-E &middot; 20 1N4148 &middot; 6 M3&times;16 + heat-set inserts</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="reference" aria-labelledby="reference-h">
+      <div class="section-head">
+        <span class="sheet-no">01</span>
+        <h2 id="reference-h">Reference renders</h2>
+        <p class="section-sub">AI concept renders (mood only). Every drawing below this point is generated in code from real part dimensions.</p>
+      </div>
+      <div class="refs">
+        <figure class="ref ref-wide">
+          <img src="img/10-frostbite-halo.jpg" width="1400" height="933" loading="lazy" decoding="async" alt="Concept render: frosted macropad on a desk with a 3 by 3 grid of glowing keys, an OLED and an aluminium knob ringed in ice-blue light.">
+          <figcaption><span class="tag">AI concept render &middot; mood only</span> Halo glow, floating plate</figcaption>
+        </figure>
+        <figure class="ref">
+          <img src="img/11-frostbite-flatlay.jpg" width="1400" height="1400" loading="lazy" decoding="async" alt="Concept render: top-down flat-lay of the macropad on grey felt, with a braided USB-C cable and a keycap puller beside it.">
+          <figcaption><span class="tag">AI concept render &middot; mood only</span> Flat-lay, top screws</figcaption>
+        </figure>
+        <figure class="ref">
+          <img src="img/4-frostbite.jpg" width="1400" height="933" loading="lazy" decoding="async" alt="Concept render: clear layered shell with a white knurled knob and a cyan light band around the base.">
+          <figcaption><span class="tag">AI concept render &middot; mood only</span> Clear shell, white knob</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="configurator" aria-labelledby="configurator-h">
+      <div class="section-head">
+        <span class="sheet-no">02</span>
+        <h2 id="configurator-h">Configurator</h2>
+        <p class="section-sub">Change any axis. Lock the ones you like, then shuffle the rest. The checker runs the Hackpad rules on every change.</p>
+      </div>
+
+      <div class="cfg">
+        <div class="cfg-stage panel" id="stage">
+          <div class="stage-head">
+            <div class="stage-title">
+              <h3 id="stage-name">Frostbite 9</h3>
+              <p id="stage-blurb" class="muted"></p>
+            </div>
+            <div class="tabs" role="tablist" aria-label="Drawing view">
+              <button type="button" role="tab" id="tab-top" aria-selected="true" aria-controls="view-panel" data-view="top">Top</button>
+              <button type="button" role="tab" id="tab-side" aria-selected="false" aria-controls="view-panel" data-view="side" tabindex="-1">Side</button>
+              <button type="button" role="tab" id="tab-exploded" aria-selected="false" aria-controls="view-panel" data-view="exploded" tabindex="-1">Exploded</button>
+            </div>
+          </div>
+          <div id="view-panel" class="view" role="tabpanel" aria-labelledby="tab-top" tabindex="0"></div>
+          <p id="spec-caption" class="spec-caption mono"></p>
+          <div class="stage-tools">
+            <button type="button" id="toggle-dims" class="btn btn-toggle" aria-pressed="false">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5v6M14 5v6M2 8h12M4.5 6.5 2 8l2.5 1.5M11.5 6.5 14 8l-2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Dimensions
+            </button>
+            <button type="button" id="toggle-sim" class="btn btn-toggle" aria-pressed="false">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.5 8h3l1.5-4 3 8 1.5-4h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Simulate runs
+            </button>
+            <span class="tools-sep" aria-hidden="true"></span>
+            <button type="button" id="btn-shuffle" class="btn btn-primary">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.5 4.5h2.8c1.6 0 2.5.8 3.4 2.3l1.6 2.4c.9 1.5 1.8 2.3 3.4 2.3h1.8M1.5 11.5h2.8c1 0 1.8-.4 2.4-1M9.2 5.5c.6-.6 1.4-1 2.5-1h2.8M12.5 2.5l2 2-2 2M12.5 9.5l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Shuffle
+            </button>
+            <button type="button" id="btn-reset" class="btn">Reset</button>
+            <button type="button" id="btn-pin-current" class="btn" aria-pressed="false">Pin to compare</button>
+          </div>
+          <div class="legend" aria-label="Status colours">
+            <span class="legend-title mono">Key status</span>
+            <ul id="status-legend" class="legend-list"></ul>
+          </div>
+          <div id="verdict" class="verdict" role="status"></div>
+        </div>
+
+        <aside class="cfg-checks panel" id="checks" aria-labelledby="checks-h">
+          <h3 id="checks-h" class="panel-title">Rule check</h3>
+          <div id="checks-body"></div>
+          <div class="json-tools">
+            <button type="button" id="btn-copy" class="btn">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 10.5H2.8A1.3 1.3 0 0 1 1.5 9.2V2.8c0-.7.6-1.3 1.3-1.3h6.4c.7 0 1.3.6 1.3 1.3V3" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+              <span id="copy-label">Copy spec JSON</span>
+            </button>
+            <details id="json-details" class="json-details">
+              <summary>Show spec JSON</summary>
+              <label for="spec-json" class="sr-only">Spec JSON</label>
+              <textarea id="spec-json" class="mono" rows="10" readonly spellcheck="false"></textarea>
+            </details>
+          </div>
+        </aside>
+
+        <div class="cfg-controls panel" id="controls" aria-labelledby="controls-h">
+          <div class="controls-head">
+            <h3 id="controls-h" class="panel-title">Spec</h3>
+            <button type="button" id="btn-unlock" class="btn btn-quiet btn-small">Unlock all</button>
+          </div>
+          <p class="muted small">The lock beside each axis keeps it fixed when you shuffle.</p>
+          <form id="controls-form" class="controls-form" autocomplete="off"></form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="presets" aria-labelledby="presets-h">
+      <div class="section-head">
+        <span class="sheet-no">03</span>
+        <h2 id="presets-h">Presets</h2>
+        <p class="section-sub">Curated directions. Select a card to load it into the configurator.</p>
+      </div>
+      <div id="preset-grid" class="grid cards"></div>
+    </section>
+
+    <section class="section" id="permutations" aria-labelledby="perm-h">
+      <div class="section-head">
+        <span class="sheet-no">04</span>
+        <h2 id="perm-h">More permutations</h2>
+        <p class="section-sub" id="perm-sub">Variants around the current configurator spec, changing one or two axes at a time.</p>
+      </div>
+      <div class="perm-bar">
+        <div id="perm-filters" class="filter-chips" role="group" aria-label="Axis to explore"></div>
+        <div class="perm-actions">
+          <button type="button" id="perm-hide-bad" class="btn btn-toggle btn-small" aria-pressed="false">Hide rule-breakers</button>
+          <button type="button" id="perm-reroll" class="btn btn-small">New pairings</button>
+        </div>
+      </div>
+      <p id="perm-summary" class="muted small perm-summary" aria-live="polite"></p>
+      <div id="perm-groups"></div>
+    </section>
+
+    <section class="section" id="compare" aria-labelledby="compare-h">
+      <div class="section-head">
+        <span class="sheet-no">05</span>
+        <h2 id="compare-h">Compare</h2>
+        <p class="section-sub">Pin up to four designs from any card or from the configurator. Rows that differ are marked.</p>
+      </div>
+      <div id="compare-tray" class="compare-tray"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>
+      <p class="footer-title">Frostbite Studio</p>
+      <p class="muted small">Drawings are generated from the spec and part dimensions in this page. Dimensions in millimetres.</p>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://hackpad.hackclub.com/guide" target="_blank" rel="noopener noreferrer">Hackpad guide</a></li>
+      <li><a href="https://hackpad.hackclub.com/parts" target="_blank" rel="noopener noreferrer">Hackpad parts list</a></li>
+    </ul>
+  </footer>
+
+  <a id="compare-dock" class="compare-dock" href="#compare" hidden>Compare <span id="compare-count" class="mono">0</span>/4</a>
+  <p id="live" class="sr-only" aria-live="polite"></p>
+</div>
+
+<script src="dims.js" charset="utf-8"></script>
+<script src="layouts.js" charset="utf-8"></script>
+<script src="catalog.js" charset="utf-8"></script>
+<script src="constraints.js" charset="utf-8"></script>
+<script src="render-top.js" charset="utf-8"></script>
+<script src="render-side.js" charset="utf-8"></script>
+<script src="app.js" charset="utf-8"></script>

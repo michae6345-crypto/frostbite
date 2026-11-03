@@ -1,0 +1,39 @@
+{
+  "check": "G3.gerbers_zip",
+  "gate": "G3",
+  "title": "production/gerbers.zip parsed with gerbonara",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
+    "production/gerbers.zip": "6d1c8053bf24313027784e0376a7b05394db1f0571ec5fdda55ceca5d23b7f02"
+  },
+  "details": {
+    "gerbonara_warnings": [
+      "frostbite-NPTH.drl:14 \"G90\": G90 header statement found after end of header",
+      "frostbite-PTH.drl:22 \"G90\": G90 header statement found after end of header"
+    ],
+    "layers_found": {
+      "top copper": "frostbite-F_Cu.gbr",
+      "top mask": "frostbite-F_Mask.gbr",
+      "top silk": "frostbite-F_Silkscreen.gbr",
+      "top paste": "frostbite-F_Paste.gbr",
+      "bottom copper": "frostbite-B_Cu.gbr",
+      "bottom mask": "frostbite-B_Mask.gbr",
+      "bottom silk": "frostbite-B_Silkscreen.gbr",
+      "bottom paste": "frostbite-B_Paste.gbr",
+      "mechanical outline": "frostbite-Edge_Cuts.gbr"
+    },
+    "drill_files": 4,
+    "outline_mm": {
+      "w": 61.15,
+      "h": 83.15,
+      "stroke": 0.1
+    }
+  },
+  "timestamp": "2026-11-03T20:22:07+00:00",
+  "duration_s": 0.06
+}

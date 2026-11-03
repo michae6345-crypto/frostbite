@@ -1,0 +1,338 @@
+{
+  "timestamp": "2026-11-03T20:17:29+00:00",
+  "status": "PASS",
+  "cases": [
+    {
+      "case": "design.json: wrong GPIO for a XIAO pin",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "pins: D9 is GP4 on the XIAO RP2040, design.json says GP5"
+      ],
+      "ok": true
+    },
+    {
+      "case": "design.json: duplicate LED index",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "leds: indices [0, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] are not exactly 0..12"
+      ],
+      "ok": true
+    },
+    {
+      "case": "keyboard.json: swapped column pins",
+      "check": "G2.firmware_pins",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "matrix_pins.cols ['GP4', 'GP29', 'GP3'] != design ['GP29', 'GP4', 'GP3']"
+      ],
+      "ok": true
+    },
+    {
+      "case": "config.h: swapped I2C SDA/SCL",
+      "check": "G2.firmware_pins",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "config.h I2C1_SDA_PIN/I2C1_SCL_PIN GP7/GP6 != design GP6/GP7"
+      ],
+      "ok": true
+    },
+    {
+      "case": "keyboard.json: 12 LEDs instead of 13",
+      "check": "G2.firmware_pins",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED count 12 != design 13"
+      ],
+      "ok": true
+    },
+    {
+      "case": "netlist: OLED SCL/SDA swapped",
+      "check": "G2.netlist",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLED OLED1 pin 3 net '/SDA', expected SCL (SCL)",
+        "OLED OLED1 pin 4 net '/SCL', expected SDA (SDA)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "netlist: LED chain broken after LED7",
+      "check": "G2.netlist",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED chain from XIAO D6 (LED_DIN) reaches 7 LEDs (['LED1', 'LED2', 'LED3', 'LED4', 'LED5', 'LED6', 'LED7']), design needs 13"
+      ],
+      "ok": true
+    },
+    {
+      "case": "netlist: XIAO D9/D10 swapped",
+      "check": "G2.netlist",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "XIAO D9 net '/COL2' != design 'COL1'",
+        "XIAO D10 net '/COL1' != design 'COL2'"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb: SW5 moved 0.2 mm",
+      "check": "G3.positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "SW5 at (30.775, 52.575), design (30.575, 52.575) tol 0.05"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb: chain LEDs 3/4 swapped",
+      "check": "G3.positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "chain LED 3 (LED4) sits under SW5, design says SW6",
+        "chain LED 4 (LED5) sits under SW6, design says SW5"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb: 3 copper layers",
+      "check": "G3.outline_layers",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "copper layers ['F.Cu', 'B.Cu', 'In1.Cu'] != [F.Cu, B.Cu]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "uf2: truncated",
+      "check": "G6.production_uf2",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/firmware.uf2: size 86428 is not a multiple of 512 (truncated or padded)",
+        "production/firmware.uf2: numBlocks field says 171, file has 168 blocks (truncated?)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "uf2: wrong family ID",
+      "check": "G6.production_uf2",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/firmware.uf2: family IDs 0x00ff00ff, 0xe48bff56 != 0xe48bff56 (RP2040)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: non-watertight Top",
+      "check": "G4.stl_mesh",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top.stl: not watertight"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: one cutout 14.3 mm",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "cutout 4 at (37.58, -37.58) measures 14.300 x 14.300, want 14.0 +/-0.1"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: one cutout moved 0.5 mm",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "cutout centre pattern deviates 0.500 mm from design key pattern (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: encoder hole 1 mm off",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: encoder opening is 0.880 mm off the design pattern relative to the keys (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "CAD positions: SW7 moved 0.4 mm",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "CAD/positions.json: SW7 at (11.525, 72.025), design (11.525, 71.625)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "CAD positions: USB cutout 13.0 < 13.5 mm",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "CAD/positions.json: usb_cutout w 13.0 < design.json case.usb_cutout.w 13.5"
+      ],
+      "ok": true
+    },
+    {
+      "case": "boss (design.json) moved onto D9 pad",
+      "check": "X.boss_vs_pads",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "[design.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (57.435, 80.125), (64.15, 9.0)] (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "boss (CAD/positions.json) moved onto D9 pad",
+      "check": "X.boss_vs_pads",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "[CAD/positions.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (57.435, 80.125), (64.15, 9.0)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "bottom_pads.json: pad 0.15 mm from a boss",
+      "check": "X.boss_vs_pads",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "[design.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [1.500,8.500 - 2.500,9.500] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [1.500,8.500 - 2.500,9.500] (min 0.5)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real PCB: design.json boss moved onto D9 pad",
+      "check": "X.boss_vs_pads",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
+        "[design.json vs parsed .kicad_pcb] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (63.15, 67.815), (64.15, 9.0)] (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "BOM: 17 LEDs > kit 16",
+      "check": "G5.bom_kit",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "design needs 17 leds, kit has 16",
+        "PCB has 13 leds footprints, design.json implies 17"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: gerbers.zip and schematic image missing",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/gerbers.zip missing",
+        "README image link does not resolve: docs/schematic.png"
+      ],
+      "ok": true
+    }
+  ],
+  "meta": [
+    {
+      "assert": "G3.drc on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
+      "assert": "G2.erc on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
+      "assert": "G4.stl_mesh on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
+      "assert": "G6.production_uf2 on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
+      "assert": "G7.host_tests on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
+      "assert": "exit code 0 when only PASS/NOT_RUN",
+      "got": 0,
+      "ok": true
+    },
+    {
+      "assert": "exit code 1 when any FAIL",
+      "got": 1,
+      "ok": true
+    },
+    {
+      "assert": "pinned JLCPCB rules file matches its SHA-256",
+      "got": true,
+      "ok": true
+    }
+  ],
+  "skipped": [],
+  "tmp": "/var/folders/2g/b60087014tq94njh6r4zdmhm0000gn/T/fbverify-selftest-xxqrm084"
+}
