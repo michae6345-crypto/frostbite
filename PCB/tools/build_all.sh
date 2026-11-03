@@ -29,11 +29,14 @@ echo "== DRC with schematic parity"
 "$CLI" pcb drc --format json --severity-error --exit-code-violations --schematic-parity \
     -o build/drc.json frostbite.kicad_pcb
 
+echo "== underside pad list for the case"
+"$PY" tools/export_bottom_pads.py
+
 echo "== fabrication outputs"
 rm -rf build/gerbers && mkdir -p build/gerbers
-"$CLI" pcb export gerbers --no-protel-ext -l F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts \
+"$CLI" pcb export gerbers --subtract-soldermask -l F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts \
     -o build/gerbers/ frostbite.kicad_pcb
-"$CLI" pcb export drill --format excellon --excellon-separate-th --generate-map --map-format gerberx2 \
+"$CLI" pcb export drill --format excellon --excellon-separate-th \
     -o build/gerbers/ frostbite.kicad_pcb
 "$CLI" pcb export pos --format csv --units mm --side both -o build/frostbite-pos.csv frostbite.kicad_pcb
 mkdir -p "$ROOT/production"

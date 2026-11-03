@@ -1,0 +1,61 @@
+{
+  "check": "G3.gnd_thermal",
+  "gate": "G3",
+  "title": "GND pads: no solid zone override, thermal relief in the file and in the poured copper",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "PCB/frostbite.kicad_pcb": "770580175ef843e0c52be8d97ae1b60e5ec0be06cc4cbaaaf57661391c552e7e",
+    "PCB/frostbite.kicad_dru": "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2"
+  },
+  "details": {
+    "pads_measured": 23,
+    "worst": [
+      {
+        "pad": "ENC1 pad C",
+        "layer": "F.Cu",
+        "ring_copper": 0.223
+      },
+      {
+        "pad": "LED6 pad 3",
+        "layer": "B.Cu",
+        "ring_copper": 0.157
+      },
+      {
+        "pad": "LED5 pad 3",
+        "layer": "B.Cu",
+        "ring_copper": 0.157
+      },
+      {
+        "pad": "LED4 pad 3",
+        "layer": "B.Cu",
+        "ring_copper": 0.157
+      },
+      {
+        "pad": "LED2 pad 3",
+        "layer": "B.Cu",
+        "ring_copper": 0.157
+      },
+      {
+        "pad": "J1 pad 1",
+        "layer": "F.Cu",
+        "ring_copper": 0.155
+      },
+      {
+        "pad": "J1 pad 1",
+        "layer": "B.Cu",
+        "ring_copper": 0.155
+      },
+      {
+        "pad": "ENC1 pad MP",
+        "layer": "F.Cu",
+        "ring_copper": 0.122
+      }
+    ]
+  },
+  "timestamp": "2026-11-03T22:16:13+00:00",
+  "duration_s": 0.12
+}

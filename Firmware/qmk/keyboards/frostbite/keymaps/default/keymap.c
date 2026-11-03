@@ -21,6 +21,14 @@
 // Host mode is active while a PING arrived in the last 5 s. Otherwise the
 // keys send the keycodes in the keymap below (F13-F18, F19, F20, Esc) and the
 // encoder sends volume up/down.
+//
+// Going to fallback only changes what is shown. Host statuses, OLED text and
+// glow are kept, so when PINGs resume the pad is back in place without a USB
+// reconnect, and a SET_ALL with the same values changes nothing.
+//
+// The OLED sleeps after 10 minutes. Only a key, the encoder or a real status
+// change counts as activity: PING, OLED_LINE ("N ago" text), SET_GLOW,
+// SET_SELECTED and a repeated SET_ALL do not.
 
 #include QMK_KEYBOARD_H
 #include "raw_hid.h"
@@ -107,6 +115,7 @@ static uint32_t last_ping;
 static bool     was_host_mode;
 
 static uint32_t last_activity;
+static bool     oled_asleep; /* latched so a 49.7-day timer wrap cannot relight it */
 
 static bool     key_down[NUM_KEYS];
 static bool     key_host[NUM_KEYS]; /* pressed while in host mode -> handled via HID */
@@ -141,8 +150,10 @@ static bool host_mode(void) {
     return ever_pinged && timer_elapsed32(last_ping) < HOST_TIMEOUT_MS;
 }
 
+/* OLED activity: key, encoder or a real status change only. */
 static void wake(void) {
     last_activity = timer_read32();
+    oled_asleep   = false;
 }
 
 static void start_fade(uint8_t led, uint16_t ms) {
@@ -167,7 +178,6 @@ static void set_glow(uint8_t r, uint8_t g, uint8_t b, uint8_t bri, uint16_t fade
     glow_b   = b;
     glow_bri = bri;
     for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) start_fade(i, fade_ms);
-    wake();
 }
 
 static void send_report(uint8_t a, uint8_t b, uint8_t c) {
@@ -237,7 +247,7 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
         selected_slot = clockwise ? (selected_slot + 1) % NUM_SLOTS : (selected_slot + NUM_SLOTS - 1) % NUM_SLOTS;
         send_report(EVT_ENCODER, clockwise ? 0x01 : 0xFF, selected_slot);
     } else {
-        tap_code(clockwise ? KC_VOLU : KC_VOLD);
+        tap_code_delay(clockwise ? KC_VOLU : KC_VOLD, 10);
     }
     return false;
 }
@@ -275,10 +285,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
                     line[i] = (c >= 0x20 && c < 0x7f) ? c : ' ';
                 }
                 line[len] = '\0';
-                if (strcmp(line, host_line[data[1]]) != 0) {
-                    memcpy(host_line[data[1]], line, len + 1);
-                    wake();
-                }
+                memcpy(host_line[data[1]], line, len + 1);
             }
             break;
 
@@ -293,10 +300,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
             break;
 
         case CMD_SET_SELECTED:
-            if (length >= 2 && data[1] < NUM_SLOTS && data[1] != selected_slot) {
-                selected_slot = data[1];
-                wake();
-            }
+            if (length >= 2 && data[1] < NUM_SLOTS) selected_slot = data[1];
             break;
 
         default:
@@ -316,18 +320,15 @@ void housekeeping_task_user(void) {
         }
     }
 
+    /* latch the timeout so a 49.7-day timer wrap cannot look like a fresh PING */
+    if (ever_pinged && timer_elapsed32(last_ping) >= HOST_TIMEOUT_MS) ever_pinged = false;
+
     bool hm = host_mode();
-    if (was_host_mode && !hm) {
-        /* host went away: fade everything back to idle and forget host text */
-        for (uint8_t i = 0; i < NUM_SLOTS; i++) set_status(i, ST_IDLE, FALLBACK_FADE_MS);
-        set_glow(GLOW_DEFAULT_R, GLOW_DEFAULT_G, GLOW_DEFAULT_B, GLOW_DEFAULT_BRI, FALLBACK_FADE_MS);
-        host_line[0][0]   = '\0';
-        host_line[1][0]   = '\0';
-        statuses_received = false;
-    }
     if (hm != was_host_mode) {
-        /* selection highlight appears/disappears: fade it */
-        for (uint8_t i = 0; i < NUM_SLOTS; i++) start_fade(key_led[i], FADE_MS);
+        /* Status, text and glow are kept; only what is rendered changes. */
+        uint16_t ms = hm ? FADE_MS : FALLBACK_FADE_MS;
+        for (uint8_t i = 0; i < NUM_SLOTS; i++) start_fade(key_led[i], ms);
+        for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) start_fade(i, ms);
     }
     was_host_mode = hm;
 }
@@ -379,7 +380,8 @@ bool rgb_matrix_indicators_user(void) {
             out[led] = scale_rgb(white_rgb, key_down[k] ? LVL_PRESSED : LVL_CMD);
         }
     }
-    rgb_t glow = {.r = scale8(glow_r, glow_bri), .g = scale8(glow_g, glow_bri), .b = scale8(glow_b, glow_bri)};
+    uint8_t gb   = hm ? glow_bri : GLOW_DEFAULT_BRI;
+    rgb_t   glow = {.r = scale8(hm ? glow_r : GLOW_DEFAULT_R, gb), .g = scale8(hm ? glow_g : GLOW_DEFAULT_G, gb), .b = scale8(hm ? glow_b : GLOW_DEFAULT_B, gb)};
     for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) out[i] = glow;
 
     /* fades */
@@ -449,7 +451,8 @@ static void build_summary(char *dst, bool compact) {
 }
 
 bool oled_task_user(void) {
-    if (timer_elapsed32(last_activity) > OLED_SLEEP_MS) {
+    if (timer_elapsed32(last_activity) > OLED_SLEEP_MS) oled_asleep = true;
+    if (oled_asleep) {
         oled_off();
         return false;
     }
@@ -486,9 +489,9 @@ bool oled_task_user(void) {
         write_row(1, "turn knob: pick slot");
     }
 
-    /* row 2: dotted divider */
-    oled_set_cursor(0, 2);
-    oled_write_P(PSTR("                     "), false);
+    /* Row 2: dotted divider. Never write text to this row. Blanking it each
+     * frame re-dirties the block and starves row 3 of QMK's one-block-per-loop
+     * render. Redrawing the dots alone changes no bytes, so nothing is resent. */
     for (uint8_t x = 0; x < 126; x += 3) oled_write_pixel(x, 19, true);
 
     /* row 3: slot strip "1- 2R 3D 4? 5! 6-  HID", selected slot inverted */
@@ -515,8 +518,4 @@ void keyboard_post_init_user(void) {
     rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
     rgb_matrix_sethsv_noeeprom(0, 0, 0);
     wake();
-}
-
-void suspend_power_down_user(void) {
-    oled_off();
 }

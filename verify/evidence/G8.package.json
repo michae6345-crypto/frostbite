@@ -8,18 +8,18 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/gerbers.zip": "6d1c8053bf24313027784e0376a7b05394db1f0571ec5fdda55ceca5d23b7f02",
-    "production/firmware.uf2": "66f0dad0cc6d43b860864c5425962b6420d4298d3c593ba9c668d81812fc812b",
-    "CAD/frostbite-assembly.step": "21386a8a336c7b9e40fcb22a008469c5bdf586a937a6db2084a253e6c6900138",
-    "production/Bottom.stl": "7d8a32a653696b6650289112d5660c59b82a6f8cda9dd568c909177366913038",
-    "production/GlowBand.step": "862ce2291985732b9b9e9b5a64917da3e1ad507d27c6a4aeeec86df647726c00",
-    "production/Top.step": "94e8d2e54376959ea3a7be846a5e88537d7fa13eb7b8c0a7cf2d25036615ec39",
-    "production/Bottom.step": "d1a648155587260b536a392d1ec3da0f172cd9f9876b22a9f31c70a5d107f54b",
-    "production/Knob.stl": "d68eec574d5be2f566610d77f9d3868ecef919aeeee7e773e9f25ca1e63caa9c",
-    "production/GlowBand.stl": "3059fc934e720395955371876ad886f0b40940056a128b3dad693a830ffecd9b",
-    "production/Top.stl": "3e4e95d41e6297365763895cd0eb121c18298495c299c80f9de9ed437129a45f",
-    "production/Knob.step": "ee58495df5e668d4e3691825ce771b6b0a1e2edc4a3d97086c49ea89c69f40c3",
-    "README.md": "a879163ca091a13ade398166f66e2e395275004e7a9cddd878f83a38c015169f"
+    "production/gerbers.zip": "dfeb9ce92a876ea1c5764342da446d0782858d279ba35e1ba50849f2acc0a99d",
+    "production/firmware.uf2": "ede4ffa4cc2c5996e2c78265528bce57938a03d70635e8b77469ad53df32761a",
+    "CAD/frostbite-assembly.step": "4f88a83e372e81bd3cc099a30e67007d0b539ffd1ea0e2ee4a211bed02eee452",
+    "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
+    "production/GlowBand.step": "3730d1899ba17579a6adc61f95c4640807204e2d817ea6a2e830b584c4596d41",
+    "production/Top.step": "cd666793ad2d4ffa6c0b649b78a612b471fcc9d303c90ec8373a4193fe215938",
+    "production/Bottom.step": "5401d8c1958e58f5799c46a97c783328220f565cab4ed762700d40e6428d9fc2",
+    "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
+    "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
+    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca",
+    "production/Knob.step": "7fbb374cc16ff13b2814fc14191a6ff7d2082617cbad2f5828f11c4b9f321e7b",
+    "README.md": "48a50f1957b4a5ad6f332167c729908ea2bbc51b4c763ae014105258a60e4f0c"
   },
   "details": {
     "images": [
@@ -77,6 +77,6 @@
       }
     ]
   },
-  "timestamp": "2026-11-03T20:22:28+00:00",
-  "duration_s": 0.07
+  "timestamp": "2026-11-03T22:16:57+00:00",
+  "duration_s": 0.12
 }

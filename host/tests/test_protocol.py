@@ -1,6 +1,9 @@
+import sys
+import types
+
 import pytest
 
-from frostbite_host.device import (CCW, CW, HOLD, REPORT_LEN, TAP, EncoderEvent, KeyEvent,
+from frostbite_host.device import (CCW, CW, HOLD, REPORT_LEN, TAP, EncoderEvent, HidTransport, KeyEvent,
                                    OledLine, Ping, PingReply, SetAll, SetGlow, SetSelected,
                                    SetSlot, Status, Unknown, decode_device, decode_host, encode,
                                    encode_device, to_ascii)
@@ -85,3 +88,36 @@ def test_status_parse():
     assert Status.parse("2") is Status.DONE
     with pytest.raises(ValueError):
         Status.parse("bogus")
+
+
+def fake_hid(monkeypatch, devices):
+    fake = types.ModuleType("hid")
+    opened = []
+
+    class Dev:
+        def open_path(self, path):
+            opened.append(path)
+
+    fake.device = Dev
+    fake.enumerate = lambda *a: list(devices)   # returns everything, whatever is asked for
+    monkeypatch.setitem(sys.modules, "hid", fake)
+    return opened
+
+
+def hid_entry(path, vid, pid, page=0xFF60, usage=0x61):
+    return {"path": path, "vendor_id": vid, "product_id": pid, "usage_page": page, "usage": usage}
+
+
+def test_only_frostbite_is_opened_next_to_a_via_keyboard(monkeypatch):
+    opened = fake_hid(monkeypatch, [hid_entry(b"via", 0x3434, 0x0121),
+                                    hid_entry(b"same-vid", 0xFEED, 0x0001),
+                                    hid_entry(b"same-pid", 0x3434, 0x4642),
+                                    hid_entry(b"kbd-iface", 0xFEED, 0x4642, page=0x01, usage=0x06),
+                                    hid_entry(b"pad", 0xFEED, 0x4642)])
+    assert HidTransport.open() is not None
+    assert opened == [b"pad"]
+
+
+def test_no_frostbite_means_nothing_is_opened(monkeypatch):
+    opened = fake_hid(monkeypatch, [hid_entry(b"via", 0x3434, 0x0121)])
+    assert HidTransport.open() is None and opened == []

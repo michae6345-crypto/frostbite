@@ -5,13 +5,12 @@
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
-  "notes": [
-    "USB cutout position is only checked through a CAD positions file (not measured from the mesh)"
-  ],
+  "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
-    "CAD/positions.json": "5620df54441e5e310bd5a6ceba0c60cdadaadd78243f9ca6130e6046cacf4807"
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "CAD/positions.json": "af7c29806eeb337b92787e52c5ca036fed24b850ae3f3bfc01c4ab0d0c9cd9d7",
+    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca"
   },
   "details": {
     "pcb": {
@@ -64,14 +63,74 @@
         10.505
       ]
     },
-    "cad_encoder_pattern_dev_mm": 0.0,
-    "cad_oled_window_pattern_dev_mm": 0.0,
+    "registration": {
+      "plate_normal": [
+        0.0,
+        -0.0,
+        -1.0
+      ],
+      "outline_mm": [
+        79.15,
+        97.15
+      ],
+      "rotation_sign": 1,
+      "feature_points_open_at_plate_top": "11/11",
+      "levels_h": [
+        0.0,
+        0.5,
+        1.0,
+        1.3,
+        1.5,
+        2.5,
+        3.2,
+        5.0,
+        5.43,
+        6.6,
+        12.0,
+        13.23,
+        16.0
+      ],
+      "section_volume_mm3": 43282.7,
+      "mesh_volume_mm3": 43282.7
+    },
+    "top_measured": {
+      "screw0": {
+        "centre": [
+          -4.65,
+          9.0
+        ],
+        "d": 4.7
+      },
+      "screw1": {
+        "centre": [
+          65.8,
+          9.0
+        ],
+        "d": 4.7
+      },
+      "screw2": {
+        "centre": [
+          -4.65,
+          62.1
+        ],
+        "d": 4.7
+      },
+      "screw3": {
+        "centre": [
+          65.8,
+          62.1
+        ],
+        "d": 4.7
+      },
+      "usb_width": 13.5,
+      "usb_centre_x": 21.0
+    },
     "comparisons_run": [
       "design<->PCB",
       "design<->CAD/positions.json",
       "design<->Top STL"
     ]
   },
-  "timestamp": "2026-11-03T20:22:28+00:00",
+  "timestamp": "2026-11-03T22:16:57+00:00",
   "duration_s": 0.0
 }

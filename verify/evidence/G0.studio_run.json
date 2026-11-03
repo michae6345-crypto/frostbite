@@ -14,7 +14,7 @@
       ],
       "cwd": "~/Documents/frostbite/verify/.cache/work/studio_copy",
       "exit_code": 0,
-      "duration_s": 4.32,
+      "duration_s": 6.34,
       "stdout_tail": [
         "frostbite verify: 1889 specs, 0 hard, 33 soft -> verify/report.md",
         "  pass modules                checks=6 hard=0 soft=0",
@@ -22,7 +22,7 @@
         "  pass spec validity          checks=10205 hard=0 soft=0",
         "  pass harness self-test      checks=10 hard=0 soft=0",
         "  pass FB.check shape         checks=3770 hard=0 soft=0",
-        "  pass FB.check limits        checks=14154 hard=0 soft=0",
+        "  pass FB.check limits        checks=12840 hard=0 soft=0",
         "  pass presets pass           checks=37 hard=0 soft=0",
         "  pass geometry vs FB.check   checks=1881 hard=0 soft=0",
         "  pass renderTop              checks=4031 hard=0 soft=0",
@@ -46,14 +46,14 @@
     "studio/test/constraints.test.js": "aa35399475ab7f4f3b3b0f33880b6dcb04cdfe17d0760b0b220355a6690b1aa7",
     "studio/tools/export-images.js": "c694b32c73b53a93be05bd8246ccf83c69fae0805c54b730798d8e435c973412",
     "studio/tools/export-media.js": "5888b50f9fbb33248d5422eb45842e9334b179c7a5c2b4c337a717fde37d8324",
-    "studio/verify/run.js": "f6a823e3ed1bf2f54762ce3fd5ce591c9e19718be76c38838c8d74fbc865c438"
+    "studio/verify/run.js": "be056d559228a17109dbb02baa23ab9669c46bb440914cbc041ef1429fb4cd4b"
   },
   "details": {
-    "report_md_sha256": "a7ff3fd11c3d450b29beb142697e7437ee45312be03142eb0f2693ef2ce69905",
+    "report_md_sha256": "c14c734cee7e63922e43249cc722e32bb9454a9e30d2d18c17a094144ee9e17c",
     "report_md_head": [
       "# Frostbite Studio verification report",
       "",
-      "Generated 2026-11-03T20:22:02.288Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).",
+      "Generated 2026-11-03T22:16:05.519Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).",
       "",
       "**Result: PASS** \u2014 0 hard failures, 33 warnings.",
       "",
@@ -81,7 +81,7 @@
       "| spec validity | 10205 | 0 | 0 | pass |",
       "| harness self-test | 10 | 0 | 0 | pass |",
       "| FB.check shape | 3770 | 0 | 0 | pass |",
-      "| FB.check limits | 14154 | 0 | 0 | pass |",
+      "| FB.check limits | 12840 | 0 | 0 | pass |",
       "| presets pass | 37 | 0 | 0 | pass |",
       "| geometry vs FB.check | 1881 | 0 | 0 | pass |",
       "| renderTop | 4031 | 0 | 0 | pass |",
@@ -93,6 +93,6 @@
       ""
     ]
   },
-  "timestamp": "2026-11-03T20:22:02+00:00",
-  "duration_s": 4.33
+  "timestamp": "2026-11-03T22:16:05+00:00",
+  "duration_s": 6.35
 }

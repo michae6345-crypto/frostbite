@@ -260,7 +260,7 @@
   },
   "case": {
     "shell": {
-      "w": 75.15,
+      "w": 79.15,
       "h": 97.15,
       "corner": 12,
       "bezel": 9,
@@ -275,22 +275,22 @@
     },
     "tolerance": 0.3,
     "screws": {
-      "_about": "M3 heat-set inserts in the Top, screws up from underneath; bosses tuck ~1 mm under the PCB edge, so these y bands must stay free of bottom-side pads (checked against PCB/build/bottom_pads.json)",
+      "_about": "M3 heat-set inserts in the Top, screws up from underneath; each boss (OD 8.7 = hole 4.7 + 2 x 2.0 wall) is a circle of the side wall, fully outside the PCB insertion envelope (PCB + tolerance) because the PCB enters the Top from the skirt side. Side bezel = tolerance 0.3 + boss 8.7 = 9.0 from the PCB edge, so x = -(0.3 + 4.35) and 61.15 + 4.65",
       "positions": [
         {
-          "x": -3.0,
+          "x": -4.65,
           "y": 9.0
         },
         {
-          "x": 64.15,
+          "x": 65.8,
           "y": 9.0
         },
         {
-          "x": -3.0,
+          "x": -4.65,
           "y": 62.1
         },
         {
-          "x": 64.15,
+          "x": 65.8,
           "y": 62.1
         }
       ],
@@ -301,6 +301,11 @@
     "framework": "QMK",
     "keyboard": "frostbite",
     "output": "firmware.uf2",
+    "usb": {
+      "vid": "0xFEED",
+      "pid": "0x4642",
+      "note": "test values; the host filters on them"
+    },
     "raw_hid": {
       "usage_page": "0xFF60",
       "usage": "0x61",

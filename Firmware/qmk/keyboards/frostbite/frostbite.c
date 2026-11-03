@@ -11,9 +11,7 @@ bool bootmagic_should_reset(void) {
 }
 
 #ifdef OLED_ENABLE
-/* The OLED header sits at the right (+x) end of the PCB. If text shows up
- * upside down on your module, add `#define FROSTBITE_OLED_FLIP` to config.h
- * (or build with OPT_DEFS += -DFROSTBITE_OLED_FLIP) and reflash. */
+/* FROSTBITE_OLED_FLIP in config.h rotates the display 180 degrees (default on). */
 oled_rotation_t oled_init_kb(oled_rotation_t rotation) {
 #    ifdef FROSTBITE_OLED_FLIP
     rotation = OLED_ROTATION_180;

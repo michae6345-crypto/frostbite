@@ -2,6 +2,8 @@
 
 * lib/frostbite.pretty/SK6812MINI-E_key.kicad_mod: care-package SK6812MINI-E_fixed with pads
   pulled 0.3 mm clear of the LED cut-out (JLCPCB copper-to-edge rule).
+* lib/frostbite.pretty/EC11E-Switch_Vertical_H20mm_Slot3.4x1.5.kicad_mod: KiCad's slotted EC11E
+  footprint with slots that pass JLCPCB's 2:1 rule.
 * lib/frostbite.pretty/SK6812MINI-E_glow_down.kicad_mod: the same, with its copper/mask/paste/
   silk/courtyard moved from B.* to F.*.  Placed and flipped to the bottom side in pcbnew, it is a
   MINI-E soldered on the underside with its lens facing DOWN (away from the PCB) and its back in
@@ -44,6 +46,22 @@ derive("SK6812MINI-E_glow_down",
        "SK6812 MINI-E on the underside, lens facing down (from Hack Club SK6812MINI-E_fixed; place flipped on B.Cu)",
        front_layers=True)
 
+# EC11E with switch: KiCad's slotted footprint with the lug slots lengthened from 2.8 x 1.5 to
+# 3.4 x 1.5 mm.  Lug centres stay at +-5.6, so the slot's outer edge stays at 6.35 (Alps: 6.25, barb
+# tip: 6.55) and the barb still catches.  The length meets JLCPCB's "slot length >= 2 x width" rule
+# and takes the slot's rounded ends past the 2.5 mm wide lug's corners (see README).
+# Pads grow to 4.0 x 2.1 to keep a 0.3 mm annular ring all round.
+ENC = Path.home() / ("Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints/Rotary_Encoder.pretty/"
+                     "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm.kicad_mod")
+enc = ENC.read_text()
+enc = enc.replace('(footprint "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm"',
+                  '(footprint "EC11E-Switch_Vertical_H20mm_Slot3.4x1.5"', 1)
+assert enc.count("(drill oval 2.8 1.5)") == 2 and enc.count("(size 3.2 2)") == 2
+enc = enc.replace("(drill oval 2.8 1.5)", "(drill oval 3.4 1.5)").replace("(size 3.2 2)", "(size 4 2.1)")
+for old, new in (("5.5 -3.4", "5.2 -3.4"), ("5.5 8.4", "5.2 8.4"), ("9.5 -3.4", "9.8 -3.4"), ("9.5 8.4", "9.8 8.4")):
+    enc = enc.replace(old, new)   # body outline silk: stay 0.15 clear of the longer pads
+(PCB / "lib/frostbite.pretty/EC11E-Switch_Vertical_H20mm_Slot3.4x1.5.kicad_mod").write_text(enc)
+
 S = "${KICAD10_SYMBOL_DIR}"
 F = "${KICAD10_FOOTPRINT_DIR}"
 sym = [("XIAO_RP2040", "${KIPRJMOD}/lib/XIAO_RP2040.kicad_sym", "Hack Club care package"),
@@ -77,6 +95,7 @@ pro = {
                       "min_through_hole_diameter": 0.3, "min_via_annular_width": 0.13,
                       "min_hole_clearance": 0.25, "min_hole_to_hole": 0.25,
                       "min_copper_edge_clearance": 0.3, "min_silk_clearance": 0.0,
+                      "min_resolved_spokes": 1,
                       "min_text_height": 0.8, "min_text_thickness": 0.12,
                       "solder_mask_to_copper_clearance": 0.0},
             "track_widths": [0.0, 0.25, 0.5],
@@ -105,3 +124,9 @@ pro_path = PCB / "frostbite.kicad_pro"
 if not pro_path.exists():
     pro_path.write_text(json.dumps(pro, indent=2) + "\n")
     print("wrote frostbite.kicad_pro")
+else:
+    # KiCad rewrites the project file; keep the settings the board depends on.
+    cur = json.loads(pro_path.read_text())
+    # U1.13 reaches 2 spokes on F.Cu but only 1 on B.Cu; 3 x 0.4 mm spokes carry the 0.48 A worst case.
+    cur["board"]["design_settings"]["rules"]["min_resolved_spokes"] = 1
+    pro_path.write_text(json.dumps(cur, indent=2) + "\n")

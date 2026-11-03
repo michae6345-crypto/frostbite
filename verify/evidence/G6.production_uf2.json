@@ -8,8 +8,8 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/firmware.uf2": "66f0dad0cc6d43b860864c5425962b6420d4298d3c593ba9c668d81812fc812b",
-    "production/led-test.uf2": "43dbac906fc5e300174cc498456a05ad1adaac4b54ed19fad37087df8523877c"
+    "production/firmware.uf2": "ede4ffa4cc2c5996e2c78265528bce57938a03d70635e8b77469ad53df32761a",
+    "production/led-test.uf2": "65d02c7e5ee44db6a096a40c891d3fd0f851936f9c7ad0a9d518614c547ecc7b"
   },
   "details": {
     "uf2_production/firmware.uf2": {
@@ -51,6 +51,6 @@
     "identical_to_fresh_build": true,
     "newer_than_all_firmware_sources": true
   },
-  "timestamp": "2026-11-03T20:22:25+00:00",
+  "timestamp": "2026-11-03T22:16:43+00:00",
   "duration_s": 0.0
 }

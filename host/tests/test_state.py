@@ -54,8 +54,129 @@ def test_needs_detail_uses_last_tool():
              "status": "run", "detail": "Bash(npm test)", "tool": "Bash(npm test)"}, 0)
     b.apply({"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Bash"}, 1)
     assert b.slots[0].detail == "Bash(npm test)?"
-    b.apply({"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Edit"}, 2)
+    b.answer(0, 2, status=Status.RUN, detail="approved")
+    b.apply({"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Edit"}, 100)
     assert b.slots[0].detail == "Edit?"
+
+
+def _ask(tool, **kw):
+    return {"op": "update", "source": "claude", "key": "claude:s", "name": "n", "status": "needs",
+            "detail": tool + "?", "tool": tool, **kw}
+
+
+def test_prompts_close_by_tool_and_agent():
+    b = Board()
+    b.apply(_ask("Bash(a)", agent="s1"), 0)
+    b.apply(_ask("Bash(b)", agent="s2"), 1)
+    run = {"op": "update", "key": "claude:s", "status": "run"}
+    b.apply({**run, "resolve": {"tool": "Bash(a)", "agent": "s2"}}, 2)   # same tool, other agent
+    assert b.slots[0].status is Status.NEEDS and len(b.slots[0].pending) == 2
+    b.apply({**run, "resolve": {"tool": "Bash(a)", "agent": "s1"}}, 3)
+    assert b.slots[0].status is Status.NEEDS and b.slots[0].detail == "Bash(b)?"
+    b.apply({**run, "resolve": {"tool": "Bash(b)", "agent": "s2"}}, 4)
+    assert b.slots[0].status is Status.RUN and b.slots[0].detail == "Bash(b)"
+
+
+def test_notification_after_the_answer_does_not_raise_needs_again():
+    b = Board()
+    b.apply(_ask("Bash(a)"), 0)
+    b.answer(0, 2, status=Status.RUN, detail="approved")
+    note = {"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Bash", "notification": True}
+    b.apply(note, 6)
+    assert b.slots[0].status is Status.RUN
+    b.apply(note, 60)                     # long after: a real prompt with no PermissionRequest
+    assert b.slots[0].status is Status.NEEDS
+
+
+def test_prompt_raised_by_a_notification_closes_when_its_tool_finishes():
+    b = Board()
+    b.apply({"op": "update", "source": "claude", "key": "claude:s", "name": "n", "status": "run",
+             "detail": "Bash(a)", "tool": "Bash(a)"}, 0)
+    note = {"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Bash", "notification": True}
+    run = {"op": "update", "key": "claude:s", "status": "run"}
+    b.apply(note, 1)
+    b.apply({**run, "resolve": {"tool": "Read(x)", "agent": None}}, 2)
+    assert b.slots[0].status is Status.NEEDS
+    b.apply({**run, "resolve": {"tool": "Bash(a)", "agent": "s1"}}, 3)
+    assert b.slots[0].status is Status.RUN
+
+
+def test_notification_adds_nothing_to_an_open_prompt():
+    b = Board()
+    b.apply(_ask("Bash(a)"), 0)
+    b.apply({"op": "update", "key": "claude:s", "status": "needs", "tool_hint": "Bash", "notification": True}, 6)
+    assert len(b.slots[0].pending) == 1
+
+
+def test_stop_and_new_prompt_close_everything():
+    for msg in ({"op": "update", "key": "claude:s", "status": "done", "clears": True},
+                {"op": "update", "key": "claude:s", "status": "run", "clears": True}):
+        b = Board()
+        b.apply(_ask("Bash(a)"), 0)
+        b.apply(msg, 1)
+        assert b.slots[0].pending == [] and b.slots[0].status is not Status.NEEDS
+
+
+def test_idle_notification_keeps_an_open_prompt():
+    b = Board()
+    b.apply(_ask("Bash(a)"), 0)
+    b.apply({"op": "update", "key": "claude:s", "status": "done", "detail": "waiting for input"}, 70)
+    assert b.slots[0].status is Status.NEEDS
+
+
+def test_question_is_not_queued_twice():
+    b = Board()
+    q = _ask("AskUserQuestion", kind="question")
+    b.apply(q, 0)
+    b.apply(q, 1)
+    assert len(b.slots[0].pending) == 1
+
+
+def test_quiet_run_goes_idle_then_frees():
+    b = Board()
+    b.update("claude:x", "claude", 0, status=Status.RUN)
+    assert not b.expire(3599)
+    assert b.expire(3600)
+    assert b.slots[0].status is Status.IDLE and b.slots[0].detail == "quiet 1h00"
+    assert b.expire(24 * 3600)
+    assert b.slots[0] is None
+
+
+def test_slot_on_a_reused_tty_is_freed():
+    b = Board()
+    t = {"bundle": "com.apple.Terminal", "tty": "/dev/ttys001"}
+    b.update("claude:old", "claude", 0, status=Status.NEEDS, terminal=t)
+    b.update("claude:new", "claude", 1, status=Status.RUN, terminal=t)
+    assert b.find("claude:old") is None and b.find("claude:new") is not None
+
+
+def test_clock_step_back_does_not_stretch_linger():
+    b = Board()
+    b.update("k", "ctl", 10000, status=Status.DONE)
+    b.expire(5000)
+    assert b.expire(5000 + 600)
+
+
+def test_overflow_clears_and_expires():
+    b = Board()
+    for i in range(6):
+        b.update(f"c{i}", "claude", 0, status=Status.RUN)
+    msg = {"op": "update", "source": "claude", "key": "c6", "name": "n", "status": "needs"}
+    assert not b.apply(msg, 1)
+    assert b.glow()[:3] == (0xFF, 0xB0, 0x20)
+    b.free("c0")
+    assert b.apply(msg, 2) and not b.overflow
+    b.free("c6")
+    b.update("c0", "claude", 3, status=Status.RUN)
+    assert not b.apply(msg, 3)
+    b.expire(3 + 3600)
+    assert not b.overflow
+
+
+def test_long_project_names_use_the_short_label():
+    b = Board()
+    b.update("claude:x", "claude", 0, name="frostbite-firmware", status=Status.RUN)
+    assert b.oled_lines(0)[0] == "c#1 fros~firmware RUN"
 
 
 def test_oled_lines_claude_example():
@@ -97,6 +218,7 @@ def test_fit_lr():
     assert fit_lr("abc", "RUN") == "abc".ljust(17) + " RUN"
     assert len(fit_lr("x" * 40, "DONE")) == 21
     assert fit_lr("x" * 40, "DONE").endswith("x DONE")
+    assert fit_lr("c#1 frostbite-firmware", "WAIT") == "c#1 fros~irmware WAIT"
 
 
 def test_glow_worst_status():

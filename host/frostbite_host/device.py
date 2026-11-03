@@ -30,6 +30,11 @@ from typing import Callable, Protocol
 
 log = logging.getLogger("frostbite.device")
 
+# Identity of the pad (Firmware/qmk/keyboards/frostbite/keyboard.json). All four must match.
+# The usage page and usage alone are QMK's defaults: on a VIA keyboard PING (0x05) means
+# "set keycode" and SET_SELECTED (0x06) means "reset keymap", so nothing else is ever opened.
+VENDOR_ID = 0xFEED
+PRODUCT_ID = 0x4642
 USAGE_PAGE = 0xFF60
 USAGE = 0x61
 REPORT_LEN = 32
@@ -37,6 +42,8 @@ PROTOCOL_VERSION = 1
 NUM_SLOTS = 6
 OLED_COLS = 21
 PING_INTERVAL = 2.0
+PONG_TIMEOUT = 6.5       # no PING reply for this long: the link is wedged, reopen it
+HANDSHAKE_TIMEOUT = 1.0  # a pad must answer the first PING before it gets anything else
 
 
 class Status(IntEnum):
@@ -286,7 +293,7 @@ class Transport(Protocol):
 
 
 class HidTransport:
-    """A real pad, found by Raw HID usage page / usage."""
+    """A real pad, found by VID + PID + Raw HID usage page + usage. Nothing else is opened."""
 
     def __init__(self, dev, info: dict):
         self._dev = dev
@@ -297,8 +304,9 @@ class HidTransport:
         import hid
 
         return [
-            d for d in hid.enumerate()
-            if d.get("usage_page") == USAGE_PAGE and d.get("usage") == USAGE
+            d for d in hid.enumerate(VENDOR_ID, PRODUCT_ID)
+            if d.get("vendor_id") == VENDOR_ID and d.get("product_id") == PRODUCT_ID
+            and d.get("usage_page") == USAGE_PAGE and d.get("usage") == USAGE
         ]
 
     @classmethod
@@ -340,20 +348,29 @@ class DryRunTransport:
     def __init__(self, out=print):
         self.out = out
         self._pinged = False
+        self._replies: "queue.Queue[bytes]" = queue.Queue()
+        self._last_all: object = None
 
     def write(self, report: bytes) -> None:
         msg = decode_host(report)
         if isinstance(msg, Ping):
+            self._replies.put(encode_device(PingReply(PROTOCOL_VERSION, 0)))
             if self._pinged:
                 return
             self._pinged = True
             self.out("[dry-run] -> PING (further pings every 2 s not shown)")
             return
+        if isinstance(msg, SetAll):  # repeats with every PING; print changes only
+            if msg == self._last_all:
+                return
+            self._last_all = msg
         self.out(f"[dry-run] -> {describe(msg)}   {report[:8].hex(' ')}...")
 
     def read(self, timeout_ms: int) -> bytes | None:
-        time.sleep(timeout_ms / 1000)
-        return None
+        try:
+            return self._replies.get(timeout=timeout_ms / 1000)
+        except queue.Empty:
+            return None
 
     def close(self) -> None:
         pass
@@ -458,15 +475,25 @@ class DeviceLink:
     """Owns the transport on a single I/O thread: writes queued reports, pings every 2 s,
     reads device reports, reconnects after an unplug.
 
-    `on_event(obj)` receives decoded device messages plus the strings "connected" /
-    "disconnected". It is called from the I/O thread; hand off to your own queue.
+    A newly opened device is not "connected" until it answers a PING with the expected
+    protocol version; until then it receives nothing but that PING. A connected device
+    that stops answering is closed and reopened.
+
+    `keepalive()` may return one extra message written right after every PING, so the pad
+    recovers by itself from a gap in the PINGs. `on_event(obj)` receives decoded device
+    messages plus the strings "connected" / "disconnected". It is called from the I/O
+    thread; hand off to your own queue.
     """
 
     def __init__(self, opener: Callable[[], Transport | None], on_event: Callable[[object], None],
                  ping_interval: float = PING_INTERVAL, retry_interval: float = 1.0,
-                 read_timeout_ms: int = 50):
+                 read_timeout_ms: int = 50, keepalive: Callable[[], HostMsg | None] | None = None,
+                 pong_timeout: float = PONG_TIMEOUT, handshake_timeout: float = HANDSHAKE_TIMEOUT):
         self.opener = opener
         self.on_event = on_event
+        self.keepalive = keepalive
+        self.pong_timeout = pong_timeout
+        self.handshake_timeout = handshake_timeout
         self.ping_interval = ping_interval
         self.retry_interval = retry_interval
         self.read_timeout_ms = read_timeout_ms
@@ -507,15 +534,38 @@ class DeviceLink:
             log.warning("device disconnected")
             self.on_event("disconnected")
 
+    def _handshake(self, t: Transport) -> bool:
+        """First write to any device. Returns True once it answers with our protocol."""
+        t.write(encode(Ping()))
+        end = time.monotonic() + self.handshake_timeout
+        while time.monotonic() < end and not self._stop.is_set():
+            data = t.read(self.read_timeout_ms)
+            if not data:
+                continue
+            msg = decode_device(data)
+            if isinstance(msg, PingReply):
+                self.version = msg.version
+                if msg.version == PROTOCOL_VERSION:
+                    log.info("firmware protocol v%d", msg.version)
+                    return True
+                log.warning("firmware protocol v%d, host speaks v%d: not using this device",
+                            msg.version, PROTOCOL_VERSION)
+                return False
+        log.warning("device did not answer PING: not using it")
+        return False
+
     def _run(self) -> None:
         last_ping = 0.0
         missing_logged = False
+        open_error = ""
         while not self._stop.is_set():
             if self.transport is None:
                 try:
                     t = self.opener()
-                except Exception as e:  # noqa: BLE001
-                    log.debug("open failed: %s", e)
+                except Exception as e:  # noqa: BLE001  e.g. a broken hidapi install
+                    if str(e) != open_error:
+                        open_error = str(e)
+                        log.warning("cannot open the pad: %s", e)
                     t = None
                 if t is None:
                     if not missing_logged:
@@ -524,9 +574,20 @@ class DeviceLink:
                     self._stop.wait(self.retry_interval)
                     continue
                 missing_logged = False
+                open_error = ""
+                try:
+                    ok = self._handshake(t)
+                except Exception as e:  # noqa: BLE001
+                    log.info("handshake failed: %s", e)
+                    ok = False
+                if not ok:
+                    t.close()
+                    self._stop.wait(self.retry_interval)
+                    continue
                 self.transport = t
                 self.connected.set()
-                last_ping = 0.0
+                last_ping = time.monotonic()
+                self.last_pong = last_ping
                 self.on_event("connected")
             try:
                 while True:
@@ -536,21 +597,19 @@ class DeviceLink:
                         break
                     self.transport.write(rep)
                 now = time.monotonic()
+                if now - self.last_pong >= self.pong_timeout:
+                    raise OSError(f"no PING reply for {self.pong_timeout:.1f} s")
                 if now - last_ping >= self.ping_interval:
                     self.transport.write(encode(Ping()))
                     last_ping = now
+                    extra = self.keepalive() if self.keepalive else None
+                    if extra is not None:
+                        self.transport.write(encode(extra))
                 data = self.transport.read(self.read_timeout_ms)
                 if data:
                     msg = decode_device(data)
                     if isinstance(msg, PingReply):
                         self.last_pong = time.monotonic()
-                        if self.version != msg.version:
-                            self.version = msg.version
-                            if msg.version != PROTOCOL_VERSION:
-                                log.warning("firmware protocol v%d, host speaks v%d",
-                                            msg.version, PROTOCOL_VERSION)
-                            else:
-                                log.info("firmware protocol v%d", msg.version)
                     self.on_event(msg)
             except Exception as e:  # noqa: BLE001  (OSError on unplug, anything else: reconnect)
                 log.info("device I/O error: %s", e)

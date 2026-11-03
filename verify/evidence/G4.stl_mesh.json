@@ -8,45 +8,45 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/Bottom.stl": "7d8a32a653696b6650289112d5660c59b82a6f8cda9dd568c909177366913038",
-    "production/GlowBand.stl": "3059fc934e720395955371876ad886f0b40940056a128b3dad693a830ffecd9b",
-    "production/Knob.stl": "d68eec574d5be2f566610d77f9d3868ecef919aeeee7e773e9f25ca1e63caa9c",
-    "production/Top.stl": "3e4e95d41e6297365763895cd0eb121c18298495c299c80f9de9ed437129a45f"
+    "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
+    "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
+    "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
+    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca"
   },
   "details": {
     "combined_extents": [
-      75.15,
+      79.15,
       97.606,
       16.0
     ],
     "parts": {
       "Bottom.stl": {
-        "faces": 5460,
+        "faces": 4820,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 25551.115414747954,
+        "volume": 27950.979401820503,
         "extents": [
-          75.15,
+          79.15,
           97.606,
           9.908
         ]
       },
       "GlowBand.stl": {
-        "faces": 2664,
+        "faces": 4304,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 5898.69101514474,
+        "volume": 10444.839046386354,
         "extents": [
-          74.15,
+          78.15,
           96.15,
           8.8
         ]
       },
       "Knob.stl": {
-        "faces": 1204,
+        "faces": 1708,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 3284.286006040212,
+        "volume": 3217.729935168798,
         "extents": [
           18.0,
           17.901,
@@ -54,18 +54,18 @@
         ]
       },
       "Top.stl": {
-        "faces": 6216,
+        "faces": 5496,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 37329.96016003175,
+        "volume": 43282.73767288728,
         "extents": [
-          75.15,
+          79.15,
           97.15,
           16.0
         ]
       }
     }
   },
-  "timestamp": "2026-11-03T20:22:20+00:00",
+  "timestamp": "2026-11-03T22:16:36+00:00",
   "duration_s": 0.45
 }

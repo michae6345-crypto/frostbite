@@ -35,7 +35,7 @@ FP = {
     "LEDKEY": "frostbite:SK6812MINI-E_key",
     "LEDGLOW": "frostbite:SK6812MINI-E_glow_down",
     "U": "hackpad:XIAO-Generic-Hybrid-14P-2.54-21X17.8MM",
-    "ENC": "Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm_CircularMountingHoles",
+    "ENC": "frostbite:EC11E-Switch_Vertical_H20mm_Slot3.4x1.5",
     "J": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
 }
 LIBS = {

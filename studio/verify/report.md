@@ -1,6 +1,6 @@
 # Frostbite Studio verification report
 
-Generated 2026-11-03T20:09:07.052Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
+Generated 2026-11-03T21:46:53.315Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
 
 **Result: PASS** — 0 hard failures, 33 warnings.
 
@@ -28,7 +28,7 @@ Generated 2026-11-03T20:09:07.052Z by `node verify/run.js` (seed 20261103, 500 r
 | spec validity | 10205 | 0 | 0 | pass |
 | harness self-test | 10 | 0 | 0 | pass |
 | FB.check shape | 3770 | 0 | 0 | pass |
-| FB.check limits | 14154 | 0 | 0 | pass |
+| FB.check limits | 12840 | 0 | 0 | pass |
 | presets pass | 37 | 0 | 0 | pass |
 | geometry vs FB.check | 1881 | 0 | 0 | pass |
 | renderTop | 4031 | 0 | 0 | pass |

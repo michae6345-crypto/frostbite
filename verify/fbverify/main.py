@@ -17,22 +17,32 @@ VERIFY = Path(__file__).resolve().parents[1]
 ROOT = VERIFY.parent
 
 PIPELINE = [
-    C.g0_studio_run, C.g0_studio_constraints, C.g0_design_json,
-    C.g2_firmware_pins, C.g2_netlist, C.g2_erc,
-    C.g3_outline_layers, C.g3_positions, C.g3_drc, C.g3_drc_jlcpcb, C.g3_gerbers, C.g3_gerbers_zip,
-    C.g4_check_fit, C.g4_stl_mesh, C.g4_switch_cutouts,
-    C.g5_bom_kit,
-    C.g6_qmk_lint, lambda ctx: C.g6_compile(ctx, "default"), lambda ctx: C.g6_compile(ctx, "ledtest"),
-    C.g6_production_uf2,
-    C.g7_host_tests,
-    C.g8_package,
-    C.x_cross_positions, C.x_boss_vs_pads,
+    ("G0.studio_run", C.g0_studio_run), ("G0.studio_constraints", C.g0_studio_constraints),
+    ("G0.design_json", C.g0_design_json),
+    ("G2.firmware_pins", C.g2_firmware_pins), ("G2.netlist", C.g2_netlist), ("G2.erc", C.g2_erc),
+    ("G3.outline_layers", C.g3_outline_layers), ("G3.positions", C.g3_positions), ("G3.drc", C.g3_drc),
+    ("G3.drc_jlcpcb", C.g3_drc_jlcpcb), ("G3.gerbers_export", C.g3_gerbers), ("G3.gerbers_zip", C.g3_gerbers_zip),
+    ("G3.gnd_thermal", C.g3_gnd_thermal),
+    ("G4.check_fit", C.g4_check_fit), ("G4.stl_mesh", C.g4_stl_mesh), ("G4.switch_cutouts", C.g4_switch_cutouts),
+    ("G4.encoder_clearance", C.g4_encoder_clearance), ("G4.oled_clearance", C.g4_oled_clearance),
+    ("G5.bom_kit", C.g5_bom_kit),
+    ("G6.qmk_lint", C.g6_qmk_lint), ("G6.compile_default", lambda ctx: C.g6_compile(ctx, "default")),
+    ("G6.compile_ledtest", lambda ctx: C.g6_compile(ctx, "ledtest")), ("G6.production_uf2", C.g6_production_uf2),
+    ("G6.firmware_harness", C.g6_firmware_harness), ("G6.oled_strip_panel", C.g6_oled_strip_panel),
+    ("G7.host_tests", C.g7_host_tests),
+    ("G8.package", C.g8_package),
+    ("X.cross_positions", C.x_cross_positions), ("X.boss_vs_pads", C.x_boss_vs_pads),
+    ("X.pcb_insertion", C.x_pcb_insertion), ("X.usb_ids", C.x_usb_ids),
 ]
-IDS = ["G0.studio_run", "G0.studio_constraints", "G0.design_json", "G2.firmware_pins", "G2.netlist", "G2.erc",
-       "G3.outline_layers", "G3.positions", "G3.drc", "G3.drc_jlcpcb", "G3.gerbers_export", "G3.gerbers_zip",
-       "G4.check_fit", "G4.stl_mesh", "G4.switch_cutouts", "G5.bom_kit", "G6.qmk_lint", "G6.compile_default",
-       "G6.compile_ledtest", "G6.production_uf2", "G7.host_tests", "G8.package", "X.cross_positions",
-       "X.boss_vs_pads"]
+
+# Audit items no tool here can settle. Green below does not cover them, whatever the counts say.
+NEEDS_REAL_PARTS = [
+    ("OLED flip", "docs/audit/firmware.md F2", "FROSTBITE_OLED_FLIP is set from reference boards. Flash ledtest with the OLED fitted and read the text."),
+    ("EC11 resolution", "docs/audit/firmware.md F6, electrical.md E9", "Resolution 4 may need two clicks per step on a 30/15 part. Turn the kit encoder in ledtest; direction is open too."),
+    ("Glow brightness", "docs/audit/case.md M2", "The light reaching the band is a model and an estimate. Print one corner with one SK6812 and look at it."),
+    ("LED data level", "docs/audit/electrical.md E3", "3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the whole chain at full white on the real board."),
+    ("OLED flex clearance", "docs/audit/case.md M3", "The module's flex and tape height at the far end is unknown. Caliper the kit module against the lip gap."),
+]
 
 
 def run_one(fn, ctx: Ctx, cid: str) -> dict:
@@ -52,12 +62,15 @@ def exit_code(records) -> int:
 def write_report(records, path: Path, ctx: Ctx):
     n = {s: sum(1 for r in records if r["status"] == s) for s in (PASS, FAIL, NOT_RUN)}
     now = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
-    L = [f"# Frostbite verification report", "",
+    L = ["# Frostbite verification report", "",
          f"Generated {now} by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` "
          f"(commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.", "",
          f"**PASS {n[PASS]} · FAIL {n[FAIL]} · NOT_RUN {n[NOT_RUN]}** — exit code {exit_code(records)}", "",
          f"kicad-cli: `{ctx.kicad_cli or 'not installed'}`", "",
-         "| Check | Gate | Status | Summary |", "|---|---|---|---|"]
+         "## Needs real parts", "",
+         "Green below means the files agree. It does not prove these, and no check here can:", ""]
+    L += [f"- **{a}** ({b}): {c}" for a, b, c in NEEDS_REAL_PARTS]
+    L += ["", "## Checks", "", "| Check | Gate | Status | Summary |", "|---|---|---|---|"]
     for r in records:
         if r["status"] == FAIL:
             s = r["fail_reasons"][0] + (f" (+{len(r['fail_reasons']) - 1} more)" if len(r["fail_reasons"]) > 1 else "")
@@ -102,7 +115,7 @@ def main(argv=None):
     ctx = Ctx(root=ROOT, evidence_dir=ev, work=work, kicad_cli=find_kicad_cli(), env=base_env(),
               run_qmk=not a.no_qmk)
     records = []
-    for fn, cid in zip(PIPELINE, IDS):
+    for cid, fn in PIPELINE:
         if a.only and not fnmatch.fnmatch(cid, a.only):
             continue
         stale = ev / f"{cid}.json"

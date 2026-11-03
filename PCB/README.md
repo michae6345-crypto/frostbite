@@ -19,8 +19,8 @@ KiCad 10 project for the Frostbite 9 Hackpad: 3×3 MX keys, EC11E encoder, 0.91"
 | `sym-lib-table`, `fp-lib-table` | project libraries (care package, derived footprints, KiCad standard) |
 | `lib/` | Hack Club care package files + `frostbite.pretty` (derived LED footprints) |
 | `tools/` | generators and checks (below) |
-| `build/` | regenerated intermediates: netlist, DSN/SES, ERC/DRC JSON, gerbers, pos file |
-| `../production/gerbers.zip` | Gerbers (F/B Cu, Mask, Paste, Silkscreen, Edge.Cuts) + PTH/NPTH Excellon drill + job file |
+| `build/` | regenerated intermediates: netlist, DSN/SES, ERC/DRC JSON, gerbers, pos file, `bottom_pads.json` (underside pads, used by the case checks) |
+| `../production/gerbers.zip` | Gerbers (F/B Cu, Mask, Paste, Silkscreen, Edge.Cuts, Protel file names, silk clipped at the mask) + PTH/NPTH Excellon drill + job file |
 
 ## How it was generated / how to regenerate
 
@@ -44,9 +44,11 @@ sh PCB/tools/build_all.sh
    netlist, symbol links (path/sheet) set for parity, silkscreen; exports Specctra DSN.
 6. `tools/gen_pcb.py route` – Freerouting 2.5.0 headless (`-de … -do … -mp 100`, DSN clearance
    raised to 0.3 mm so traces keep clear of the board edge and LED cut-outs), SES import, Freerouting
-   neck-downs widened back to the 0.2 mm minimum, GND pours on both layers, zone fill, save.
+   neck-downs widened back to the 0.2 mm minimum, GND pours on both layers with thermal relief on
+   every pad, zone fill, save.
 7. `kicad-cli pcb drc --severity-error --exit-code-violations --schematic-parity`.
-8. Gerbers, drill, pos file, `production/gerbers.zip`, images (`sch export pdf` / `pcb export pdf`
+8. `tools/export_bottom_pads.py` writes `build/bottom_pads.json`.
+9. Gerbers, drill, pos file, `production/gerbers.zip`, images (`sch export pdf` / `pcb export pdf`
    → PNG via `sips`, and `pcb render`).
 
 ## Hack Club care package
@@ -64,12 +66,34 @@ The XIAO footprint is byte-identical on both branches. Derived footprints (`lib/
   the inside (copper 2.15–3.40 mm from centre) so it is ≥ 0.3 mm from the routed LED cut-out
   (the original pads are 0.1 mm from it, which fails JLCPCB's copper-to-edge rule). Courtyard tightened.
 * `SK6812MINI-E_glow_down` – the same on F.* layers; flipped to the bottom it is a MINI-E on the
-  underside with the lens facing **down** (its back sits in the cut-out), i.e. the mirrored pin
-  arrangement of the per-key (lens-up) LEDs.
+  underside with the lens facing **out of the board** (its back sits in the cut-out), i.e. the
+  mirrored pin arrangement of the per-key (lens-into-hole) LEDs.
+* `EC11E-Switch_Vertical_H20mm_Slot3.4x1.5` – KiCad's slotted EC11E footprint with 3.4 × 1.5 lug
+  slots and 4.0 × 2.1 pads (see "Encoder lugs").
 
-Other footprints: KiCad standard `Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal`,
-`Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm_CircularMountingHoles` (the slotted
-variant's 2.8 × 1.5 slots fail JLCPCB's 2:1 slot rule) and `Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical`.
+Other footprints: KiCad standard `Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal` and
+`Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical`. SW3's pad 2 is reduced to Ø2.0 on
+the board only (not in the library), which is why DRC notes one footprint-vs-library mismatch. Do
+not "update footprints from library" on SW3 without restoring it.
+
+## Assembly: the glow LEDs go in the other way up
+
+All 13 MINI-Es solder to B.Cu pads around an identical cut-out, but:
+
+| | LEDs | Fit | Light |
+|---|---|---|---|
+| Key LEDs | LED1–LED9 | Lens **into** the hole, back of the part facing you | Up, into the switch |
+| Glow LEDs | LED10–LED13 | **Flipped: lens out**, facing you, back of the part in the hole | Down, into the glow band |
+
+Both ways, line the chamfered lead up with the board's triangle. The silkscreen shows
+`LENS OUT` and a ring-and-dot mark beside each glow LED, and a two-line legend sits at the middle
+of the underside. Fitted lens-in like the others, VDD and GND still land correctly but the data
+pins swap: LED10's DOUT fights LED9's DOUT on `LED_D9`, the glow chain gets no data and the light goes
+into the board. Key LEDs still work, so the fault shows only at the end of bring-up. Check one
+glow LED against `led-test.uf2` before fitting the rest.
+
+Solder the XIAO to the underside (`XIAO HERE`), with its components facing away from the PCB. Compare
+the kit OLED's pin labels with the `GND VCC SCL SDA` silkscreen beside J1 before soldering it.
 
 ## Results
 
@@ -77,13 +101,13 @@ ERC (`build/erc.json`, KiCad 10.0.8, severities `error`): **0 violations** (also
 
 DRC (`build/drc.json`, KiCad 10.0.8, severities `error`, schematic parity on):
 `"violations": [], "unconnected_items": [], "schematic_parity": []` → **0 errors, 0 unconnected, 0 parity issues**.
-At all severities there are 26 silkscreen warnings, all from library artwork (care-package XIAO
-silk over its own pads, its USB outline past the board edge, one MINI-E pin-1 marker near SW3).
+At all severities there are 26 warnings and no errors: 25 from care-package XIAO silk (over its own
+pads, and its USB outline past the board edge), plus the deliberate SW3 pad change above.
 
 Netlist check: `netlist matches design.json and keyboard.json: 0 differences` (35 named nets, 109 pins, 34 parts).
 
-Routing: Freerouting reports 0 unrouted, 0 violations; 467 track segments (0.2 / 0.25 signal,
-0.375 / 0.5 power), 33 vias. Board outline 61.15 × 83.15 mm (Edge.Cuts gerber extents 0…61.15 × 0…83.15).
+Routing: Freerouting reports 0 unrouted, 0 violations; 499 track segments (0.2 / 0.25 signal,
+0.375 / 0.5 power), 40 vias. Board outline 61.15 × 83.15 mm (Edge.Cuts gerber extents 0…61.15 × 0…83.15).
 
 ## Placement (PCB coordinates, mm, origin top-left, y down)
 
@@ -91,8 +115,8 @@ Routing: Freerouting reports 0 unrouted, 0 violations; 467 track segments (0.2 /
 |---|---|---|
 | SW1–SW9 | top | switch centres exactly at `design.json keys[]` |
 | D1–D9 | top, vertical in the 5 mm gap right of each switch | (x + 9.525, y), anode up, cathode (K, square pad) at y + 3.81 |
-| LED1–LED9 | per-key, reverse mounted on the underside, lens up through the cut-out | (x, y + 5.08) under each switch's LED window; LEDn = chain index n−1 per `keys[].led` |
-| LED10–LED13 | glow, underside, lens down | (5.0, 25.4) (56.15, 25.4) (56.15, 80.6) (5.0, 80.6) – see deviations |
+| LED1–LED9 | per-key, on the underside, lens into the cut-out, shining up | (x, y + 5.08) under each switch's LED window; LEDn = chain index n−1 per `keys[].led` |
+| LED10–LED13 | glow, underside, flipped: lens out, shining down | (5.0, 25.4) (56.15, 25.4) (56.15, 80.6) (5.0, 80.6) |
 | U1 | bottom (flipped), USB-C toward y = 0 | rect 12.1…29.9 × 0…21.0, centre (21.0, 10.5) |
 | ENC1 | top, rotated 90° (A/C/B row toward the keys) | shaft (49.15, 13.0); A/C/B at y 20.5 (x 46.65/49.15/51.65); S1/S2 at y 6.0; lugs (43.55, 13.0) (54.75, 13.0) |
 | J1 | top | pin row x 39.0, pins 1–4 at y 9.19 / 11.73 / 14.27 / 16.81 = GND, VCC, SCL, SDA |
@@ -100,13 +124,43 @@ Routing: Freerouting reports 0 unrouted, 0 violations; 467 track segments (0.2 /
 Note for `kicad-cli pcb export pos`: KiCad reports footprint origins with y negated; ENC1's origin
 is pad A (46.65, 20.5), not the shaft, and J1's origin is pin 1.
 
+## Under the XIAO
+
+The XIAO's back sits directly on this board, and that back has bare VIN and GND pads, test pads and USB
+shell tabs. Rule areas on B.Cu (`xiao_back`, x 15.4–26.6, y 0.4–21) keep tracks and vias out, so no
+signal relies on solder mask alone, and `xiao_vin_gnd` (x 18.5–23.3, y 17.5–20.65) also clears the pour
+under the VIN and GND pads, whose positions come from Seeed's render (± 0.3 mm).
+
+## GND pours
+
+Every pad, SMD and through-hole, has thermal relief (gap 0.3, spoke 0.4), so no joint fights the pour.
+`min_resolved_spokes` is 1 because U1 pad 13, the only XIAO GND pin, gets 2 spokes on F.Cu but 1 on
+B.Cu. Those three 0.4 mm spokes comfortably carry the 0.48 A worst case.
+
+## Encoder lugs
+
+The lug is 2.5 mm wide with a barb tip at 6.55 mm from the shaft. How far the barb must flex past the
+hole edge, in mm, at the lug's centre and at its corners against a rounded slot end:
+
+| Hole | Lug centre | Lug corner | Passes JLCPCB 2:1 slot rule? |
+|---|---|---|---|
+| Ø2.6 round at ±5.6 (previous board) | none | 0.59 | n/a |
+| KiCad 2.8 × 1.5 at ±5.6 | 0.20 | 0.50 | No |
+| Alps 2.6 × 1.5 at ±5.5, if its ends are round | 0.30 | 0.78 | No |
+| **3.4 × 1.5 at ±5.6 (this board)** | **0.20** | **0.26** | Yes, 2.27:1 |
+
+Width and centre match KiCad's slot, which six reference boards use, so the barb still catches the
+outer edge. The extra length only clears the corners and adds no play across the lug. Figures are
+from Alps' STEP model; a kit clone may differ.
+
 ## OLED pin order
 
 The common 0.91" 128×32 module, display side up with the header at the **right** end, presents
 GND, VCC, SCL, SDA from the back edge (top of the PCB view) to the front edge: a vendor photo of
 the module in that orientation has SDA on the pin nearest the viewer, and the gorbachev footprint
 the Hackpad guide links (38 × 12 board, pads at x 36.5, GND at y 2.19) is the same. So J1 matches
-`design.json` as written. Some clones swap GND/VCC: check the silkscreen on the kit module before soldering.
+`design.json` as written. Some clones swap GND/VCC, so compare the kit module's labels with the
+`GND VCC SCL SDA` silkscreen beside J1 (on both faces) before soldering.
 
 ## Nets
 
@@ -125,8 +179,10 @@ the Hackpad guide links (38 × 12 board, pads at x 36.5, GND at y 2.19) is the s
 
 ## For the case
 
-* Bottom side: XIAO (≈3.5 mm, allow `xiaoDetail.tMax` 4.5 + 0.5), MINI-E bodies 0.84 mm (per-key)
-  and lenses ≈0.94 mm (glow LEDs, shining down), THT lead ends ≈1.7–2 mm (switches, encoder, diodes, J1).
-* USB-C: receptacle centred at x = 21.0, 9.0 wide, on the underside, overhanging the y = 0 edge by 1.42 mm.
+* Bottom side: XIAO (≈3.5 mm, allow `xiaoDetail.tMax` 4.5 + 0.5). Per-key LED backs protrude ≈0.94 mm
+  below B.Cu, glow LED lenses ≈0.84 mm (the lens is the 0.84 side of the part). THT lead ends ≈1.7–2 mm (switches, encoder, diodes, J1).
+* USB-C: receptacle centred at x = 21.0, 9.0 wide, on the underside, overhanging the y = 0 edge by
+  1.42 mm per Seeed's footprint (Seeed's STEP gives 1.0; a real XIAO settles it).
+* ENC1 lug pads are 2.1 × 4.0 at (43.55, 13.0) and (54.75, 13.0); parts sit where they did.
 * Top side: only the diodes (Ø 2 mm, under the plate) and J1/ENC1; OLED module outline (x 2.5–40.5, y 7–19) is free of parts apart from flush XIAO pads.
 * No mounting holes: `design.json` puts the M3 inserts in the bezel, outside the PCB.

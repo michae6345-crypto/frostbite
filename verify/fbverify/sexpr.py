@@ -174,31 +174,52 @@ def load_pcb(text: str) -> dict:
             hh = (abs(w * math.sin(a)) + abs(h * math.cos(a))) / 2
             dr = child(pad, "drill")
             off = child(dr, "offset") if dr is not None else None
-            if off is not None:
-                # copper is shifted by the drill offset; its direction on flipped footprints is easy to get
-                # wrong, so cover both signs (conservative for clearance checks)
-                ox, oy = num(off[1]), num(off[2])
-                hw += abs(ox * math.cos(a)) + abs(oy * math.sin(a))
-                hh += abs(ox * math.sin(a)) + abs(oy * math.cos(a))
+            # copper centre = pad position + drill offset rotated by the pad angle (checked against pcbnew)
+            ox, oy = _rot(num(off[1]), num(off[2]), pa) if off is not None else (0.0, 0.0)
+            zc = child(pad, "zone_connect")
             pads.append({"num": str(pad[1]), "x": x + dx, "y": y + dy, "net": _net_name(pad),
                          "pinfunction": str(pf[1]) if pf is not None else None,
                          "type": str(pad[2]) if len(pad) > 2 else None, "shape": str(pad[3]) if len(pad) > 3 else None,
                          "w": w, "h": h, "angle": pa, "hw": hw, "hh": hh,
+                         "cx": x + dx + ox, "cy": y + dy + oy,
+                         "zone_connect": int(zc[1]) if zc is not None else None,
                          "layers": [str(v) for v in lay[1:]] if lay is not None else []})
         graphics = []
         for g in fp[1:]:
             if isinstance(g, list) and head(g) in ("fp_line", "fp_rect", "fp_poly", "fp_arc", "fp_circle"):
                 pts = [(x + _rot(px, py, rot)[0], y + _rot(px, py, rot)[1]) for px, py in _edge_points(g)]
                 graphics.append({"kind": head(g), "layer": layer_of(g), "pts": pts})
+        fzc = child(fp, "zone_connect")
         fps.append({"lib": lib, "ref": ref, "value": val, "x": x, "y": y, "rot": rot,
-                    "layer": layer_of(fp), "pads": pads, "graphics": graphics})
+                    "layer": layer_of(fp), "pads": pads, "graphics": graphics,
+                    "zone_connect": int(fzc[1]) if fzc is not None else None})
     texts = []
     for t in children(tree, "gr_text"):
         texts.append({"text": str(t[1]), "layer": layer_of(t)})
     for fp in children(tree, "footprint"):
         for t in children(fp, "fp_text"):
             texts.append({"text": str(t[2]) if len(t) > 2 else "", "layer": layer_of(t)})
-    return {"layers": layers, "edge_pts": edge_pts, "footprints": fps, "texts": texts}
+    zones = []
+    for z in children(tree, "zone"):
+        nn = child(z, "net_name")
+        n = child(z, "net")
+        name = str(nn[1]) if nn is not None else (str(n[1]) if n is not None and isinstance(n[1], Str) else None)
+        ly = child(z, "layers")
+        lays = [str(v) for v in ly[1:]] if ly is not None else ([layer_of(z)] if layer_of(z) else [])
+        cp = child(z, "connect_pads")
+        mode = "thermal"
+        if cp is not None:
+            atoms = [str(v) for v in cp[1:] if not isinstance(v, list)]
+            if atoms:
+                mode = atoms[0]        # yes = solid, no = none, thru_hole_only = solid SMD + thermal THT
+        fills = []
+        for f in children(z, "filled_polygon"):
+            pl = child(f, "pts")
+            pts = [(num(q[1]), num(q[2])) for q in children(pl, "xy")] if pl is not None else []
+            fills.append({"layer": layer_of(f), "pts": pts})
+        zones.append({"net": name, "layers": lays, "connect": mode, "fills": fills,
+                      "keepout": child(z, "keepout") is not None})
+    return {"layers": layers, "edge_pts": edge_pts, "footprints": fps, "texts": texts, "zones": zones}
 
 
 def load_netlist(text: str) -> dict:

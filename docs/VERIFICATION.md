@@ -22,7 +22,7 @@ patched later, so the checks before submission carry most of the weight.
 | MCU | Seeed XIAO RP2040, 11 GPIO D0–D10, USB head past Edge.Cuts | Hackpad submission page, tutorial |
 | I²C | OLED on D4 (SDA, GP6) / D5 (SCL, GP7); analog only D0–D3 (A0–A3) | CONTRACT, XIAO pinout |
 | OLED | 0.91" 128×32, pin order **GND-VCC-SCL-SDA**, max 1 (fixed 0x3C address) | Parts page |
-| Inputs | **< 16** (switches + encoders) | Submission page |
+| Switches | ≤ 16 in the kit (the old "< 16 inputs" rule is not on the live pages, see docs/audit/hackpad-rules.md) | `/parts` |
 | Kit max | 16 MX switches, 16 DSA white caps, 2 EC11, 1 OLED, 16 SK6812 MINI-E, 20 1N4148, M3×16 screws, M3 heat-set inserts | Parts page |
 | PCB | ≤ 100 × 100 mm, 2 layers, project name on silkscreen, "XIAO HERE" on the XIAO side | Submission page, tutorial |
 | Case | ≤ 200 × 200 × 100 mm, 3D printed only (no acrylic / laser / CNC), name on a hidden face | Submission page, FAQ |
@@ -59,7 +59,7 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
 ### G2 Pin map and schematic
 - **Checks** (against `design.json.pins`):
   - ≤ 11 GPIO, no pin used twice; D4 = SDA, D5 = SCL to the OLED; header pins 1-2-3-4 = GND, VCC, SCL, SDA.
-  - Analog use only on D0–D3 (none planned); LED data on one GPIO, chain DIN→DOUT in `design.json.leds` order, every LED has a 100 nF cap.
+  - Analog use only on D0–D3 (none planned); LED data on one GPIO, chain DIN→DOUT in `design.json.leds` order. No decoupling caps: the kit has none, and the reference Hackpad boards checked in docs/audit/electrical.md run without them; a known risk, checked at bring-up.
   - Matrix: one 1N4148 per switch, same direction (COL2ROW); no column or row shorted to another net.
   - Encoder A/B on two GPIO, C to GND; push wired only if the layout says `dialPress`.
   - SK6812 on 5 V with 3.3 V data is marginal (VIH ≈ 3.5 V). Feed the first LED's VDD through a

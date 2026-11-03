@@ -1,0 +1,6 @@
+item,qty,source,link,price_usd,shipping_usd,notes
+"Hackpad kit (XIAO RP2040, 9 of 16 switches, 3 of 16 DSA caps, 9 diodes, EC11E, OLED, 13 SK6812 MINI-E, 4 M3x16, 4 inserts)",1,Hack Club kit,https://hackpad.hackclub.com/parts,0,0,Provided
+"PCB, 2-layer, 61.15 x 83.15 mm (production/gerbers.zip)",1,JLCPCB,https://jlcpcb.com,,,Covered by the Hackpad PCB grant; fill in the real quote
+"3D-printed case (Top, Bottom, Knob in iced PETG; GlowBand in clear PETG)",1,Printing Legion,,,,Covered by the case grant; ask whether translucent PETG is available
+Frosted translucent MX keycaps,6,Buy yourself,,,,"Fill in the real listing, price and shipping"
+"Knob for 6 mm D-shaft, 18 mm (or print production/Knob.stl)",1,Buy or print,,,,Optional if printed

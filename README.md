@@ -52,7 +52,7 @@ The case is generated from `design.json` in CadQuery and printed in four parts:
 | `Bottom` | Base with a 4° typing tilt; the M3 screws go in from underneath so none show from above |
 | `Knob` | Optional printable 18 mm knob for the 6 mm D-shaft (30 knurl ribs) |
 
-- Outer shell 75.15 × 97.15 mm, 12 mm corner radius, 9 mm bezel.
+- Outer shell 79.15 × 97.15 mm, 12 mm corner radius, 9 mm bezel.
 - 4 × M3 heat-set inserts (4.7 mm hole, 4 mm deep) in the Top's side walls, M3×16 screws up from underneath
   through Bottom and GlowBand. The bosses tuck under the PCB edge, so they are placed clear of the underside pads.
 - 0.3 mm tolerance per side where print meets PCB.
@@ -209,7 +209,7 @@ Try it without hardware: `frostbite-daemon --fake --dry-run`.
 
 | Gate | What it checks |
 |---|---|
-| G0 | Design studio harness and unit tests; `design.json` self-consistency (pin map matches Seeed's XIAO pinout, one key per matrix cell, LED indices 0-12, < 16 inputs, PCB ≤ 100 × 100) |
+| G0 | Design studio harness and unit tests; `design.json` self-consistency (pin map matches Seeed's XIAO pinout, one key per matrix cell, LED indices 0-12, ≤ 16 switches, PCB ≤ 100 × 100) |
 | G2 | QMK `keyboard.json` / `config.h` pins match `design.json`; KiCad netlist nets, matrix paths and LED chain match; ERC has 0 errors |
 | G3 | PCB outline and layers, part positions within 0.05 mm, DRC with the project rules and with pinned JLCPCB rules, gerber export |
 | G4 | `CAD/check_fit.py`; every STL watertight; the Top plate has 9 cutouts of 14.0 ± 0.1 mm in the design's key pattern |
@@ -222,12 +222,16 @@ Try it without hardware: `frostbite-daemon --fake --dry-run`.
 **Evidence.** Each check writes `verify/evidence/<check>.json` with every command, exit code, output tail,
 measurements, and the SHA-256 of every input file. A claim only counts if its evidence file exists and its input
 hashes match the current files. A check is PASS only when every command exited 0 and every value matched;
-NOT_RUN (missing input or tool) is never counted as a pass. `verify/run.sh --self-test` injects 25 known faults
+NOT_RUN (missing input or tool) is never counted as a pass. `verify/run.sh --self-test` injects 45 known faults
 (a swapped pin, a moved switch, a truncated UF2, a leaky STL, a screw boss on a solder pad, ...) into copies of the
 project and confirms the right check fails for each.
 
-**Current status** (from [verify/REPORT.md](verify/REPORT.md)): **PASS 24 · FAIL 0 · NOT_RUN 0**, self-test 25/25
+**Current status** (from [verify/REPORT.md](verify/REPORT.md)): **PASS 31 · FAIL 0 · NOT_RUN 0**, self-test 45/45
 faults caught. Rerun `verify/run.sh` to refresh.
+
+Six separate audits (in [docs/audit/](docs/audit)) then looked for what those checks can't see, compared against
+real Hack Club boards. They found and fixed, among others: the PCB could not physically enter the case, part of the
+OLED never updated, and the host could have written to other QMK keyboards.
 
 What the checks do not prove: that the board works once soldered (3.3 V LED data into 5 V SK6812s, solder quality),
 that prints come out to size on a given printer, or how anything feels in the hand. Those are checked at bring-up

@@ -160,6 +160,25 @@ def snowflake(board, layer, cx, cy, R, width=0.2):
                 seg(board, layer, (bx, by), (bx + bl * R * math.cos(b), by - bl * R * math.sin(b)), width)
 
 
+def lens_mark(board, layer, cx, cy):
+    """Ring and dot: the usual 'pointing at you' sign, here for the lens facing the viewer."""
+    c = pcbnew.PCB_SHAPE(board)
+    c.SetShape(pcbnew.SHAPE_T_CIRCLE)
+    c.SetCenter(pt(cx, cy))
+    c.SetEnd(pt(cx + 0.65, cy))
+    c.SetLayer(layer)
+    c.SetWidth(mm(0.2))
+    board.Add(c)
+    d = pcbnew.PCB_SHAPE(board)
+    d.SetShape(pcbnew.SHAPE_T_CIRCLE)
+    d.SetCenter(pt(cx, cy))
+    d.SetEnd(pt(cx + 0.2, cy))
+    d.SetLayer(layer)
+    d.SetWidth(mm(0.2))
+    d.SetFilled(True)
+    board.Add(d)
+
+
 # ---------------------------------------------------------------- place
 def place():
     comps, nets = read_netlist()
@@ -215,10 +234,12 @@ def place():
                 ref_t.SetPosition(pt(p["x"], p["y"] + dy))
             else:
                 ref_t.SetPosition(pt(p["x"], p["y"] + 2.4))
-        if ref == "U1":   # castellated GND pad: solid connection to the pour
+        if ref == "SW3":
+            # LED11's GND pad is 0.84 mm from this joint and neither part can move.  Pad 2 -> 2.0 mm
+            # (ring 0.24, JLCPCB minimum 0.18): +0.15 mm gap, and LED11's pin-1 mark keeps its silk.
             for q in fp.Pads():
-                if q.GetNumber() == "13":
-                    q.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
+                if q.GetNumber() == "2":
+                    q.SetSize(pcbnew.F_Cu, pcbnew.VECTOR2I(mm(2.0), mm(2.0)))
         fp.Value().SetVisible(False)
 
     # ---- silkscreen
@@ -232,7 +253,26 @@ def place():
     r = D["mcu"]["rect"]
     text(board, B, "XIAO HERE", r["x"] + r["w"] / 2, r["y"] + r["h"] + 1.6, size=1.2, thick=0.2, mirror=True)
     text(board, B, "USB-C", r["x"] + r["w"] / 2, 3.0, size=1.0, thick=0.15, mirror=True)
+    text(board, F, "XIAO ON BACK", r["x"] + r["w"] / 2, 3.4, size=1.0, thick=0.15)
 
+    # J1 pin names on both faces: top is what you compare with the module, bottom is what you solder
+    names = D["oled"]["header"]["pins_top_to_bottom"]
+    h = D["oled"]["header"]
+    for i, name in enumerate(names):
+        y = h["centre_y"] + (i - 1.5) * h["pitch"]
+        text(board, F, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15)
+        text(board, B, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15, mirror=True)
+
+    # Glow LEDs are fitted the opposite way up to the key LEDs (see README).  They have identical
+    # pads and cut-outs, so the marks are the only thing telling them apart.
+    for g in D["leds"]["glow"]:
+        gx, gy, inboard = g["x"], GLOW_Y.get(g["y"], g["y"]), (1 if g["x"] < W / 2 else -1)
+        lens_mark(board, B, gx + 5.0 * inboard, gy + 0.4)
+        text(board, B, "LENS OUT", gx + 9.9 * inboard, gy + 0.4, size=1.0, thick=0.15, mirror=True)
+    text(board, B, "LED1-9: LENS INTO HOLE", W / 2, 63.2, size=1.0, thick=0.15, mirror=True)
+    text(board, B, "LED10-13 FLIPPED: LENS OUT", W / 2, 64.6, size=1.0, thick=0.15, mirror=True)
+
+    add_keepouts(board)
     pcbnew.SaveBoard(str(BOARD), board)
     BUILD.mkdir(exist_ok=True)
     dsn = BUILD / "frostbite.dsn"
@@ -284,16 +324,17 @@ def report_positions(board):
     print(f"max position deviation vs design.json: {worst:.4f} mm")
 
 
-def keepout(board, name, x0, y0, x1, y1):
+def keepout(board, name, x0, y0, x1, y1, no_pour=False):
+    """B.Cu rule area: no tracks or vias (a through via has copper on B.Cu), optionally no pour."""
     z = pcbnew.ZONE(board)
     z.SetIsRuleArea(True)
     z.SetZoneName(name)
-    z.SetLayerSet(pcbnew.LSET.AllCuMask(2))
+    z.SetLayer(pcbnew.B_Cu)
     z.SetDoNotAllowTracks(True)
     z.SetDoNotAllowVias(True)
     z.SetDoNotAllowPads(False)
     z.SetDoNotAllowFootprints(False)
-    z.SetDoNotAllowZoneFills(False)   # the GND pour keeps its own 0.3 mm edge clearance
+    z.SetDoNotAllowZoneFills(no_pour)
     ol = z.Outline()
     ol.NewOutline()
     for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
@@ -302,17 +343,14 @@ def keepout(board, name, x0, y0, x1, y1):
 
 
 def add_keepouts(board):
-    """Track/via keep-outs so Freerouting honours the 0.3 mm copper-to-edge rule: a band along
-    the outline and a box around every SK6812 cut-out (cut-out +-1.75 x -1.67..1.47, plus 0.35)."""
-    b = 0.45
-    keepout(board, "edge_top", 0, 0, W, b)
-    keepout(board, "edge_bottom", 0, H - b, W, H)
-    keepout(board, "edge_left", 0, 0, b, H)
-    keepout(board, "edge_right", W - b, 0, W, H)
-    for fp in board.GetFootprints():
-        if fp.GetReference().startswith("LED"):
-            x, y = pcbnew.ToMM(fp.GetPosition().x), pcbnew.ToMM(fp.GetPosition().y)
-            keepout(board, f"cutout_{fp.GetReference()}", x - 2.1, y - 2.05, x + 2.1, y + 1.85)
+    """The XIAO's back sits on the PCB, with bare VIN and GND pads, test pads and USB shell tabs.
+    Solder mask would be the only insulation over anything on B.Cu there, so keep signals off B.Cu
+    under the whole board-to-board contact area, and clear the pour under VIN and GND as well."""
+    r = D["mcu"]["rect"]
+    cx = r["x"] + r["w"] / 2
+    keepout(board, "xiao_back", cx - 5.6, 0.4, cx + 5.6, r["y"] + r["h"])
+    # VIN 21.70-22.69, GND 19.11-20.08, y 18.07-20.05 (audit, measured +-0.3 from Seeed's render)
+    keepout(board, "xiao_vin_gnd", 18.5, 17.5, 23.3, 20.65, no_pour=True)
 
 
 # ---------------------------------------------------------------- route
@@ -353,7 +391,7 @@ def add_zones(board):
         z.SetIsRuleArea(False)
         z.SetLocalClearance(mm(0.3))
         z.SetMinThickness(mm(0.25))
-        z.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)  # SMD LED pads solid, THT thermal
+        z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)  # every pad, or GND joints sink the iron
         z.SetThermalReliefGap(mm(0.3))
         z.SetThermalReliefSpokeWidth(mm(0.4))
         z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)

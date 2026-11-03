@@ -5,7 +5,6 @@ generated from design.json where they do not), assert the check PASSes on it, in
 fault, assert the check FAILs and that a fail reason names the fault."""
 from __future__ import annotations
 
-import copy
 import datetime as _dt
 import json
 import re
@@ -17,7 +16,7 @@ from pathlib import Path
 from . import checks as C
 from . import geom
 from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, sha256
-from .main import exit_code
+from .main import NEEDS_REAL_PARTS, exit_code, write_report
 
 # ---------------------------------------------------------------- synthetic fixtures
 
@@ -62,16 +61,19 @@ def synth_pcb(d: dict) -> str:
         din = "LED_DIN" if i == 0 else f"LEDN{i - 1}"
         out.append(f' (footprint "frostbite:LED_SK6812MINI-E" (layer "{side}") {A(x, y)}'
                    f' (property "Reference" "LED{i + 1}") (property "Value" "SK6812MINI-E")'
-                   f' (pad "1" smd rect (at -1.6 -0.7) (size 1 0.8) (net "+5V") (pinfunction "VDD"))'
-                   f' (pad "2" smd rect (at -1.6 0.7) (size 1 0.8) (net "LEDN{i}") (pinfunction "DOUT"))'
-                   f' (pad "3" smd rect (at 1.6 0.7) (size 1 0.8) (net "GND") (pinfunction "GND"))'
-                   f' (pad "4" smd rect (at 1.6 -0.7) (size 1 0.8) (net "{din}") (pinfunction "DIN")))')
+                   f' (pad "1" smd rect (at -1.6 -0.7) (size 1 0.8) (layers "B.Cu") (net "+5V") (pinfunction "VDD"))'
+                   f' (pad "2" smd rect (at -1.6 0.7) (size 1 0.8) (layers "B.Cu") (net "LEDN{i}") (pinfunction "DOUT"))'
+                   f' (pad "3" smd rect (at 1.6 0.7) (size 1 0.8) (layers "B.Cu") (net "GND") (pinfunction "GND"))'
+                   f' (pad "4" smd rect (at 1.6 -0.7) (size 1 0.8) (layers "B.Cu") (net "{din}") (pinfunction "DIN")))')
     for k in d["keys"]:
         n = k["ref"][2:]
         out.append(f' (footprint "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal" (layer "F.Cu") {A(k["x"], k["y"] + 8.5)}'
                    f' (property "Reference" "D{n}") (property "Value" "1N4148")'
                    f' (pad "1" thru_hole rect (at -3.81 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask") (net "ROW{k["row"]}"))'
                    f' (pad "2" thru_hole circle (at 3.81 0) (size 1.6 1.6) (drill 0.8) (layers "*.Cu" "*.Mask")))')
+    # GND pour on B.Cu: a corner patch, standing in for a fill that keeps a relief gap to every pad
+    out.append(f' (zone (net "GND") (layer "B.Cu") (connect_pads (clearance 0.3)) (min_thickness 0.25)'
+               f' (filled_polygon (layer "B.Cu") (pts (xy {OX + 1} {OY + 1}) (xy {OX + 3} {OY + 1}) (xy {OX + 3} {OY + 3}) (xy {OX + 1} {OY + 3}))))')
     out.append(")")
     return "\n".join(out)
 
@@ -136,26 +138,64 @@ def synth_uf2(nblocks=8, family=geom.RP2040_FAMILY) -> bytes:
     return out
 
 
-def synth_plate(d: dict, cut=14.0, move=None):
-    """Top plate: shell outline with switch cutouts, encoder hole and OLED window. CAD frame = y up."""
+def synth_solid(d: dict):
+    """A plain watertight plate: only G4.stl_mesh uses it."""
     import shapely.geometry as g
     import trimesh
     sh = d["case"]["shell"]
-    ox, oy = (sh["w"] - d["pcb"]["w"]) / 2, (sh["h"] - d["pcb"]["h"]) / 2
-    T = lambda x, y: (x + ox, sh["h"] - (y + oy))  # noqa: E731
-    poly = g.box(0, 0, sh["w"], sh["h"])
+    return trimesh.creation.extrude_polygon(g.box(0, 0, sh["w"], sh["h"]).buffer(-1), 1.5)
+
+
+def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(30.6, 12.1), boss_x=None,
+              depth=16.0, usb_w=None, hole_move=0.0):
+    """A Top like the real one, in print orientation: plate top on the bed at z=0, skirt rising to z=depth."""
+    import shapely.geometry as g
+    import shapely.ops as o
+    import trimesh
+    W, H = d["pcb"]["w"], d["pcb"]["h"]
+    sh = d["case"]["shell"]
+    x0, y0 = (W - sh["w"]) / 2, (H - sh["h"]) / 2
+    shell = g.box(x0, y0, x0 + sh["w"], y0 + sh["h"])
+    tol = d["case"]["tolerance"]
+    pocket = g.box(-tol, -tol, W + tol, H + tol)
+    cuts, pockets = [], []
     for i, k in enumerate(d["keys"]):
-        x, y = T(k["x"], k["y"])
+        x, y = k["x"], k["y"]
         c = cut[i] if isinstance(cut, list) else cut
         if move and move[0] == i:
             x += move[1]
-        poly = poly.difference(g.box(x - c / 2, y - c / 2, x + c / 2, y + c / 2))
-    ex, ey = T(d["encoder"]["x"], d["encoder"]["y"])
-    poly = poly.difference(g.Point(ex, ey).buffer(3.75, 64))
-    w = d["oled"]["window"]
-    wx, wy = T(w["x"] + w["w"] / 2, w["y"] + w["h"] / 2)
-    poly = poly.difference(g.box(wx - w["w"] / 2, wy - w["h"] / 2, wx + w["w"] / 2, wy + w["h"] / 2))
-    return trimesh.creation.extrude_polygon(poly, 1.5)
+        cuts.append(g.box(x - c / 2, y - c / 2, x + c / 2, y + c / 2))
+        pockets.append(g.box(x - 7.7, y - 7.7, x + 7.7, y + 7.7))
+    ex, ey = d["encoder"]["x"], d["encoder"]["y"]
+    if enc[0] == "round":
+        eo = g.Point(ex, ey).buffer(enc[1] / 2, 64)
+    else:
+        eo = g.box(ex - enc[1] / 2, ey - enc[2] / 2, ex + enc[1] / 2, ey + enc[2] / 2)
+    w, mod = d["oled"]["window"], d["oled"]["module"]
+    cxw, cyw = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
+    win = g.box(cxw - window[0] / 2, cyw - window[1] / 2, cxw + window[0] / 2, cyw + window[1] / 2)
+    recess = g.box(mod["x"] - tol, mod["y"] - tol, mod["x"] + mod["w"] + tol, mod["y"] + mod["h"] + tol)
+    bosses, holes = [], []
+    for sc in d["case"]["screws"]["positions"]:
+        x = sc["x"] if boss_x is None else (boss_x[0] if sc["x"] < W / 2 else boss_x[1])
+        bosses.append(g.Point(x, sc["y"]).buffer(d["case"]["screws"]["boss_od"] / 2, 48))
+        holes.append(g.Point(x + hole_move, sc["y"]).buffer(4.7 / 2, 48))
+    ring = shell.difference(pocket).union(o.unary_union(bosses).intersection(shell))
+    uw = d["case"]["usb_cutout"]["w"] if usb_w is None else usb_w
+    xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
+    notch = g.box(xc - uw / 2, y0 - 1, xc + uw / 2, 0)
+    layers = [(shell.difference(o.unary_union(cuts + [eo, win])), 0.0, 1.0),
+              (shell.difference(o.unary_union(cuts + [eo, recess])), 1.0, 1.5),
+              (shell.difference(o.unary_union(pockets + [eo, recess])), 1.5, 2.5),
+              (ring, 2.5, 5.43), (ring.difference(notch), 5.43, depth - 4),
+              (ring.difference(notch).difference(o.unary_union(holes)), depth - 4, depth)]
+    meshes = []
+    for poly, z0, z1 in layers:
+        for p in (poly.geoms if hasattr(poly, "geoms") else [poly]):
+            m = trimesh.creation.extrude_polygon(p, z1 - z0)
+            m.apply_translation([-W / 2, -H / 2, z0])
+            meshes.append(m)
+    return trimesh.util.concatenate(meshes)
 
 
 # ---------------------------------------------------------------- harness
@@ -175,9 +215,10 @@ def _ctx(root: Path, base: Path) -> Ctx:
 def _copy_project(real: Path, dst: Path):
     dst.mkdir(parents=True)
     shutil.copy2(real / "design.json", dst / "design.json")
-    for sub in ("Firmware", "PCB", "production", "CAD"):
+    for sub in ("Firmware", "PCB", "production", "CAD", "host"):
         if (real / sub).is_dir():
-            shutil.copytree(real / sub, dst / sub, ignore=shutil.ignore_patterns(".venv", "*-backups", ".build"))
+            shutil.copytree(real / sub, dst / sub, ignore=shutil.ignore_patterns(
+                ".venv", "*-backups", ".build", "__pycache__", ".pytest_cache", "previews", "images"))
     if (real / "README.md").is_file():
         shutil.copy2(real / "README.md", dst / "README.md")
 
@@ -271,26 +312,132 @@ def run_selftest(verify: Path, real: Path) -> int:
     def stl_clean(root):
         prod = root / "production"
         prod.mkdir(exist_ok=True)
-        for s in prod.glob("*"):
-            if s.suffix.lower() == ".stl":
-                s.unlink()
-        synth_plate(d).export(prod / "Top.stl")
+        for q in prod.glob("*"):
+            if q.suffix.lower() == ".stl":
+                q.unlink()
+        synth_solid(d).export(prod / "Top.stl")
 
     def stl_hole(root):
         import trimesh
         p = root / "production/Top.stl"
         m = trimesh.load(str(p), force="mesh")
         keep = [True] * len(m.faces)
-        for i in range(0, 12):
+        keep[0] = keep[1] = False
+        m.update_faces(keep)
+        m.export(p)
+
+    def stl_stale(root):
+        import os
+        import time
+        later = time.time() + 60
+        os.utime(root / "design.json", (later, later))
+
+    def top_write(root, **kw):
+        prod = root / "production"
+        prod.mkdir(exist_ok=True)
+        for q in prod.glob("*"):
+            if q.suffix.lower() == ".stl":
+                q.unlink()
+        synth_top(kw.pop("dd", d), **kw).export(prod / "Top.stl")
+        r = d["mcu"]["rect"]
+        o = d["oled"]["window"]
+        c = kw.get("window", (30.6, 12.1))
+        cut = {"x": o["x"] + o["w"] / 2 - c[0] / 2, "y": o["y"] + o["h"] / 2 - c[1] / 2, "w": c[0], "h": c[1]}
+        pos = {"keys": [{"ref": k["ref"], "x": k["x"], "y": k["y"]} for k in d["keys"]],
+               "encoder": {"x": d["encoder"]["x"], "y": d["encoder"]["y"]},
+               "usb_cutout": {"x": r["x"] + r["w"] / 2, "w": d["case"]["usb_cutout"]["w"], "h": d["case"]["usb_cutout"]["h"]},
+               "oled_window": {**o, "cut": cut},
+               "screws": [dict(p) for p in d["case"]["screws"]["positions"]]}
+        (root / "CAD").mkdir(exist_ok=True)
+        (root / "CAD/positions.json").write_text(json.dumps(pos))
+        pd = root / "PCB"
+        if pd.exists():
+            shutil.rmtree(pd)
+
+    def t(**kw):
+        return lambda root: top_write(root, **kw)
+
+    def top_broken(root):
+        import trimesh
+        p = root / "production/Top.stl"
+        m = trimesh.load(str(p), force="mesh")
+        walls = (abs(m.face_normals[:, 2]) < 0.01).nonzero()[0]
+        keep = [True] * len(m.faces)
+        for i in walls[: len(walls) // 2]:
             keep[i] = False
         m.update_faces(keep)
         m.export(p)
 
-    def stl_big_cutout(root):
-        synth_plate(d, cut=[14.0] * 4 + [14.3] + [14.0] * 4).export(root / "production/Top.stl")
+    def old_b1(root):
+        """The real audited Top (B1) with the design of that day: shell 75.15, bosses at -3.0 / 64.15."""
+        prod = root / "production"
+        for q in prod.glob("*"):
+            if q.suffix.lower() == ".stl":
+                q.unlink()
+        shutil.copy2(verify / "fixtures/old_b1_Top.stl", prod / "Top.stl")
 
-    def stl_moved_cutout(root):
-        synth_plate(d, move=(4, 0.5)).export(root / "production/Top.stl")
+        def edit(j):
+            j["case"]["shell"]["w"] = 75.15
+            for sc in j["case"]["screws"]["positions"]:
+                sc["x"] = -3.0 if sc["x"] < 30 else 64.15
+        _edit_json(root / "design.json", edit)
+
+    def stale_cut(root):
+        _edit_json(root / "CAD/positions.json", lambda j: j["oled_window"].__setitem__("cut", dict(d["oled"]["window"])))
+
+    def usb_filter_removed(root):
+        p = root / "host/frostbite_host/device.py"
+        t0 = p.read_text()
+        t1 = t0.replace("hid.enumerate(VENDOR_ID, PRODUCT_ID)", "hid.enumerate()")
+        t1 = t1.replace('if d.get("vendor_id") == VENDOR_ID and d.get("product_id") == PRODUCT_ID\n            and d.get("usage_page")',
+                        'if d.get("usage_page")')
+        assert t1 != t0 and "d.get(\"vendor_id\") == VENDOR_ID" not in t1, "fixture: filter text not found in device.py"
+        p.write_text(t1)
+
+    def fw_pid(root):
+        _edit_json(root / kb_rel, lambda j: j["usb"].__setitem__("pid", "0x4643"))
+
+    def design_pid(root):
+        _edit_json(root / "design.json", lambda j: j["firmware"]["usb"].__setitem__("pid", "0x4643"))
+
+    def gnd_clean(root):
+        pcb_clean(root)
+
+    def gnd_override(root):
+        p = root / "PCB/frostbite.kicad_pcb"
+        t0 = p.read_text()
+        p.write_text(t0.replace('(size 1 0.8) (layers "B.Cu") (net "GND")', '(size 1 0.8) (layers "B.Cu") (zone_connect 2) (net "GND")', 1))
+
+    def gnd_zone_solid(root):
+        p = root / "PCB/frostbite.kicad_pcb"
+        p.write_text(p.read_text().replace("(connect_pads (clearance 0.3))", "(connect_pads yes (clearance 0.3))"))
+
+    def gnd_flooded_fill(root):
+        p = root / "PCB/frostbite.kicad_pcb"
+        t0 = p.read_text()
+        p.write_text(t0.replace(f'(xy {OX + 1} {OY + 1}) (xy {OX + 3} {OY + 1}) (xy {OX + 3} {OY + 3}) (xy {OX + 1} {OY + 3})',
+                                f'(xy {OX} {OY}) (xy {OX + 61} {OY}) (xy {OX + 61} {OY + 83}) (xy {OX} {OY + 83})'))
+
+    def real_gnd_clean(root):
+        if not (root / "PCB/frostbite.kicad_pcb").is_file():
+            raise SkipCase("real PCB not present")
+
+    def real_gnd_override(root):
+        p = root / "PCB/frostbite.kicad_pcb"
+        t0 = p.read_text()
+        t1, n = re.subn(r'\(pad "13" thru_hole (\w+)', r'(pad "13" thru_hole \1 (zone_connect 2)', t0, count=1)
+        assert n == 1, "fixture: U1 pad 13 not found"
+        p.write_text(t1)
+
+    def f1_back(root):
+        p = root / C.KB_DIR / "keymaps/default/keymap.c"
+        t0 = p.read_text()
+        key = "for (uint8_t x = 0; x < 126; x += 3) oled_write_pixel(x, 19, true);"
+        assert key in t0, "fixture: divider loop not found in keymap.c"
+        p.write_text(t0.replace(key, 'oled_set_cursor(0, 2); oled_write_P(PSTR("                     "), false);\n    ' + key))
+
+    def host_test_breaks(root):
+        (root / "host/tests/test_selftest_fault.py").write_text("def test_fault():\n    assert False\n")
 
     def cadpos_clean(root):
         pd = root / "PCB"
@@ -309,13 +456,6 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def cadpos_move(root):
         _edit_json(root / "CAD/positions.json", lambda j: j["keys"][6].__setitem__("y", j["keys"][6]["y"] + 0.4))
-
-    def plate_encoder_moved(root):
-        stl_clean(root)
-        import shapely.geometry as g  # noqa: F401
-        dd = copy.deepcopy(d)
-        dd["encoder"]["x"] += 1.0
-        synth_plate(dd).export(root / "production/Top.stl")
 
     def cadpos_usb_narrow(root):
         _edit_json(root / "CAD/positions.json", lambda j: j["usb_cutout"].__setitem__("w", 13.0))
@@ -410,15 +550,35 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("uf2: truncated", "G6.production_uf2", C.g6_production_uf2, uf2_clean, uf2_truncate, "multiple of 512"),
         Case("uf2: wrong family ID", "G6.production_uf2", C.g6_production_uf2, uf2_clean, uf2_family, "family"),
         Case("stl: non-watertight Top", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, stl_hole, "not watertight"),
-        Case("stl: one cutout 14.3 mm", "G4.switch_cutouts", C.g4_switch_cutouts, stl_clean, stl_big_cutout, "14.3"),
-        Case("stl: one cutout moved 0.5 mm", "G4.switch_cutouts", C.g4_switch_cutouts, stl_clean, stl_moved_cutout, "pattern"),
-        Case("stl: encoder hole 1 mm off", "X.cross_positions", C.x_cross_positions, stl_clean, plate_encoder_moved, "encoder"),
         Case("CAD positions: SW7 moved 0.4 mm", "X.cross_positions", C.x_cross_positions, cadpos_clean, cadpos_move, "SW7"),
         Case("CAD positions: USB cutout 13.0 < 13.5 mm", "X.cross_positions", C.x_cross_positions, cadpos_clean, cadpos_usb_narrow, "usb_cutout w"),
         Case("boss (design.json) moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, boss_on_pad_design, "[design.json vs"),
         Case("boss (CAD/positions.json) moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, boss_on_pad_cad, "[CAD/positions.json vs"),
         Case("bottom_pads.json: pad 0.15 mm from a boss", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, pad_under_boss_json, "vs PCB/build/bottom_pads.json] boss 0"),
         Case("real PCB: design.json boss moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, real_boss_clean, boss_on_pad_design, "D9 pad 2"),
+        Case("stl: older than design.json", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, stl_stale, "older than design.json"),
+        Case("top: one cutout 14.3 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(cut=[14.0] * 4 + [14.3] + [14.0] * 4), "14.300"),
+        Case("top: one cutout moved 0.5 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(move=(4, 0.5)), "opening centre"),
+        Case("top 13 mm tall: heights come from the part", "G4.switch_cutouts", C.g4_switch_cutouts, t(depth=13.0), t(depth=13.0, cut=13.7), "13.700"),
+        Case("top: walls missing, slicer must not guess", "G4.switch_cutouts", C.g4_switch_cutouts, t(), top_broken, "lost material"),
+        Case("encoder: round 17.4 clears, 15.0 hits the body", "G4.encoder_clearance", C.g4_encoder_clearance, t(enc=("round", 17.4)), t(enc=("round", 15.0)), "EC11 body"),
+        Case("encoder: 12.98 x 16 clears, 11.9 x 16 does not", "G4.encoder_clearance", C.g4_encoder_clearance, t(), t(enc=("rect", 11.9, 16.0)), "EC11 body"),
+        Case("oled: window smaller than the glass", "G4.oled_clearance", C.g4_oled_clearance, t(), t(window=(29.0, 12.1)), "OLED glass"),
+        Case("oled: positions.json states the design window, not the cut", "G4.oled_clearance", C.g4_oled_clearance, t(), stale_cut, "oled_window cut"),
+        Case("pcb insertion: bosses at old x -3.0 / 64.15", "X.pcb_insertion", C.x_pcb_insertion, t(), t(boss_x=(-3.0, 64.15)), "cannot reach its seat"),
+        Case("pcb insertion: the real audited B1 Top", "X.pcb_insertion", C.x_pcb_insertion, t(), old_b1, "cannot reach its seat"),
+        Case("mesh: insert hole 0.5 mm off", "X.cross_positions", C.x_cross_positions, t(), t(hole_move=0.5), "insert hole"),
+        Case("mesh: USB opening 13.0 < 13.5 mm", "X.cross_positions", C.x_cross_positions, t(), t(usb_w=13.0), "USB opening"),
+        Case("usb: host VID/PID filter removed", "X.usb_ids", C.x_usb_ids, noop, usb_filter_removed, "keychron"),
+        Case("usb: keyboard.json PID differs", "X.usb_ids", C.x_usb_ids, noop, fw_pid, "keyboard.json usb"),
+        Case("usb: design.json PID differs", "X.usb_ids", C.x_usb_ids, noop, design_pid, "VENDOR_ID/PRODUCT_ID"),
+        Case("gnd: one pad set to full", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_override, "zone_connect 2"),
+        Case("gnd: zone set to solid", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_zone_solid, "must be thermal"),
+        Case("gnd: pour floods the pads", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_flooded_fill, "no working thermal relief"),
+        Case("gnd: real U1 pad 13 set to full", "G3.gnd_thermal", C.g3_gnd_thermal, real_gnd_clean, real_gnd_override, "U1 pad 13"),
+        Case("firmware: F1 blanking line back in keymap.c", "G6.oled_strip_panel", C.g6_oled_strip_panel, noop, f1_back, "PASS F1 HID: slot strip"),
+        Case("firmware: harness fails with F1 back", "G6.firmware_harness", C.g6_firmware_harness, noop, f1_back, "FAIL F1 HID"),
+        Case("host: a failing test in host/tests", "G7.host_tests", C.g7_host_tests, noop, host_test_breaks, "pytest exited"),
         Case("BOM: 17 LEDs > kit 16", "G5.bom_kit", C.g5_bom_kit, noop, bom_too_many, "leds"),
         Case("package: gerbers.zip and schematic image missing", "G8.package", C.g8_package, pkg_clean, pkg_broken, "gerbers.zip"),
     ]
@@ -477,6 +637,12 @@ def run_selftest(verify: Path, real: Path) -> int:
     meta.append({"assert": "exit code 0 when only PASS/NOT_RUN", "got": exit_code(fake), "ok": exit_code(fake) == 0})
     fake.append({"status": FAIL})
     meta.append({"assert": "exit code 1 when any FAIL", "got": exit_code(fake), "ok": exit_code(fake) == 1})
+    rep = tmp / "report.md"
+    write_report([], rep, ectx)
+    text = rep.read_text()
+    for name, _, _ in NEEDS_REAL_PARTS:
+        meta.append({"assert": f"REPORT lists '{name}' under Needs real parts", "got": name in text, "ok": name in text})
+    meta.append({"assert": "exactly the 5 agreed Needs real parts items", "got": len(NEEDS_REAL_PARTS), "ok": len(NEEDS_REAL_PARTS) == 5})
     pinned = sha256(verify / C.JLC_DRU.split("verify/")[1]) == C.JLC_DRU_SHA256
     meta.append({"assert": "pinned JLCPCB rules file matches its SHA-256", "got": pinned, "ok": pinned})
     for m in meta:

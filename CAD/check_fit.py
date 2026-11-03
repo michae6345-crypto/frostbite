@@ -98,7 +98,7 @@ def check_pocket(m):
     cx, cy = fc.PCB_W / 2, fc.PCB_H / 2
     rows = []
     ok = True
-    for name, z in (("Top", -5.0), ("GlowBand", -10.4), ("Bottom", -12.0)):
+    for name, z in (("Top", -5.0), ("Bottom", -12.0)):
         r = Ray(m["parts"][name])
         w = r.first(P(cx, cy, z), (1, 0, 0)) + r.first(P(cx, cy, z), (-1, 0, 0))
         h = r.first(P(cx, cy, z), (0, -1, 0)) + r.first(P(cx, cy, z), (0, 1, 0))
@@ -155,9 +155,7 @@ def check_switch_cutouts(m):
     rec("Plate 1.5 at the clips, thicker between", all(abs(t - 1.5) < 0.02 for t in ts) and min(te) >= 2.0,
         f"clip zone {min(ts):.2f}-{max(ts):.2f}, web {min(te):.2f} mm")
     sw = sum(inter_vol(top, m["ph"][f"{k['ref']}_switch"]) for k in D["keys"])
-    dmin = min(dist(top, m["ph"][f"{k['ref']}_switch"].translate(cq.Vector(0, 0, 0))) for k in D["keys"][:1])
     rec("Switch bodies vs plate", sw < EPS_VOL, f"overlap {sw:.4f} mm^3 (housing 14.0 in a 14.0 cutout, clips in 15.4 pockets)")
-    _ = dmin
 
 
 def check_keycaps(m):
@@ -194,11 +192,15 @@ def check_inserts(m):
     rec("Insert holes 4.7 x 4 deep (Top)", all(abs(d - 4.7) < 0.02 for d in dia) and all(abs(x - 4.0) < 0.02 for x in depth),
         f"dia {min(dia):.2f}, depth {min(depth):.2f}-{max(depth):.2f} mm")
     rec("Wall around inserts >= 1.3 (ruthex min)", min(walls) >= 1.3, f"min wall {min(walls):.2f} mm")
-    bosses = [fc.solid(fc.cyl(sx, sy, fc.TOP_BOSS_R, fc.SKIRT_BOT, -fc.TOL)) for sx, sy in fc.SCREWS]
-    bd = min(dist(b.intersect(top), pcb) for b in bosses)
-    v = sum(inter_vol(b.intersect(top), pcb) for b in bosses)
-    rec("Insert bosses vs PCB outline", v < EPS_VOL and bd >= fc.TOL - 1e-3,
-        f"overlap {v:.4f} mm^3, boss-PCB gap {bd:.2f} mm (bosses tuck 0.3 under the PCB edge)")
+    # the insert boss is a circle of the side wall: it must stay outside the PCB insertion envelope
+    env_edge = [max(-fc.TOL - sx, sx - (fc.PCB_W + fc.TOL)) for sx, _ in fc.SCREWS]
+    gap = min(e - fc.BOSS_OD / 2 for e in env_edge)
+    hole_wall = min(e - fc.INSERT_HOLE / 2 for e in env_edge)
+    rec("Boss OD clear of the PCB insertion envelope", gap >= -1e-6,
+        f"boss OD {fc.BOSS_OD} edge to envelope {gap:.2f} mm, insert hole to envelope {hole_wall:.2f} mm")
+    env = fc.solid(fc.pocket_prism(fc.SKIRT_BOT, fc.PLATE_UNDER))
+    v_env = inter_vol(top, env)
+    rec("No Top material inside the PCB envelope below the plate", v_env < EPS_VOL, f"{v_env:.4f} mm^3")
     # features must not collide with insert holes: distance from feature cutters to insert cylinders
     w, mo = fc.OL["window"], fc.OL["module"]
     feats = {f"{k['ref']} cutout": fc.cbox(k["x"], k["y"], fc.CLIP_POCKET, fc.CLIP_POCKET, fc.PLATE_UNDER, fc.PLATE_TOP)
@@ -257,8 +259,9 @@ def check_encoder(m):
         f"smallest opening {2 * min(rad):.2f} mm (bushing 7.0); body clearance {db:.2f} mm, overlap {v:.4f}")
     kv = inter_vol(knob, ph["EC11_shaft"]) + inter_vol(knob, ph["EC11_bushing"])
     kd = dist(knob, ph["EC11_shaft"])
-    rec("Knob bore fits the 6 mm D-shaft", kv < EPS_VOL and 0.03 <= kd <= 0.3,
-        f"overlap {kv:.4f}, bore-shaft gap {kd:.2f} mm, knob {fc.KNOB_D:.0f} mm")
+    rec("Knob seats at design height on the real shaft", kv < EPS_VOL and 0.03 <= kd <= 0.3,
+        f"overlap {kv:.4f}, bore-shaft gap {kd:.2f} mm, knob {fc.KNOB_D:.0f} mm at z {fc.KNOB_Z0:.1f}, "
+        f"{fc.KNOB_Z0 - fc.PLATE_TOP:.1f} above the plate, {fc.KNOB_Z0 - (fc.PCB_TOP + fc.EC_BODY[2] + fc.EC_BUSH_H):.1f} above the bushing")
 
 
 def check_oled(m):
@@ -287,6 +290,14 @@ def check_glow(m):
     rec("GlowBand: 2.0 tall light gap, pads under each glow LED",
         fc.BAND_H >= 2.0 and all(c < 1.0 for c in cover) and min(gaps) >= fc.TOL - 1e-3,
         f"band {fc.BAND_H:.1f} mm; LED-to-pad air {min(cover):.2f}-{max(cover):.2f} mm")
+    # M1: everything of the band that stands inside the Top needs real clearance
+    top = m["parts"]["Top"]
+    inside = fc.solid(fc.box(-1, fc.PCB_W + 1, -0.05, fc.PCB_H + 1, fc.BAND_TOP + 0.01, 1))
+    riser = band.intersect(inside)
+    tongue = band.intersect(fc.solid(fc.box(0, fc.PCB_W, -9, -0.1, fc.BAND_TOP + 0.01, 1)))
+    dr, dt = dist(riser, top), dist(tongue, top)
+    rec("GlowBand risers clear the Top pocket (M1)", dr >= fc.TOL - 1e-3 and dt >= 0.2 - 1e-3,
+        f"pads and riser {dr:.2f} mm to the pocket wall, USB tongue {dt:.2f} mm to the notch")
 
 
 def check_bottom_pads(m):
@@ -320,7 +331,7 @@ def check_bottom_pads(m):
         for p in pads:
             dx = max(p["x0"] - sx, 0, sx - p["x1"])
             dy = max(p["y0"] - sy, 0, sy - p["y1"])
-            d = math.hypot(dx, dy) - fc.TOP_BOSS_R
+            d = math.hypot(dx, dy) - fc.BOSS_OD / 2
             if d < worst[0]:
                 worst = (d, f"{p['ref']}.{p['pad']} vs boss ({sx}, {sy})")
     rec("Insert boss footprints (OD %.1f) >= 0.5 from every pad" % fc.BOSS_OD, worst[0] >= fc.PAD_CLEAR,
@@ -328,6 +339,107 @@ def check_bottom_pads(m):
     tb = dist(m["parts"]["Bottom"], cq.Compound.makeCompound(
         [t for t, p in zip(tails, pads) if p["through_hole"]]))
     rec("THT lead tails (2.0) clear the Bottom floor and bosses", tb >= fc.PAD_CLEAR, f"{tb:.2f} mm")
+
+
+# ------------------------------------------------------------------ assembly path
+def shifted_bb(bb, dz):
+    return bb.xmin, bb.xmax, bb.ymin, bb.ymax, bb.zmin + dz, bb.zmax + dz
+
+
+def sweep(moving: dict, fixed: dict, start: float, step: float = 0.5):
+    """Move each solid from offset `start` (z) to its seat (0) and intersect every position.
+
+    A discrete sweep along the real straight path: the step is smaller than any moving or fixed
+    feature, so nothing can be jumped over. Returns (worst sum at one position, offenders).
+    """
+    n = int(round(abs(start) / step))
+    offs = [start * (1 - i / n) for i in range(n + 1)]
+    fb = {k: v.BoundingBox() for k, v in fixed.items()}
+    worst, off = 0.0, {}
+    for dz in offs:
+        total = 0.0
+        for mn, ms in moving.items():
+            mb = ms.BoundingBox()
+            x0, x1, y0, y1, z0, z1 = shifted_bb(mb, dz)
+            placed = None
+            for fn, fs in fixed.items():
+                b = fb[fn]
+                if x1 < b.xmin or b.xmax < x0 or y1 < b.ymin or b.ymax < y0 or z1 < b.zmin or b.zmax < z0:
+                    continue
+                if placed is None:
+                    placed = ms.translate(cq.Vector(0, 0, dz))
+                v = placed.intersect(fs).Volume()
+                if v > EPS_VOL:
+                    total += v
+                    if v > off.get((mn, fn), (0,))[0]:
+                        off[(mn, fn)] = (v, dz)
+        worst = max(worst, total)
+    return worst, off
+
+
+def path_groups(m):
+    ph = m["ph"]
+    rigid = {f"{k['ref']}_rigid": fc.solid(fc.switch_rigid(k["x"], k["y"])) for k in D["keys"]}
+    # everything soldered to the PCB before it meets the switches (OLED sits loose in J1, moves with it)
+    board = {k: v for k, v in ph.items()
+             if k == "PCB" or k.startswith(("XIAO", "EC11", "OLED", "glow")) or k.endswith("_led")}
+    pins = {k: v for k, v in ph.items() if k.endswith("_pins")}
+    tails = {f"tail_{p['ref']}.{p['pad']}": fc.solid(fc.box(p["x0"], p["x1"], p["y0"], p["y1"], -fc.THT_TAIL, 0))
+             for p in fc.bottom_pads() if p["through_hole"]}
+    caps = {k: v for k, v in ph.items() if k.endswith("keycap")}
+    return rigid, board, pins, tails, caps
+
+
+def stage(name, moving, fixed, start, step=0.5):
+    w, off = sweep(moving, fixed, start, step)
+    top3 = sorted(off.items(), key=lambda kv: -kv[1][0])[:3]
+    txt = ", ".join(f"{a} into {b} {v[0]:.2f} mm^3 at dz {v[1]:+.1f}" for (a, b), v in top3)
+    rec(f"Path: {name}", w < EPS_VOL, f"{len(moving)} solids, dz {start:+.0f} to seat: "
+        + ("clear" if not off else f"BLOCKED ({w:.2f} mm^3): {txt}"))
+    return w
+
+
+LEGACY_X = (-3.0, 64.15)      # the blocked design: bosses stood 1.35 mm inside the PCB envelope
+LEGACY_Y = (9.0, 62.1)
+
+
+def legacy_top(top):
+    """Today's Top with the old insert bosses added back, as a negative control for the sweep."""
+    out = top
+    for x in LEGACY_X:
+        for y in LEGACY_Y:
+            boss = fc.solid(fc.cyl(x, y, 8.7 / 2, fc.SKIRT_BOT, -fc.TOL))
+            out = out.fuse(boss)
+    return out.clean()
+
+
+def check_assembly_path(m):
+    """Assembly order from CAD/README.md, each step along its real straight path."""
+    parts, ph = m["parts"], m["ph"]
+    top = parts["Top"]
+    rigid, board, pins, tails, caps = path_groups(m)
+    # negative control first: this must report a blockage or the test proves nothing
+    w, off = sweep({"PCB": ph["PCB"]}, {"Top": legacy_top(top)}, -40.0, 1.0)
+    rec("Self-test: sweep FAILS on the old tuck bosses", w > 1.0,
+        f"old bosses block the PCB, {w:.1f} mm^3 overlap at the worst step (must be > 0)")
+
+    inserts = {f"insert{i}": fc.solid(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.SKIRT_BOT, fc.SKIRT_BOT + fc.INSERT_DEPTH))
+               for i, (sx, sy) in enumerate(fc.SCREWS)}
+    stage("1 inserts into Top", inserts, {"Top": top}, -30.0)
+    stage("2 switches into plate (no clips)", rigid, {"Top": top}, +30.0)
+    stage("3 PCB + soldered parts into Top", board, {"Top": top, **rigid}, -45.0)
+    seated = {"Top": top, **rigid, **board, **pins, **tails}
+    stage("4 GlowBand onto Top", {"GlowBand": parts["GlowBand"]}, seated, -45.0)
+    stage("5 Bottom onto stack", {"Bottom": parts["Bottom"]}, {**seated, "GlowBand": parts["GlowBand"]}, -45.0)
+    screws = {}
+    for i, (sx, sy) in enumerate(fc.SCREWS):
+        screws[f"shank{i}"] = fc.solid(fc.cyl(sx, sy, 1.5, fc.SEAT, fc.SCREW_TIP))
+        screws[f"head{i}"] = fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT - fc.HEAD_H, fc.SEAT))
+    case = {k: parts[k] for k in ("Top", "GlowBand", "Bottom")}
+    stage("6 screws from underneath", screws, case, -40.0)
+    enc = {k: v for k, v in ph.items() if k.startswith("EC11")}
+    stage("7 keycaps onto stems", caps, {"Top": top, **enc, "OLED_glass": ph["OLED_glass"]}, +30.0)
+    stage("8 knob onto shaft", {"Knob": parts["Knob"]}, {"Top": top, **enc, **caps}, +30.0)
 
 
 # ------------------------------------------------------------------ printability
@@ -451,6 +563,7 @@ def main():
     check_oled(m)
     check_glow(m)
     check_bottom_pads(m)
+    check_assembly_path(m)
     check_printability(printed, m)
     check_mesh_sections()
 

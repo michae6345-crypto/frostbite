@@ -78,6 +78,45 @@ def test_defensive(payload):
     assert hook_to_message(payload, {}) is None
 
 
+def test_needs_events_capture_the_tty(monkeypatch):
+    monkeypatch.setattr("frostbite_host.hook.controlling_tty", lambda: "/dev/ttys007")
+    for name in ("permission_request.json", "notification_permission.json"):
+        assert hook_to_message(load(name), ENV)["terminal"]["tty"] == "/dev/ttys007"
+
+
+def test_tool_events_carry_the_agent():
+    p = load("permission_request.json")
+    p["agent_id"] = "s1"
+    assert hook_to_message(p, ENV)["agent"] == "s1"
+    p = load("post_tool_use.json")
+    p["agent_id"] = "s1"
+    assert hook_to_message(p, ENV)["resolve"] == {"tool": "Bash(npm test)", "agent": "s1"}
+
+
+def test_ask_user_question_waits_on_you():
+    p = load("pre_tool_use_bash.json")
+    p.update(tool_name="AskUserQuestion", tool_input={"questions": [{"question": "Which?"}]})
+    m = hook_to_message(p, ENV)
+    assert m["status"] == "needs" and m["kind"] == "question"
+
+
+def test_stop_failure_is_error_and_interrupt_ends_the_turn():
+    p = load("stop.json")
+    p.update(hook_event_name="StopFailure", error="rate_limit")
+    m = hook_to_message(p, ENV)
+    assert m["status"] == "error" and m["detail"] == "rate_limit" and m["clears"]
+    p = load("post_tool_use.json")
+    p.update(hook_event_name="PostToolUseFailure", is_interrupt=True)
+    m = hook_to_message(p, ENV)
+    assert m["status"] == "done" and m["detail"] == "interrupted"
+
+
+def test_cwd_root_has_a_name():
+    p = load("stop.json")
+    p["cwd"] = "/"
+    assert hook_to_message(p, ENV)["name"] == "claude"
+
+
 def test_describe_tool():
     assert describe_tool("Edit", {"file_path": "/a/b/c.py"}) == "Edit(c.py)"
     assert describe_tool("WebFetch", {"url": "https://docs.qmk.fm/x"}) == "WebFetch(docs.qmk.fm)"

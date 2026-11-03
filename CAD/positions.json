@@ -94,74 +94,44 @@
   },
   "screws": [
     {
-      "x": -3.0,
+      "x": -4.65,
       "y": 9.0,
       "insert": "Top",
       "head": "Bottom underside",
       "boss_od": 8.7
     },
     {
-      "x": 64.15,
+      "x": 65.8,
       "y": 9.0,
       "insert": "Top",
       "head": "Bottom underside",
       "boss_od": 8.7
     },
     {
-      "x": -3.0,
+      "x": -4.65,
       "y": 62.1,
       "insert": "Top",
       "head": "Bottom underside",
       "boss_od": 8.7
     },
     {
-      "x": 64.15,
+      "x": 65.8,
       "y": 62.1,
       "insert": "Top",
       "head": "Bottom underside",
       "boss_od": 8.7
     }
   ],
-  "bottom_side_keepouts": [
-    {
-      "x0": -7.35,
-      "x1": 1.35,
-      "y0": 4.65,
-      "y1": 13.35,
-      "z_top_below_pcb": 0.3,
-      "what": "Top insert boss"
-    },
-    {
-      "x0": 59.8,
-      "x1": 68.5,
-      "y0": 4.65,
-      "y1": 13.35,
-      "z_top_below_pcb": 0.3,
-      "what": "Top insert boss"
-    },
-    {
-      "x0": -7.35,
-      "x1": 1.35,
-      "y0": 57.75,
-      "y1": 66.45,
-      "z_top_below_pcb": 0.3,
-      "what": "Top insert boss"
-    },
-    {
-      "x0": 59.8,
-      "x1": 68.5,
-      "y0": 57.75,
-      "y1": 66.45,
-      "z_top_below_pcb": 0.3,
-      "what": "Top insert boss"
-    }
-  ],
+  "shell": {
+    "w": 79.15,
+    "h": 97.15
+  },
   "heights": {
     "front_mm": 21.12,
     "back_mm": 27.83,
     "_note": "Top face above the desk at the front / back skin, centre line; keycaps add ~13.6 above the plate",
     "case_bbox_desk_mm": [
-      75.15,
+      79.15,
       98.86,
       27.86
     ]

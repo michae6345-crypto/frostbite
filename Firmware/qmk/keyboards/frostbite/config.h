@@ -24,5 +24,11 @@
 /* Hold-detection threshold for the Raw HID KEY event (tap vs hold). */
 #define FROSTBITE_HOLD_MS 400
 
-/* Uncomment if the OLED text appears upside down (check with the ledtest build). */
-// #define FROSTBITE_OLED_FLIP
+/* OLED rotated 180 degrees: the header sits at the right end of the module, and
+ * reference Hackpads with this placement all flip it. Not yet confirmed on a
+ * fitted Frostbite module. If the text is upside down, comment out this line. */
+#define FROSTBITE_OLED_FLIP
+
+/* Seeed's XIAO RP2040 board header sets this: "On some samples, the xosc can
+ * take longer to stabilize than is usual" (pico-sdk seeed_xiao_rp2040.h). */
+#define PICO_XOSC_STARTUP_DELAY_MULTIPLIER 64

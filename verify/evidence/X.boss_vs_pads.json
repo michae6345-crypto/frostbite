@@ -5,85 +5,102 @@
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
-  "notes": [],
+  "notes": [
+    "14 pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree)"
+  ],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
-    "PCB/frostbite.kicad_pcb": "b99cadff7e4148e1a4641d510bc795da955c26f145f794179ce756ca396ac062",
-    "PCB/build/bottom_pads.json": "8867ec94aef334422abae9678f55fccfc76f1a395427bfd78bfe6e41adfdb582",
-    "CAD/positions.json": "5620df54441e5e310bd5a6ceba0c60cdadaadd78243f9ca6130e6046cacf4807"
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "PCB/frostbite.kicad_pcb": "770580175ef843e0c52be8d97ae1b60e5ec0be06cc4cbaaaf57661391c552e7e",
+    "PCB/build/bottom_pads.json": "67f162cdfa6558c6a4af4a784228c400d1649f9db44794cad4de6f27560e4bb7",
+    "CAD/positions.json": "af7c29806eeb337b92787e52c5ca036fed24b850ae3f3bfc01c4ab0d0c9cd9d7"
   },
   "details": {
     "pads_PCB/build/bottom_pads.json": 140,
     "pads_parsed .kicad_pcb": 140,
     "closest_pad_per_boss": {
-      "design.json boss 0 (-3.0, 9.0) vs PCB/build/bottom_pads.json": [
-        9.176,
+      "design.json boss 0 (-4.65, 9.0) vs PCB/build/bottom_pads.json": [
+        10.826,
         "U1 pad 12"
       ],
-      "design.json boss 1 (64.15, 9.0) vs PCB/build/bottom_pads.json": [
-        3.811,
+      "design.json boss 1 (65.8, 9.0) vs PCB/build/bottom_pads.json": [
+        5.848,
         "ENC1 pad MP"
       ],
-      "design.json boss 2 (-3.0, 62.1) vs PCB/build/bottom_pads.json": [
-        6.854,
+      "design.json boss 2 (-4.65, 62.1) vs PCB/build/bottom_pads.json": [
+        8.292,
         "SW7 pad 1"
       ],
-      "design.json boss 3 (64.15, 62.1) vs PCB/build/bottom_pads.json": [
-        2.115,
-        "D6 pad 1"
+      "design.json boss 3 (65.8, 62.1) vs PCB/build/bottom_pads.json": [
+        3.291,
+        "D9 pad 2"
       ],
-      "design.json boss 0 (-3.0, 9.0) vs parsed .kicad_pcb": [
-        9.176,
+      "design.json boss 0 (-4.65, 9.0) vs parsed .kicad_pcb": [
+        11.826,
         "U1 pad 12"
       ],
-      "design.json boss 1 (64.15, 9.0) vs parsed .kicad_pcb": [
-        3.811,
+      "design.json boss 1 (65.8, 9.0) vs parsed .kicad_pcb": [
+        5.848,
         "ENC1 pad MP"
       ],
-      "design.json boss 2 (-3.0, 62.1) vs parsed .kicad_pcb": [
-        6.854,
+      "design.json boss 2 (-4.65, 62.1) vs parsed .kicad_pcb": [
+        8.292,
         "SW7 pad 1"
       ],
-      "design.json boss 3 (64.15, 62.1) vs parsed .kicad_pcb": [
-        2.115,
-        "D6 pad 1"
+      "design.json boss 3 (65.8, 62.1) vs parsed .kicad_pcb": [
+        3.291,
+        "D9 pad 2"
       ],
-      "CAD/positions.json boss 0 (-3.0, 9.0) vs PCB/build/bottom_pads.json": [
-        9.176,
+      "CAD/positions.json boss 0 (-4.65, 9.0) vs PCB/build/bottom_pads.json": [
+        10.826,
         "U1 pad 12"
       ],
-      "CAD/positions.json boss 1 (64.15, 9.0) vs PCB/build/bottom_pads.json": [
-        3.811,
+      "CAD/positions.json boss 1 (65.8, 9.0) vs PCB/build/bottom_pads.json": [
+        5.848,
         "ENC1 pad MP"
       ],
-      "CAD/positions.json boss 2 (-3.0, 62.1) vs PCB/build/bottom_pads.json": [
-        6.854,
+      "CAD/positions.json boss 2 (-4.65, 62.1) vs PCB/build/bottom_pads.json": [
+        8.292,
         "SW7 pad 1"
       ],
-      "CAD/positions.json boss 3 (64.15, 62.1) vs PCB/build/bottom_pads.json": [
-        2.115,
-        "D6 pad 1"
+      "CAD/positions.json boss 3 (65.8, 62.1) vs PCB/build/bottom_pads.json": [
+        3.291,
+        "D9 pad 2"
       ],
-      "CAD/positions.json boss 0 (-3.0, 9.0) vs parsed .kicad_pcb": [
-        9.176,
+      "CAD/positions.json boss 0 (-4.65, 9.0) vs parsed .kicad_pcb": [
+        11.826,
         "U1 pad 12"
       ],
-      "CAD/positions.json boss 1 (64.15, 9.0) vs parsed .kicad_pcb": [
-        3.811,
+      "CAD/positions.json boss 1 (65.8, 9.0) vs parsed .kicad_pcb": [
+        5.848,
         "ENC1 pad MP"
       ],
-      "CAD/positions.json boss 2 (-3.0, 62.1) vs parsed .kicad_pcb": [
-        6.854,
+      "CAD/positions.json boss 2 (-4.65, 62.1) vs parsed .kicad_pcb": [
+        8.292,
         "SW7 pad 1"
       ],
-      "CAD/positions.json boss 3 (64.15, 62.1) vs parsed .kicad_pcb": [
-        2.115,
-        "D6 pad 1"
+      "CAD/positions.json boss 3 (65.8, 62.1) vs parsed .kicad_pcb": [
+        3.291,
+        "D9 pad 2"
       ]
     },
-    "json_pads_not_inside_parsed_bbox": []
+    "json_pads_not_inside_parsed_bbox": [
+      "U1 pad 1",
+      "U1 pad 2",
+      "U1 pad 3",
+      "U1 pad 4",
+      "U1 pad 5",
+      "U1 pad 6",
+      "U1 pad 7",
+      "U1 pad 8",
+      "U1 pad 9",
+      "U1 pad 10",
+      "U1 pad 11",
+      "U1 pad 12",
+      "U1 pad 13",
+      "U1 pad 14"
+    ]
   },
-  "timestamp": "2026-11-03T20:22:28+00:00",
+  "timestamp": "2026-11-03T22:16:57+00:00",
   "duration_s": 0.0
 }

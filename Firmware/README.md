@@ -8,7 +8,7 @@ qmk/keyboards/frostbite/
   keyboard.json          pins, matrix, encoder, WS2812 (PIO) on GP0, RGB matrix layout, USB IDs
   config.h               I2C1 on GP6/GP7, OLED 128x32 @ 0x3C, double-tap reset, hold time
   halconf.h, mcuconf.h   enable ChibiOS I2C1
-  frostbite.c            two-key bootmagic, optional OLED flip
+  frostbite.c            two-key bootmagic, OLED flip
   keymaps/default/       Raw HID agent dashboard + keyboard fallback  -> production/firmware.uf2
   keymaps/ledtest/       LED chain / OLED bring-up test               -> production/led-test.uf2
 ```
@@ -41,7 +41,19 @@ Bring-up order: flash `led-test.uf2` first, before soldering switches. Each LED 
 red, green, blue and then white in chain order while the OLED shows `LED TEST n/13`.
 If LED n works but n+1 never lights, check LED n's DOUT, LED n+1's DIN, and its 5 V/GND.
 The test build also shows the last key pressed (`key: rR cC`) and an encoder count.
-If the OLED text is upside down, uncomment `#define FROSTBITE_OLED_FLIP` in `config.h` and rebuild.
+
+Three things still have to be checked on the assembled pad:
+
+- **OLED orientation**: the display is rotated 180 degrees by default because the header sits at
+  the right end of the module, and four reference Hackpads with that placement flip it. This has not
+  been confirmed on a fitted Frostbite module. If the text is upside down, comment out this one line
+  in `qmk/keyboards/frostbite/config.h` and rebuild: `#define FROSTBITE_OLED_FLIP`
+- **Encoder resolution (UNVERIFIED)**: the kit part has not been measured. Turn the knob in `ledtest`
+  and watch the `knob:` count. The setting is `encoder.rotary[0].resolution` in `keyboard.json` (it
+  generates `ENCODER_RESOLUTION`), and it means encoder transitions per step. It is currently 4.
+  - One detent moves the count by two (one detent moves two slots): double the value.
+  - Two detents are needed for one count, as on a true 30-detent/15-pulse EC11E: set it to 2.
+- **Encoder direction**: if clockwise counts down, swap `pin_a` and `pin_b` in `keyboard.json`.
 
 ## Keymap
 
@@ -87,8 +99,12 @@ consumed by the OS, so the firmware sees the command as the first byte.
 does not have to pad (padding to 21 is harmless).
 
 **Host mode** lasts while a PING arrived within the last 5 s, so the host should PING about every 1-2 s.
-Without a PING the pad falls back to the keycodes above and the encoder sends volume. Agent LEDs fade to idle,
-the host's OLED text and statuses are cleared, and glow returns to its default.
+Without a PING the pad falls back to the keycodes above and the encoder sends volume. Agent LEDs fade to idle
+over 1.5 s, glow fades to its default, and the OLED shows the no-host screen.
+
+Fallback only changes what is displayed. Statuses, OLED text, glow and the selected slot are kept, so after a PING
+gap without a USB reconnect the pad returns to the last host state as soon as PINGs resume. The host can send SET_ALL
+with every PING: values that match the stored ones change nothing.
 
 **LEDs**: idle is dim white, run is blue `#3d8bff`, done is green `#2fbf5b`, needs is a slow amber `#ffb020` pulse
 (2.4 s) and error blinks red `#ff4d4f` (1 Hz). The selected slot is brighter and breathes gently. Command keys are dim
@@ -98,7 +114,10 @@ white and brighten while pressed. Colour changes cross-fade. A simple current li
 - Row 1 shows OLED_LINE 0, or `slot N  STATUS` for the selected slot (N is 1-6 on screen).
 - Row 2 shows OLED_LINE 1, or a summary such as `3 run 1 wait 2 done` once the host has sent statuses, or otherwise a hint.
 - Row 4 is a slot strip (`1- 2R 3D 4? 5! 6-`), with the selected slot inverted and `HID` or `KBD` showing the mode.
-- Burn-in protection: the display turns off after 10 minutes without activity. A key press, an encoder turn or a HID message that changes something wakes it. A repeated PING does not count.
+- Burn-in protection: the display turns off after 10 minutes without activity. Only a key press, an encoder turn or a real status change (SET_SLOT or SET_ALL with a different value) counts as activity. PING, OLED_LINE (so `N ago` updates are safe), SET_GLOW, SET_SELECTED and a repeated SET_ALL neither wake it nor keep it on, though the text still updates for the next wake. Resuming from USB suspend does not wake it either once the 10 minutes have passed.
+- Row 3 is a dotted divider. Do not write text to it: blanking it every frame re-dirties that block and starves row 4 of QMK's one-block-per-loop OLED render.
+
+On macOS, F14 and F15 (Agent 2 and 3 in fallback) may change display brightness. This has not been tested. The keycodes come from design.json.
 
 ## Bootloader combo
 

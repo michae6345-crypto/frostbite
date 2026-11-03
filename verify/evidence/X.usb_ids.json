@@ -1,0 +1,80 @@
+{
+  "check": "X.usb_ids",
+  "gate": "X",
+  "title": "Host VID/PID filter = keyboard.json usb = design.json firmware.usb, and enforced when opening",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [
+    {
+      "argv": [
+        "~/Documents/frostbite/verify/.venv/bin/python",
+        "-I",
+        "~/Documents/frostbite/verify/fbverify/probe_usb.py",
+        "~/Documents/frostbite/host",
+        "0xFEED",
+        "0x4642",
+        "0xFF60",
+        "0x61"
+      ],
+      "cwd": "~/Documents/frostbite",
+      "exit_code": 0,
+      "duration_s": 0.03,
+      "stdout_tail": [
+        "{\"vendor_id\": 65261, \"product_id\": 17986, \"scenes\": {\"other QMK board with the same Raw HID usage, listed first, plus the pad\": {\"opened\": [\"frostbite-raw\"], \"want\": [\"frostbite-raw\"], \"returned\": true}, \"only another QMK board\": {\"opened\": [], \"want\": [], \"returned\": false}, \"same VID, other PID\": {\"opened\": [], \"want\": [], \"returned\": false}, \"same PID, other VID\": {\"opened\": [], \"want\": [], \"returned\": false}, \"the pad's keyboard interface only\": {\"opened\": [], \"want\": [], \"returned\": false}}}"
+      ],
+      "stderr_tail": []
+    }
+  ],
+  "inputs_sha256": {
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "Firmware/qmk/keyboards/frostbite/keyboard.json": "374b3af90756f13e276b292544878355222d3da26e12699d2880f25489a3203b",
+    "host/frostbite_host/__init__.py": "ecba807dff834af27e23799a497badcdec38889a38b5d041526ed2fa8a580e18",
+    "host/frostbite_host/actions.py": "05d50de8ea9372f44d92a717f2f22e3c4d9169cef833dcd9bfdd8cf4ff817613",
+    "host/frostbite_host/ctl.py": "69bdee1dedddfa15deed7c92cdb409bb0f19e4e1d084f699f22d2ef0ed6148c3",
+    "host/frostbite_host/daemon.py": "aaa902d8cf200e1c0fe388a2750211bd561c660f4315c3ee4d8dc66cd696876b",
+    "host/frostbite_host/device.py": "d4c0e35f19d6f83fd25beb859b9911108b4d6b1bb4c545bb53be17f8395af62d",
+    "host/frostbite_host/hook.py": "b90431d719cf2df2eee061adfbf1595a497ff5fd5368a3dfea47dc6ed6e0810e",
+    "host/frostbite_host/ipc.py": "eda15343ed1765082b2ab1c828394304e92f30eb4d250e7cd22d083e7529947f",
+    "host/frostbite_host/state.py": "630d7bc2dd2436a01e06c997fa9981d0a9d61c4ca2a5842a8e056e0d0b429c13",
+    "host/frostbite_host/train.py": "5b584f03b963f9cf89c95488ae6e9ab1dc8d2bd3759d60417a6f95a2b473663c"
+  },
+  "details": {
+    "vendor_id": 65261,
+    "product_id": 17986,
+    "scenes": {
+      "other QMK board with the same Raw HID usage, listed first, plus the pad": {
+        "opened": [
+          "frostbite-raw"
+        ],
+        "want": [
+          "frostbite-raw"
+        ],
+        "returned": true
+      },
+      "only another QMK board": {
+        "opened": [],
+        "want": [],
+        "returned": false
+      },
+      "same VID, other PID": {
+        "opened": [],
+        "want": [],
+        "returned": false
+      },
+      "same PID, other VID": {
+        "opened": [],
+        "want": [],
+        "returned": false
+      },
+      "the pad's keyboard interface only": {
+        "opened": [],
+        "want": [],
+        "returned": false
+      }
+    }
+  },
+  "timestamp": "2026-11-03T22:16:57+00:00",
+  "duration_s": 0.04
+}

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ipc
-from .actions import Actions
+from .actions import USE_TERMINAL, Actions
 from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS, OLED_COLS,
                      DeviceLink, DryRunTransport, EncoderEvent, FakeDevice, HidTransport,
                      KeyEvent, OledLine, PingReply, SetAll, SetGlow, SetSelected, Status, Unknown)
@@ -28,10 +28,14 @@ from .train import TrainWatcher
 
 log = logging.getLogger("frostbite.daemon")
 
+MAX_KEY_AGE = 1.0     # a command key that waited this long in the queue is dropped
+KEY_COOLDOWN = 1.0    # after a keystroke, so a double tap cannot answer the next prompt
+SELECT_SETTLE = 0.5   # after SET_SELECTED, ignore PING replies that crossed it
+
 
 class Daemon:
     def __init__(self, board: Board, actions: Actions, send: Callable[[object], None],
-                 clock: Callable[[], float] = time.time, watcher_opts: dict | None = None):
+                 clock: Callable[[], float] = time.monotonic, watcher_opts: dict | None = None):
         self.board = board
         self.actions = actions
         self.send = send
@@ -42,13 +46,20 @@ class Daemon:
         self.watcher_opts = watcher_opts or {}
         self.stop_event = threading.Event()
         self.connected: Callable[[], bool | None] = lambda: None
+        self._statuses: tuple[Status, ...] | None = None
+        self._select_settle = -1e12
+        self._last_keystroke = -1e12
 
     # ------------------------------------------------------------------ inputs (any thread)
     def on_device(self, ev: object) -> None:
-        self.q.put(("dev", ev))
+        self.q.put(("dev", ev, time.monotonic()))
 
     def submit(self, msg: dict, reply: "queue.Queue | None" = None) -> None:
         self.q.put(("ipc", msg, reply))
+
+    def keepalive(self) -> SetAll | None:
+        """Sent with every PING (from the I/O thread), so the pad recovers from a PING gap."""
+        return SetAll(self._statuses) if self._statuses is not None else None
 
     # ------------------------------------------------------------------ output
     def push(self) -> None:
@@ -56,6 +67,7 @@ class Daemon:
         now = self.clock()
         b = self.board
         sts = tuple(b.statuses())
+        self._statuses = sts
         if self._sent.get("all") != sts:
             self.send(SetAll(sts))
             self._sent["all"] = sts
@@ -67,6 +79,7 @@ class Daemon:
         if self._sent.get("sel") != b.selected:
             self.send(SetSelected(b.selected))
             self._sent["sel"] = b.selected
+            self._select_settle = now + SELECT_SETTLE
         glow = b.glow()
         if self._sent.get("glow") != glow:
             self.send(SetGlow(*glow))
@@ -77,7 +90,7 @@ class Daemon:
         kind = item[0]
         try:
             if kind == "dev":
-                self.handle_device(item[1])
+                self.handle_device(item[1], item[2] if len(item) > 2 else None)
             elif kind == "ipc":
                 reply = self.handle_ipc(item[1])
                 if item[2] is not None:
@@ -101,11 +114,11 @@ class Daemon:
                 k: msg[k] for k in ("stale_minutes", "stale_status", "done_pattern") if k in msg})
             return {"ok": True, "key": w.key}
         if op == "unwatch":
-            key = f"train:{msg.get('name')}"
+            key = next((k for k, w in self.watchers.items() if w.name == msg.get("name")), None)
             w = self.watchers.pop(key, None)
             if w:
                 w.stop()
-            self.board.free(key)
+                self.board.free(key)
             return {"ok": bool(w)}
         try:
             changed = self.board.apply(msg, now)
@@ -113,9 +126,12 @@ class Daemon:
             log.warning("bad message %s: %s", msg, e)
             return {"ok": False, "error": str(e)}
         log.debug("ipc %s -> %s", msg.get("op"), changed)
+        if op == "update" and msg.get("key") in self.board.overflow:
+            self.board.flash("agent waiting, no slot", now)
+            return {"ok": False, "error": "all slots busy"}
         return {"ok": True}
 
-    def handle_device(self, ev: object) -> None:
+    def handle_device(self, ev: object, received: float | None = None) -> None:
         now = self.clock()
         b = self.board
         if ev == "connected":
@@ -128,8 +144,15 @@ class Daemon:
             sel = ev.selected if 0 <= ev.selected < NUM_SLOTS else b.selected + ev.direction
             b.select(sel)
             self._sent["sel"] = b.selected  # the pad already shows this selection
+            self._select_settle = -1e12
             return
         if isinstance(ev, PingReply):
+            # The pad's selection is what the strip shows. A crossing ENCODER and SET_SELECTED
+            # can leave the two apart, so follow it unless our own change is still in flight.
+            if now >= self._select_settle and 0 <= ev.selected < NUM_SLOTS and ev.selected != b.selected:
+                log.info("selection follows the pad: slot %d", ev.selected + 1)
+                b.select(ev.selected)
+                self._sent["sel"] = b.selected
             return
         if isinstance(ev, Unknown):
             log.debug("unknown report %s", ev.raw[:4].hex())
@@ -145,20 +168,57 @@ class Daemon:
             if msg:
                 b.flash(msg, now)
             return
-        slot = b.slots[b.selected]
-        if ev.key == KEY_APPROVE:
-            if slot is None or slot.status != Status.NEEDS:
-                log.info("ACTION none: approve pressed but slot %d is not waiting", b.selected + 1)
-                b.flash("nothing to approve", now)
-                return
-            _, msg = self.actions.guarded_key("escape" if held else "return", slot,
-                                              "denied" if held else "approved")
-            b.flash(msg, now)
-        elif ev.key == KEY_STOP:
-            _, msg = self.actions.guarded_key("escape", slot, "stop sent")
-            b.flash(msg, now)
-        elif ev.key == KEY_TALK:
+        if ev.key == KEY_TALK:
             log.info("talk: left to the firmware's F20 / your dictation hotkey")
+            return
+        if received is not None and time.monotonic() - received > MAX_KEY_AGE:
+            log.info("ACTION none: dropped stale %s press", ev.name)
+            return
+        if ev.key == KEY_APPROVE:
+            self._approve(held, now)
+        elif ev.key == KEY_STOP:
+            self._stop(now)
+
+    def _keystroke(self, key: str, slot, why: str, now: float) -> bool:
+        if now - self._last_keystroke < KEY_COOLDOWN:
+            log.info("ACTION none: %s within the cooldown", why)
+            return False
+        sent, msg = self.actions.guarded_key(key, slot, why)
+        if sent:
+            self._last_keystroke = now
+        self.board.flash(msg, now)
+        return sent
+
+    def _approve(self, held: bool, now: float) -> None:
+        b = self.board
+        i = b.selected
+        slot = b.slots[i]
+        if slot is None or slot.source != "claude" or slot.status != Status.NEEDS:
+            log.info("ACTION none: approve pressed but slot %d is not waiting", i + 1)
+            b.flash("nothing to approve", now)
+            return
+        if slot.pending and slot.pending[0].kind != "permission":
+            log.info("ACTION none: slot %d is asking a question, not a yes/no", i + 1)
+            b.flash(USE_TERMINAL, now)
+            return
+        if held:
+            if self._keystroke("escape", slot, "denied", now):
+                # Escape ends the turn, and no hook reports it.
+                b.answer(i, now, status=Status.DONE, detail="denied", all_prompts=True)
+        elif self._keystroke("return", slot, "approved", now):
+            b.answer(i, now, status=Status.RUN, detail="approved")
+
+    def _stop(self, now: float) -> None:
+        b = self.board
+        i = b.selected
+        slot = b.slots[i]
+        if slot is None or slot.source != "claude" or slot.status not in (Status.RUN, Status.NEEDS):
+            log.info("ACTION none: stop pressed but slot %d has no Claude turn to stop", i + 1)
+            b.flash("nothing to stop", now)
+            return
+        if self._keystroke("escape", slot, "stop sent", now):
+            # Stop does not fire after an interrupt, so nothing else would end `run`.
+            b.answer(i, now, status=Status.DONE, detail="interrupted", all_prompts=True)
 
     def tick(self) -> None:
         now = self.clock()
@@ -172,6 +232,10 @@ class Daemon:
         old = self.watchers.pop(w.key, None)
         if old:
             old.stop()
+        if any(other.name == w.name for other in self.watchers.values()):
+            # runs/A/train.log and runs/B/train.log: tell them apart on the OLED
+            parent = os.path.basename(os.path.dirname(w.path))
+            w.name = f"{parent}/{w.name}"
         self.watchers[w.key] = w
         w.start()
         return w
@@ -204,22 +268,28 @@ class SocketServer:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        ipc.ensure_state_dir(self.path.parent)
+        if self.path.parent == ipc.state_dir():
+            ipc.ensure_state_dir(self.path.parent)
+        else:  # a directory the user picked keeps its own permissions
+            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.path.exists():
             try:
                 ipc.send({"op": "ping"}, timeout=0.3, path=self.path)
             except OSError:
-                self.path.unlink()  # stale socket from a crashed daemon
+                self.path.unlink(missing_ok=True)  # stale socket from a crashed daemon
             else:
                 raise SystemExit(f"another frostbite-daemon is listening on {self.path}")
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         old = os.umask(0o177)
         try:
             s.bind(str(self.path))
+        except OSError as e:  # lost a race with another daemon starting at the same moment
+            s.close()
+            raise SystemExit(f"cannot listen on {self.path}: {e}") from None
         finally:
             os.umask(old)
         os.chmod(self.path, 0o600)
-        s.listen(16)
+        s.listen(64)
         s.settimeout(0.5)
         self.sock = s
         self._thread = threading.Thread(target=self._serve, name="frostbite-sock", daemon=True)
@@ -316,15 +386,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true",
                    help="never write to the pad or press keys; print what would be sent")
     p.add_argument("--fake", action="store_true",
-                   help="use a simulated pad (type tap/hold/cw/show on stdin)")
+                   help="use a simulated pad (type tap/hold/cw/show on stdin); keystrokes are "
+                        "printed, never sent")
     p.add_argument("--watch-train", action="append", default=[], metavar="PATH",
                    help="tail a training log or JSONL metrics file (repeatable)")
     p.add_argument("--name", action="append", default=[],
                    help="slot name for the matching --watch-train (repeatable, same order)")
     p.add_argument("--stale-minutes", type=float, default=10.0,
-                   help="mark a run finished when its log stops growing this long (default 10)")
-    p.add_argument("--stale-status", choices=["done", "needs"], default="done",
-                   help="status for a stale run (default done)")
+                   help="flag a run when its log stops growing this long (default 10)")
+    p.add_argument("--stale-status", choices=["done", "needs"], default="needs",
+                   help="status for a stale run (default needs: a killed run also goes quiet)")
     p.add_argument("--done-pattern", help="extra regex that marks the final log line")
     p.add_argument("--linger-minutes", type=float, default=10.0,
                    help="how long finished slots stay green before they free (default 10)")
@@ -338,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
     board = Board(linger_done=args.linger_minutes * 60)
-    actions = Actions(dry_run=args.dry_run)
+    actions = Actions(dry_run=args.dry_run or args.fake)
     fake: FakeDevice | None = None
     if args.fake:
         fake = FakeDevice(echo=(lambda s: print(s, flush=True)) if args.dry_run else None)
@@ -354,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
                     watcher_opts={"stale_minutes": args.stale_minutes,
                                   "stale_status": args.stale_status,
                                   "done_pattern": args.done_pattern})
-    link = DeviceLink(opener, daemon.on_device)
+    link = DeviceLink(opener, daemon.on_device, keepalive=daemon.keepalive)
     holder["link"] = link
     daemon.connected = link.connected.is_set
 

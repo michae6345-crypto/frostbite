@@ -1,0 +1,277 @@
+{
+ "inputs": {
+  "shell_w": 79.15,
+  "shell_h": 97.15,
+  "corner": 12,
+  "screws": [
+   [
+    -4.65,
+    9.0
+   ],
+   [
+    65.8,
+    9.0
+   ],
+   [
+    -4.65,
+    62.1
+   ],
+   [
+    65.8,
+    62.1
+   ]
+  ],
+  "boss_od": 8.7,
+  "E_MPa": 2000.0,
+  "nu": 0.38,
+  "min_strut": 1.2,
+  "min_window": 1.8
+ },
+ "fe_benchmark": {
+  "fe_mm": 0.5133171912645929,
+  "timoshenko_mm": 0.51656,
+  "error_pct": -0.6277700045313546
+ },
+ "lantern": {
+  "walls": {
+   "side": {
+    "thick_mm": 8.700000000000003,
+    "rib_depth_mm": 3.0,
+    "stats": {
+     "max_flat_roof_mm": 3.0,
+     "windows": 21,
+     "window_area_mm2": 163.40000000000003,
+     "removed_cm3": 0.4902000000000001,
+     "web_open_fraction": 0.4413115108302274,
+     "strut_ok_max_sliver_mm": 0.0,
+     "largest_window_inscribed_d_mm": 3.8470768123342687
+    },
+    "simp_stats": {
+     "max_flat_roof_mm": 3.0,
+     "windows": 4,
+     "window_area_mm2": 167.00000000000003,
+     "removed_cm3": 0.5010000000000001,
+     "web_open_fraction": 0.4510344082536596,
+     "strut_ok_max_sliver_mm": 0.316227766016838,
+     "largest_window_inscribed_d_mm": 6.6000000000000005
+    },
+    "ribs": {
+     "compliance_mm_per_N_sum": 0.09043958435982007,
+     "max_deflection_mm": 0.004615087987092147,
+     "vm_99_9pct_MPa": 0.31490301242579655,
+     "vm_max_MPa": 0.7751499941085082
+    },
+    "simp": {
+     "compliance_mm_per_N_sum": 0.08832193708167813,
+     "max_deflection_mm": 0.004482605251737195,
+     "vm_99_9pct_MPa": 0.29480701481858773,
+     "vm_max_MPa": 0.7602807827727676
+    },
+    "solid": {
+     "compliance_mm_per_N_sum": 0.0771878420192755,
+     "max_deflection_mm": 0.0037220654820054625,
+     "vm_99_9pct_MPa": 0.26569253476164767,
+     "vm_max_MPa": 0.7442491271868232
+    },
+    "zigzag": {
+     "compliance_mm_per_N_sum": 0.09032375750264908,
+     "max_deflection_mm": 0.004572843422260742,
+     "vm_99_9pct_MPa": 0.32200463359627296,
+     "vm_max_MPa": 0.7648109732331575
+    },
+    "zigzag_rib_w_mm": 3.252691198326647,
+    "zigzag_at_simp_area": {
+     "compliance_mm_per_N_sum": 0.09199801044703663,
+     "max_deflection_mm": 0.004691852919190311,
+     "vm_99_9pct_MPa": 0.3321512997561825,
+     "vm_max_MPa": 0.7668038101179621
+    },
+    "simp_iters": 130,
+    "web_mm2": 370.26
+   },
+   "front": {
+    "thick_mm": 6.700000000000003,
+    "rib_depth_mm": 3.0,
+    "stats": {
+     "max_flat_roof_mm": 3.0,
+     "windows": 18,
+     "window_area_mm2": 166.65000000000003,
+     "removed_cm3": 0.4999500000000001,
+     "web_open_fraction": 0.45742753623188404,
+     "strut_ok_max_sliver_mm": 0.0,
+     "largest_window_inscribed_d_mm": 3.2310988842807022
+    },
+    "simp_stats": {
+     "max_flat_roof_mm": 3.0,
+     "windows": 6,
+     "window_area_mm2": 172.18000000000004,
+     "removed_cm3": 0.5165400000000001,
+     "web_open_fraction": 0.4726064997804128,
+     "strut_ok_max_sliver_mm": 0.223606797749979,
+     "largest_window_inscribed_d_mm": 6.6000000000000005
+    },
+    "ribs": {
+     "compliance_mm_per_N_sum": 0.06324456155270178,
+     "max_deflection_mm": 0.005991587783477025,
+     "vm_99_9pct_MPa": 0.4063771800054864,
+     "vm_max_MPa": 0.5495225294055484
+    },
+    "simp": {
+     "compliance_mm_per_N_sum": 0.058824669767592416,
+     "max_deflection_mm": 0.0055835477087991525,
+     "vm_99_9pct_MPa": 0.3225240021162089,
+     "vm_max_MPa": 0.5754822121921009
+    },
+    "solid": {
+     "compliance_mm_per_N_sum": 0.04549518685943449,
+     "max_deflection_mm": 0.004194846383878866,
+     "vm_99_9pct_MPa": 0.2294353492846893,
+     "vm_max_MPa": 0.5430641165372428
+    },
+    "zigzag": {
+     "compliance_mm_per_N_sum": 0.0636511695245097,
+     "max_deflection_mm": 0.005795104311431666,
+     "vm_99_9pct_MPa": 0.3891806565468787,
+     "vm_max_MPa": 0.5480519694021249
+    },
+    "zigzag_rib_w_mm": 3.1112698355689643,
+    "zigzag_at_simp_area": {
+     "compliance_mm_per_N_sum": 0.0636511695245097,
+     "max_deflection_mm": 0.005795104311431666,
+     "vm_99_9pct_MPa": 0.3891806565468787,
+     "vm_max_MPa": 0.5480519694021249
+    },
+    "simp_iters": 130,
+    "web_mm2": 364.32
+   },
+   "back": {
+    "thick_mm": 6.700000000000003,
+    "rib_depth_mm": 3.0,
+    "stats": {
+     "max_flat_roof_mm": 2.8000000000000003,
+     "windows": 14,
+     "window_area_mm2": 114.52000000000002,
+     "removed_cm3": 0.34356000000000003,
+     "web_open_fraction": 0.4554203451841247,
+     "strut_ok_max_sliver_mm": 0.1,
+     "largest_window_inscribed_d_mm": 3.8000000000000003
+    },
+    "simp_stats": {
+     "max_flat_roof_mm": 3.0,
+     "windows": 4,
+     "window_area_mm2": 124.23000000000002,
+     "removed_cm3": 0.3726900000000001,
+     "web_open_fraction": 0.4940348365545216,
+     "strut_ok_max_sliver_mm": 0.223606797749979,
+     "largest_window_inscribed_d_mm": 6.251399843235114
+    },
+    "ribs": {
+     "compliance_mm_per_N_sum": 0.1001079808708855,
+     "max_deflection_mm": 0.0051992692715491905,
+     "vm_99_9pct_MPa": 0.5371610596985833,
+     "vm_max_MPa": 0.840443809237169
+    },
+    "simp": {
+     "compliance_mm_per_N_sum": 0.09487165582662102,
+     "max_deflection_mm": 0.004705945936004663,
+     "vm_99_9pct_MPa": 0.3910610632133118,
+     "vm_max_MPa": 0.7608335805426157
+    },
+    "solid": {
+     "compliance_mm_per_N_sum": 0.0773569194272565,
+     "max_deflection_mm": 0.003934032797300648,
+     "vm_99_9pct_MPa": 0.3159785687377587,
+     "vm_max_MPa": 0.692936292998853
+    },
+    "zigzag": {
+     "compliance_mm_per_N_sum": 0.10917411895383815,
+     "max_deflection_mm": 0.005744335001979743,
+     "vm_99_9pct_MPa": 0.6140764734624088,
+     "vm_max_MPa": 1.124990945478058
+    },
+    "zigzag_rib_w_mm": 3.1112698355689643,
+    "zigzag_at_simp_area": {
+     "compliance_mm_per_N_sum": 0.1120693303352574,
+     "max_deflection_mm": 0.005930716136818406,
+     "vm_99_9pct_MPa": 0.6436165938499954,
+     "vm_max_MPa": 1.145405758381859
+    },
+    "simp_iters": 130,
+    "web_mm2": 251.45999999999998
+   }
+  },
+  "windows": 74,
+  "window_area_mm2": 607.9700000000001,
+  "removed_cm3": 12.669163234043193,
+  "channel_cm3": 10.845253234043193,
+  "fence_added_cm3": 4.33994858970184,
+  "cavity_area_mm2": 6432.638457446882,
+  "pocket_area_mm2": 5171.562499999999
+ },
+ "bone_floor": {
+  "open_fraction": 0.4045822747762473,
+  "open_area_mm2": 2091.1453478108474,
+  "removed_cm3_at_2p5": 5.227863369527118,
+  "largest_hole_inscribed_d_mm": 7.359347797189639,
+  "thin_sliver_longest_mm": 0.0,
+  "holes": 91
+ },
+ "root_floor": {
+  "open_fraction": 0.589370341375442,
+  "open_area_mm2": 3046.2507241241683,
+  "removed_cm3_at_2p5": 7.615626810310421,
+  "largest_hole_inscribed_d_mm": 7.224956747275377,
+  "thin_sliver_longest_mm": 1.8711385775185503,
+  "holes": 42,
+  "tree": {
+   "nodes": 422,
+   "tips": 188,
+   "tip_links": 188,
+   "extra_veins": 10
+  },
+  "columns": [
+   {
+    "x": 36.0,
+    "y": 23.5,
+    "pad_clear_mm": 2.6727988209354177,
+    "why": "behind row 0, OLED side"
+   },
+   {
+    "x": 57.0,
+    "y": 19.0,
+    "pad_clear_mm": 2.676122603564221,
+    "why": "beside the EC11"
+   },
+   {
+    "x": 4.5,
+    "y": 15.0,
+    "pad_clear_mm": 4.575,
+    "why": "under the OLED left end"
+   },
+   {
+    "x": 36.0,
+    "y": 5.0,
+    "pad_clear_mm": 2.472165656162894,
+    "why": "under the OLED header end"
+   },
+   {
+    "x": 28.5,
+    "y": 44.0,
+    "pad_clear_mm": 2.683927580635209,
+    "why": "centre"
+   },
+   {
+    "x": 21.0,
+    "y": 62.0,
+    "pad_clear_mm": 3.3149999999999977,
+    "why": "row 2 left"
+   },
+   {
+    "x": 40.0,
+    "y": 62.0,
+    "pad_clear_mm": 3.3149999999999977,
+    "why": "row 2 right"
+   }
+  ]
+ }
+}

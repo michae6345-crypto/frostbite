@@ -31,6 +31,22 @@ OUTLINE_TOL = 0.1
 CUTOUT = 14.0
 CUTOUT_TOL = 0.1
 CAD_POS_TOL = 0.1
+# Real part dimensions (docs/DIMENSIONS.md, Alps EC11E drawing; audited in docs/audit/case.md).
+# h = depth below the plate top. Plate top is 5.0 above PCB top: that is the MX switch itself.
+MX_PLATE_TO_PCB = 5.0
+PCB_T = 1.6
+SWITCH_W = 14.0
+CLIP_PLATE, CLIP_PLATE_TOL = 1.5, 0.15
+EC11_BODY_W = 12.0          # Alps 11.7 x 12.0; square so the check holds for either footprint rotation
+EC11_BODY_H = 4.5
+EC11_BUSH_D = 7.0
+EC11_CLEAR = 0.2            # printed part to real part (docs/VERIFICATION.md fits)
+OLED_STANDOFF, OLED_BOARD_T = 2.5, 1.2
+OLED_CLEAR = 0.1
+SHELL_TOL = 0.2
+INSERT_HOLE, INSERT_HOLE_TOL = 4.7, 0.1
+USB_WALL_Y = (-0.5, -3.5, -6.5)
+SWEEP_LIMIT = 0.01          # mm3 of material inside the PCB envelope, over the whole path
 KB_DIR = "Firmware/qmk/keyboards/frostbite"
 
 
@@ -241,8 +257,8 @@ def g0_design_json(ctx: Ctx) -> Check:
     if d["firmware"]["raw_hid"]["report_bytes"] != 32:
         chk.fail("firmware.raw_hid.report_bytes != 32")
     inputs_count = len(keys) + 1  # + encoder
-    if inputs_count >= 16:
-        chk.fail(f"inputs {inputs_count} >= 16 (Hackpad limit < 16)")
+    if len(keys) > 16:  # kit limit; the old "< 16 inputs" rule is not on the live Hackpad pages (docs/audit/hackpad-rules.md)
+        chk.fail(f"{len(keys)} switches > 16 in the kit")
     chk.details = {"pins": len(pins), "keys": len(keys), "leds": d["leds"]["count"], "inputs": inputs_count}
     return chk
 
@@ -911,7 +927,7 @@ def g3_gerbers_zip(ctx: Ctx) -> Check:
 # ================================================================ G4
 
 def g4_check_fit(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G4.check_fit", "G4", "CAD/.venv/bin/python CAD/check_fit.py")
+    chk = Check(ctx, "G4.check_fit", "G4", "CAD/.venv/bin/python CAD/check_fit.py --no-build (checks the shipped files, rewrites nothing)")
     py, script = ctx.p("CAD/.venv/bin/python"), ctx.p("CAD/check_fit.py")
     if not script.is_file():
         return chk.not_run("CAD/check_fit.py missing")
@@ -920,7 +936,7 @@ def g4_check_fit(ctx: Ctx) -> Check:
     for f in find_one(ctx.p("CAD"), "*.py"):
         chk.hash(f)
     chk.hash(ctx.p("design.json"))
-    code, so, se = chk.run([py, script], cwd=ctx.root, timeout=900, env={"PYTHONDONTWRITEBYTECODE": "1"})
+    code, so, se = chk.run([py, script, "--no-build"], cwd=ctx.root, timeout=900, env={"PYTHONDONTWRITEBYTECODE": "1"})
     if code != 0:
         chk.fail(f"check_fit.py exited {code}")
     return chk
@@ -964,6 +980,11 @@ def g4_stl_mesh(ctx: Ctx) -> Check:
         b = m.bounds
         lo = b[0] if lo is None else np.minimum(lo, b[0])
         hi = b[1] if hi is None else np.maximum(hi, b[1])
+    srcs = [q for q in (ctx.p("design.json"), ctx.p("CAD/frostbite_case.py")) if q.is_file()]
+    for p in stls:
+        for src in srcs:
+            if p.stat().st_mtime < src.stat().st_mtime:
+                chk.fail(f"{p.name} is older than {src.relative_to(ctx.root)}: rebuild the case")
     if lo is not None:
         ext = (hi - lo).tolist()
         chk.details["combined_extents"] = [round(x, 3) for x in ext]
@@ -975,70 +996,142 @@ def g4_stl_mesh(ctx: Ctx) -> Check:
 
 
 def top_stl(ctx: Ctx):
-    c = [p for p in stl_files(ctx) if re.search(r"top|plate", p.stem, re.I)]
-    return c
+    return [p for p in stl_files(ctx) if re.search(r"top|plate", p.stem, re.I)]
 
 
-def measure_top(chk: Check, mesh, d: dict) -> dict:
-    """Section the Top part perpendicular to its largest planar face at 9 depths; classify holes."""
-    import numpy as np
-    n = geom.dominant_normal(mesh)
-    t = mesh.vertices @ n
-    tmin, tmax = float(t.min()), float(t.max())
-    best = None
-    levels = []
-    for frac in np.linspace(0.05, 0.95, 19):
-        tt = tmin + (tmax - tmin) * frac
-        polys, frame = geom.section_polygons(mesh, n * tt, n)
-        holes = [geom.rect_measure(p["poly"]) for p in polys if p["depth"] % 2 == 1]
-        sw = [h for h in holes if 12.5 <= h["sides"][0] and h["sides"][1] <= 15.5 and h["circularity"] < 0.9]
-        rnd = [h for h in holes if h["circularity"] >= 0.85 and 5.0 <= h["sides"][0] <= 13.0]
-        win = [h for h in holes if abs(h["sides"][0] - d["oled"]["window"]["h"]) <= 1.5
-               and abs(h["sides"][1] - d["oled"]["window"]["w"]) <= 1.5]
-        lv = {"frac": round(float(frac), 3), "holes": len(holes), "switch_like": len(sw),
-              "round": len(rnd), "oled_window_like": len(win)}
-        levels.append(lv)
-        score = (len(sw) == len(d["keys"]), -abs(len(sw) - len(d["keys"])),
-                 -sum(abs(h["chords"][0] - CUTOUT) + abs(h["chords"][1] - CUTOUT) for h in sw))
-        if best is None or score > best[0]:
-            best = (score, frac, sw, rnd, win)
-    chk.details["section_levels"] = levels
-    chk.details["plate_normal"] = [round(float(x), 4) for x in n]
-    _, frac, sw, rnd, win = best
-    return {"frac": float(frac), "switch": sw, "round": rnd, "window": win}
+def heights():
+    board_top = MX_PLATE_TO_PCB - OLED_STANDOFF - OLED_BOARD_T
+    return {"ec11_body_top": MX_PLATE_TO_PCB - EC11_BODY_H, "oled_board_top": board_top,
+            "pcb_top": MX_PLATE_TO_PCB, "pcb_under": MX_PLATE_TO_PCB + PCB_T, "clip": CLIP_PLATE}
+
+
+def top_model(chk: Check, d: dict):
+    """The Top part, registered into PCB coordinates from its own outline. None -> status already set."""
+    from . import topmodel
+    tops = top_stl(chk.ctx)
+    if not tops:
+        chk.not_run("no production STL with 'top' or 'plate' in its name")
+        return None
+    if len(tops) > 1:
+        chk.note(f"several top/plate STLs {[p.name for p in tops]}; using {tops[0].name}")
+    key = ("top", str(tops[0]), tops[0].stat().st_mtime_ns)
+    if key not in chk.ctx.cache:
+        chk.ctx.cache[key] = topmodel.register(load_mesh(chk, tops[0]), d, extra_h=tuple(heights().values()))
+    chk.hash(tops[0])
+    M, info = chk.ctx.cache[key]
+    chk.details["registration"] = info
+    sh = d["case"]["shell"]
+    wu, wv = info["outline_mm"]
+    if abs(wu - sh["w"]) > SHELL_TOL or abs(wv - sh["h"]) > SHELL_TOL:
+        chk.fail(f"{tops[0].name} outline {wu:.2f} x {wv:.2f} != design.json case.shell {sh['w']} x {sh['h']} (tol {SHELL_TOL})")
+    if abs(M.section_volume - M.mesh_volume) > 0.005 * abs(M.mesh_volume):
+        chk.fail(f"cross-sections integrate to {M.section_volume:.1f} mm3, mesh volume is {M.mesh_volume:.1f}: "
+                 "the slicer lost material, no measurement here can be trusted")
+    return M
 
 
 def g4_switch_cutouts(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G4.switch_cutouts", "G4", "Top part: 9 switch cutouts 14.0 +/-0.1 on the design.json key pattern")
+    chk = Check(ctx, "G4.switch_cutouts", "G4", "Top: a real switch fits, clips in, and sits on its design.json position")
     d = design(chk)
     if d is None:
         return chk
-    tops = top_stl(ctx)
-    if not tops:
-        return chk.not_run("no production STL with 'top' or 'plate' in its name")
-    if len(tops) > 1:
-        chk.note(f"several top/plate STLs {[p.name for p in tops]}; using {tops[0].name}")
-    mesh = load_mesh(chk, tops[0])
-    res = measure_top(chk, mesh, d)
-    ctx.cache["cad_top"] = res
-    sw = res["switch"]
-    chk.details["section_frac"] = res["frac"]
-    chk.details["cutouts"] = [{"chords": [round(c, 4) for c in h["chords"]], "sides": [round(s, 4) for s in h["sides"]],
-                               "centre_2d": [round(h["cx"], 3), round(h["cy"], 3)]} for h in sw]
-    if len(sw) != len(d["keys"]):
-        chk.fail(f"found {len(sw)} switch-sized square holes in {tops[0].name}, design has {len(d['keys'])}")
-    for i, h in enumerate(sw):
-        if any(abs(c - CUTOUT) > CUTOUT_TOL for c in h["chords"]):
-            chk.fail(f"cutout {i} at ({h['cx']:.2f}, {h['cy']:.2f}) measures {h['chords'][0]:.3f} x {h['chords'][1]:.3f}, want {CUTOUT} +/-{CUTOUT_TOL}")
-    if len(sw) == len(d["keys"]):
-        dk = [(k["x"], k["y"]) for k in d["keys"]]
-        mk = [(h["cx"], h["cy"]) for h in sw]
-        dev = geom.pairwise_compare(dk, mk)
-        fit, _ = geom.best_rigid_fit(dk, mk)
-        chk.details["pattern_max_pairwise_dev_mm"] = round(dev, 4)
-        chk.details["rigid_fit_max_residual_mm"] = round(fit, 4)
-        if dev > CAD_POS_TOL:
-            chk.fail(f"cutout centre pattern deviates {dev:.3f} mm from design key pattern (tol {CAD_POS_TOL})")
+    M = top_model(chk, d)
+    if M is None:
+        return chk
+    import shapely.geometry as g
+    H = MX_PLATE_TO_PCB
+    half = (SWITCH_W - 2 * CUTOUT_TOL) / 2
+    rows = []
+    for k in d["keys"]:
+        x, y = k["x"], k["y"]
+        sx, sy = M.spans(x, y, "x", 0, H), M.spans(x, y, "y", 0, H)
+        if sx is None or sy is None:
+            chk.fail(f"{k['ref']}: no opening at design position ({x}, {y})")
+            continue
+        nx, ny = min(sx, key=lambda q: q[1] - q[0]), min(sy, key=lambda q: q[1] - q[0])
+        wx, wy = nx[1] - nx[0], ny[1] - ny[0]
+        ccx, ccy = (nx[0] + nx[1]) / 2, (ny[0] + ny[1]) / 2
+        tx = sum(q[3] - q[2] for q in sx if q[1] - q[0] <= SWITCH_W + CUTOUT_TOL)
+        ty = sum(q[3] - q[2] for q in sy if q[1] - q[0] <= SWITCH_W + CUTOUT_TOL)
+        clip = min(tx, ty)
+        fit, at = M.min_gap(g.box(x - half, y - half, x + half, y + half), 0, H)
+        rows.append({"ref": k["ref"], "narrowest_mm": [round(wx, 3), round(wy, 3)], "centre": [round(ccx, 3), round(ccy, 3)],
+                     "clip_plate_mm": round(clip, 3), "housing_gap_mm": round(fit, 3)})
+        if abs(wx - SWITCH_W) > CUTOUT_TOL or abs(wy - SWITCH_W) > CUTOUT_TOL:
+            chk.fail(f"{k['ref']}: narrowest opening {wx:.3f} x {wy:.3f}, want {SWITCH_W} +/-{CUTOUT_TOL}")
+        if abs(ccx - x) > CAD_POS_TOL or abs(ccy - y) > CAD_POS_TOL:
+            chk.fail(f"{k['ref']}: opening centre ({ccx:.3f}, {ccy:.3f}), design ({x}, {y}) tol {CAD_POS_TOL}")
+        if fit < 0:
+            chk.fail(f"{k['ref']}: a {2 * half:.1f} mm switch housing hits the Top at depth {at} mm")
+        if abs(clip - CLIP_PLATE) > CLIP_PLATE_TOL:
+            chk.fail(f"{k['ref']}: clips engage {clip:.2f} mm of plate, want {CLIP_PLATE} +/-{CLIP_PLATE_TOL}")
+    chk.details["switches"] = rows
+    return chk
+
+
+def g4_encoder_clearance(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G4.encoder_clearance", "G4", "Top clears the real EC11 body and bushing along the PCB's path, any opening shape")
+    d = design(chk)
+    if d is None:
+        return chk
+    M = top_model(chk, d)
+    if M is None:
+        return chk
+    import shapely.geometry as g
+    e = d["encoder"]
+    x, y = e["x"], e["y"]
+    h = EC11_BODY_W / 2
+    bt = heights()["ec11_body_top"]
+    body, at = M.min_gap(g.box(x - h, y - h, x + h, y + h), bt, M.hmax)
+    bush, at2 = M.min_gap(g.Point(x, y).buffer(EC11_BUSH_D / 2, 64), 0, bt)
+    chk.details["body_gap_mm"], chk.details["bushing_gap_mm"] = round(body, 3), round(bush, 3)
+    for name, gap, where in (("body", body, at), ("bushing", bush, at2)):
+        if gap < EC11_CLEAR:
+            chk.fail(f"EC11 {name} gap {gap:.3f} mm at depth {where} mm, want >= {EC11_CLEAR}")
+    op = M.opening_at(x, y, 0.05)
+    if op is not None:
+        b = op.bounds
+        chk.details["measured_opening"] = {"bounds": [round(v, 3) for v in b], "w": round(b[2] - b[0], 3), "h": round(b[3] - b[1], 3)}
+        cp, rel = load_cad_positions(ctx, chk)
+        o = ((cp or {}).get("encoder") or {}).get("opening")
+        if o and (abs(o["w"] - (b[2] - b[0])) > 0.2 or abs(o["h"] - (b[3] - b[1])) > 0.2):
+            chk.fail(f"{rel}: encoder opening says {o['w']} x {o['h']}, the Top measures {b[2] - b[0]:.2f} x {b[3] - b[1]:.2f}")
+    return chk
+
+
+def g4_oled_clearance(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G4.oled_clearance", "G4", "Top clears the OLED glass and board; window measured from the mesh")
+    d = design(chk)
+    if d is None:
+        return chk
+    M = top_model(chk, d)
+    if M is None:
+        return chk
+    import shapely.geometry as g
+    w, mod = d["oled"]["window"], d["oled"]["module"]
+    ht = heights()["oled_board_top"]
+    glass = g.box(w["x"], w["y"], w["x"] + w["w"], w["y"] + w["h"])
+    board = g.box(mod["x"], mod["y"], mod["x"] + mod["w"], mod["y"] + mod["h"])
+    gg, a1 = M.min_gap(glass, 0, ht)
+    gb, a2 = M.min_gap(board, ht, ht + OLED_BOARD_T)
+    chk.details["glass_gap_mm"], chk.details["board_gap_mm"] = round(gg, 3), round(gb, 3)
+    if gg < OLED_CLEAR:
+        chk.fail(f"OLED glass gap {gg:.3f} mm at depth {a1} mm, want >= {OLED_CLEAR}")
+    if gb < OLED_CLEAR:
+        chk.fail(f"OLED board gap {gb:.3f} mm at depth {a2} mm, want >= {OLED_CLEAR}")
+    op = M.opening_at(w["x"] + w["w"] / 2, w["y"] + w["h"] / 2, 0.05)
+    if op is None:
+        chk.fail("no opening over the OLED window at the plate top")
+        return chk
+    b = op.bounds
+    cut = {"x": round(b[0], 3), "y": round(b[1], 3), "w": round(b[2] - b[0], 3), "h": round(b[3] - b[1], 3)}
+    chk.details["measured_window"] = cut
+    cp, rel = load_cad_positions(ctx, chk)
+    pw = (cp or {}).get("oled_window")
+    if pw is not None:
+        stated = pw.get("cut", pw)
+        if any(abs(stated[k] - cut[k]) > CAD_POS_TOL for k in ("x", "y", "w", "h")):
+            chk.fail(f"{rel}: oled_window cut {stated} != measured {cut}")
     return chk
 
 
@@ -1182,10 +1275,92 @@ def g6_production_uf2(ctx: Ctx) -> Check:
     return chk
 
 
+# ================================================================ G6 firmware behaviour on the desk
+
+F1_LINES = ("PASS F1 KBD: panel matches buffer on all 4 pages", "PASS F1 idle screen: 0 I2C bytes in 1000 loops",
+            "PASS F1 HID: slot strip and HID reach the panel", "PASS F1 divider all 42 dots on panel")
+
+
+def _harness(chk: Check) -> str | None:
+    ctx = chk.ctx
+    run = ctx.p("Firmware/tests/run.sh")
+    if not run.is_file():
+        chk.not_run("Firmware/tests/run.sh missing")
+        return None
+    if not shutil.which("clang", path=ctx.env["PATH"]):
+        chk.not_run("clang not on PATH")
+        return None
+    if not (ctx.qmk_home / "drivers/oled/oled_driver.c").is_file():
+        chk.not_run(f"{ctx.qmk_home} has no drivers/oled/oled_driver.c")
+        return None
+    for f in find_one(ctx.p("Firmware/tests"), "*") + fw_sources(ctx):
+        chk.hash(f)
+    key = ("fw_harness", str(run))
+    if key not in ctx.cache:
+        out = ctx.work / "fwtest"
+        if out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True)
+        code, so, se = chk.run(["bash", run, out], timeout=300, env={"QMK_HOME": str(ctx.qmk_home)})
+        ctx.cache[key] = (code, so, out)
+    code, so, out = ctx.cache[key]
+    return so if code is not None else None
+
+
+def g6_firmware_harness(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G6.firmware_harness", "G6", "Real keymap.c + real QMK OLED driver on the desk under ASan/UBSan, plus the host<->firmware protocol")
+    so = _harness(chk)
+    if so is None:
+        return chk
+    code, _, out = ctx.cache[("fw_harness", str(ctx.p("Firmware/tests/run.sh")))]
+    passed = [l for l in so.splitlines() if l.startswith("PASS ")]
+    failed = [l for l in so.splitlines() if l.startswith("FAIL ")]
+    chk.details["harness"] = {"exit_code": code, "pass": len(passed), "fail": len(failed)}
+    if code != 0:
+        chk.fail(f"harness exited {code}" + (f"; {failed[0]}" if failed else ""))
+    for l in failed[:20]:
+        chk.fail(l)
+    if not passed:
+        chk.fail("harness printed no PASS lines")
+    binary, proto = out / "harness", ctx.p("Firmware/tests/proto_test.py")
+    if binary.is_file() and proto.is_file() and ctx.p("host/pyproject.toml").is_file():
+        uv = shutil.which("uv", path=ctx.env["PATH"]) or str(Path.home() / ".local/bin/uv")
+        venv = Path(__file__).resolve().parents[1] / ".cache" / "host-venv"
+        c2, o2, e2 = chk.run([uv, "run", "--project", ctx.p("host"), "python", proto, binary], timeout=300,
+                             env={"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"})
+        m = re.search(r"^ok (\d+) bad (\d+)", o2, re.M)
+        chk.details["protocol"] = {"exit_code": c2, "ok": int(m.group(1)) if m else None, "bad": int(m.group(2)) if m else None}
+        if c2 != 0 or not m or m.group(2) != "0" or m.group(1) == "0":
+            chk.fail(f"proto_test.py exited {c2}, summary {m.group(0) if m else 'missing'}")
+    else:
+        chk.note("protocol test not run (harness binary, proto_test.py or host project missing)")
+    return chk
+
+
+def g6_oled_strip_panel(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G6.oled_strip_panel", "G6", "F1 regression: slot strip and divider reach the simulated SSD1306, not just the frame buffer")
+    so = _harness(chk)
+    if so is None:
+        return chk
+    lines = so.splitlines()
+    for want in F1_LINES:
+        if want not in lines:
+            chk.fail(f"missing from harness output: '{want}'")
+    pages = [l for l in lines if re.match(r"page\d buffer ", l)]
+    chk.details["panel_dump"] = pages[-8:]
+    if not pages:
+        chk.fail("harness printed no panel dump")
+    for l in pages[-4:]:
+        m = re.search(r"bytes differing=(\d+) never-written=(\d+)", l)
+        if not m or m.group(1) != "0" or m.group(2) != "0":
+            chk.fail(f"panel differs from the frame buffer: {l}")
+    return chk
+
+
 # ================================================================ G7
 
 def g7_host_tests(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G7.host_tests", "G7", "uv run --project host pytest -q")
+    chk = Check(ctx, "G7.host_tests", "G7", "uv run --project host pytest -q, every test file, audit tests included")
     proj = ctx.p("host/pyproject.toml")
     if not proj.is_file():
         return chk.not_run("host/pyproject.toml missing")
@@ -1196,13 +1371,44 @@ def g7_host_tests(ctx: Ctx) -> Check:
         chk.hash(f)
     uv = shutil.which("uv", path=ctx.env["PATH"]) or str(Path.home() / ".local/bin/uv")
     venv = Path(__file__).resolve().parents[1] / ".cache" / "host-venv"
-    code, so, se = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider"],
-                           cwd=ctx.p("host"), timeout=600,
-                           env={"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"})
+    env = {"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"}
+    code, so, se = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
+                            "-rx", "--tb=short"], cwd=ctx.p("host"), timeout=600, env=env)
     if code == 5:
         return chk.not_run("pytest collected no tests (exit 5)")
     if code != 0:
         chk.fail(f"pytest exited {code}")
+    m = re.search(r"^.*\d+ (?:passed|failed|error).*$", so, re.M)
+    chk.details["summary"] = m.group(0).strip("= ") if m else None
+    xf = re.findall(r"^XFAIL \S+::(\S+)(?: - (.*))?$", so, re.M)
+    chk.details["xfailed_known_open"] = [f"{a}: {b}" for a, b in xf]
+    if xf:
+        chk.note(f"{len(xf)} tests are strict xfail: open audit findings, not passes")
+    names = {f.name for f in tests}
+    chk.details["test_files"] = sorted(names)
+    audit = find_one(ctx.p("docs/audit/host-tests"), "test_*.py")
+    left = [f for f in audit if f.name not in names]
+    if left:
+        # Run a private copy: the audit stub predates F12 (tap_code_delay), and docs/audit is a record, not ours to edit.
+        mirror = ctx.work / "audit-mirror"
+        if mirror.exists():
+            shutil.rmtree(mirror)
+        dst = mirror / "docs/audit/host-tests"
+        shutil.copytree(ctx.p("docs/audit/host-tests"), dst, ignore=shutil.ignore_patterns("__pycache__"))
+        (mirror / "Firmware").symlink_to(ctx.p("Firmware").resolve())
+        stub = dst / "fw_stub/qmk_stub.h"
+        if stub.is_file() and "tap_code_delay" not in stub.read_text():
+            t = stub.read_text().replace('static inline void tap_code(uint16_t k){printf("TAP %d\\n",k);}',
+                                         'static inline void tap_code(uint16_t k){printf("TAP %d\\n",k);}\n'
+                                         'static inline void tap_code_delay(uint16_t k,uint16_t d){(void)d;tap_code(k);}')
+            stub.write_text(t)
+            chk.note("audit stub copy gained tap_code_delay (keymap uses it since F12); docs/audit is unchanged")
+    for f in left:
+        c2, o2, e2 = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
+                              f"--rootdir={dst}", str(dst / f.name)], cwd=ctx.p("host"), timeout=300, env=env)
+        chk.details[f"audit_{f.name}"] = (re.findall(r"\d+ (?:passed|failed|error)[^=\n]*", o2) or [None])[-1]
+        if c2 != 0:
+            chk.fail(f"{f.name} (docs/audit/host-tests) exited {c2}")
     return chk
 
 
@@ -1338,34 +1544,190 @@ def x_cross_positions(ctx: Ctx) -> Check:
             chk.fail(f"{rel}: no oled_window entry")
         elif any(abs(w[k] - ow[k]) > CAD_POS_TOL for k in ("x", "y", "w", "h")):
             chk.fail(f"{rel}: oled_window {w} != design {ow}")
-    # design <-> CAD measured (Top STL section)
-    top = ctx.cache.get("cad_top")
-    if top is None and top_stl(ctx):
-        mesh = load_mesh(chk, top_stl(ctx)[0])
-        top = measure_top(chk, mesh, d)
-    if top is not None:
-        ran.append("design<->Top STL")
-        dk = [(k["x"], k["y"]) for k in d["keys"]]
-        mk = [(h["cx"], h["cy"]) for h in top["switch"]]
-        if len(mk) != len(dk):
-            chk.fail(f"Top STL: {len(mk)} switch cutouts found, cannot place the frame")
-        else:
-            ew = d["oled"]["window"]
-            features = {"encoder": ((d["encoder"]["x"], d["encoder"]["y"]), top["round"]),
-                        "oled_window": ((ew["x"] + ew["w"] / 2, ew["y"] + ew["h"] / 2), top["window"])}
-            for name, (want, cands) in features.items():
-                if not cands:
-                    chk.fail(f"Top STL: no {name} opening found in the switch-cutout section")
+    # design <-> what the Top mesh really is (registered from its outline; no positions file involved)
+    if top_stl(ctx):
+        M = top_model(chk, d)
+        if M is not None:
+            ran.append("design<->Top STL")
+            meas = {}
+            for i, sc in enumerate((d["case"].get("screws") or {}).get("positions", [])):
+                op = M.opening_at(sc["x"], sc["y"], M.hmax - 0.05)
+                if op is None:
+                    chk.fail(f"Top STL: no insert hole at design screw {i} ({sc['x']}, {sc['y']})")
                     continue
-                best = min(cands, key=lambda h: geom.pairwise_compare(dk + [want], mk + [(h["cx"], h["cy"])]))
-                dev = geom.pairwise_compare(dk + [want], mk + [(best["cx"], best["cy"])])
-                chk.details[f"cad_{name}_pattern_dev_mm"] = round(dev, 4)
-                if dev > CAD_POS_TOL:
-                    chk.fail(f"Top STL: {name} opening is {dev:.3f} mm off the design pattern relative to the keys (tol {CAD_POS_TOL})")
-            chk.note("USB cutout position is only checked through a CAD positions file (not measured from the mesh)")
+                b = op.bounds
+                cx, cy, w = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]
+                meas[f"screw{i}"] = {"centre": [round(cx, 3), round(cy, 3)], "d": round(w, 3)}
+                if abs(cx - sc["x"]) > CAD_POS_TOL or abs(cy - sc["y"]) > CAD_POS_TOL:
+                    chk.fail(f"Top STL: insert hole {i} at ({cx:.3f}, {cy:.3f}), design ({sc['x']}, {sc['y']})")
+                if abs(w - INSERT_HOLE) > INSERT_HOLE_TOL:
+                    chk.fail(f"Top STL: insert hole {i} is {w:.3f} mm, want {INSERT_HOLE} +/-{INSERT_HOLE_TOL}")
+            du = d["case"].get("usb_cutout")
+            if du:
+                xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
+                z = -(1.2 + 3.26 / 2)            # receptacle centre below the PCB underside (XIAO 1.2 + shell 3.26 / 2)
+                h = heights()["pcb_under"] - z
+                spans = [M.spans(xc, y, "x", h, h + 0.001) for y in USB_WALL_Y]
+                if any(not q for q in spans):
+                    chk.fail(f"Top STL: back wall is solid at the USB receptacle (x {xc}, depth {h:.2f} mm)")
+                else:
+                    a, b = max(q[0][0] for q in spans), min(q[0][1] for q in spans)
+                    meas["usb_width"] = round(b - a, 3)
+                    meas["usb_centre_x"] = round((a + b) / 2, 3)
+                    if b - a < du["w"] - 1e-3:
+                        chk.fail(f"Top STL: USB opening {b - a:.3f} mm wide through the wall, design.json needs {du['w']}")
+                    if abs((a + b) / 2 - xc) > CAD_POS_TOL:
+                        chk.fail(f"Top STL: USB opening centred at x {(a + b) / 2:.3f}, XIAO at {xc}")
+            chk.details["top_measured"] = meas
     chk.details["comparisons_run"] = ran
     if not ran:
         chk.not_run("no PCB, no CAD positions file and no Top STL to compare with design.json")
+    return chk
+
+
+# ================================================================ PCB path into the Top
+
+def x_pcb_insertion(ctx: Ctx) -> Check:
+    chk = Check(ctx, "X.pcb_insertion", "X", "PCB envelope (design.json pcb + tolerance) swept from the skirt rim to its seat through Top.stl")
+    d = design(chk)
+    if d is None:
+        return chk
+    M = top_model(chk, d)
+    if M is None:
+        return chk
+    import shapely.geometry as g
+    tol = d["case"]["tolerance"]
+    W, H = d["pcb"]["w"], d["pcb"]["h"]
+    env = g.box(-tol, -tol, W + tol, H + tol)
+    seat = heights()["pcb_top"]
+    vol, rows, worst = 0.0, [], None
+    for s in M.slabs_between(seat, M.hmax):
+        ov = s["mat"].intersection(env)
+        dv = ov.area * (s["h1"] - s["h0"])
+        vol += dv
+        rows.append({"depth_mm": [s["h0"], s["h1"]], "overlap_mm2": round(ov.area, 4)})
+        if ov.area > 0 and (worst is None or ov.area > worst[0]):
+            worst = (ov.area, [round(v, 2) for v in ov.bounds], [s["h0"], s["h1"]])
+    chk.details.update({"envelope": [-tol, -tol, W + tol, H + tol], "sweep_from_depth": M.hmax, "seat_depth": seat,
+                        "slabs": rows, "swept_overlap_mm3": round(vol, 4)})
+    if vol > SWEEP_LIMIT:
+        chk.fail(f"PCB cannot reach its seat: {vol:.2f} mm3 of Top inside the {W + 2 * tol:.2f} x {H + 2 * tol:.2f} envelope "
+                 f"on the way in; worst {worst[0]:.2f} mm2 at depth {worst[2]} mm, bounds {worst[1]}")
+    return chk
+
+
+# ================================================================ USB IDs
+
+def x_usb_ids(ctx: Ctx) -> Check:
+    chk = Check(ctx, "X.usb_ids", "X", "Host VID/PID filter = keyboard.json usb = design.json firmware.usb, and enforced when opening")
+    d = design(chk)
+    kb, _ = keyboard_json(chk)
+    dev = ctx.p("host/frostbite_host/device.py")
+    if d is None or kb is None:
+        return chk
+    if not dev.is_file():
+        return chk.not_run("host/frostbite_host/device.py missing")
+    usb = (d.get("firmware") or {}).get("usb")
+    if not usb:
+        chk.fail("design.json has no firmware.usb")
+        return chk
+    want = (int(usb["vid"], 0), int(usb["pid"], 0))
+    fw = (int(kb["usb"]["vid"], 0), int(kb["usb"]["pid"], 0))
+    if fw != want:
+        chk.fail(f"keyboard.json usb {fw[0]:#06x}:{fw[1]:#06x} != design.json firmware.usb {want[0]:#06x}:{want[1]:#06x}")
+    for f in find_one(ctx.p("host/frostbite_host"), "*.py"):
+        chk.hash(f)
+        if f.name != "device.py" and re.search(r"^\s*(import\s+hid|from\s+hid\b)", f.read_text(), re.M):
+            chk.fail(f"{f.name} imports hid directly: every open must go through the filtered HidTransport")
+    rh = d["firmware"]["raw_hid"]
+    code, so, se = chk.run([Path(__file__).resolve().parents[1] / ".venv/bin/python", "-I", Path(__file__).with_name("probe_usb.py"),
+                            ctx.p("host"), usb["vid"], usb["pid"], rh["usage_page"], rh["usage"]], timeout=60,
+                           env={"PYTHONDONTWRITEBYTECODE": "1"})
+    if code != 0:
+        chk.fail(f"probe of the host's device code exited {code}")
+        return chk
+    r = json.loads(so.strip().splitlines()[-1])
+    chk.details.update(r)
+    host = (r["vendor_id"], r["product_id"])
+    if host != want:
+        chk.fail(f"host VENDOR_ID/PRODUCT_ID {host} != design.json {want}")
+    for name, sc in r["scenes"].items():
+        if sc["opened"] != sc["want"]:
+            chk.fail(f"host opened {sc['opened']} in scene '{name}', must open {sc['want']}")
+    return chk
+
+
+# ================================================================ GND thermal relief
+
+def pad_outline(p):
+    """True copper outline of a pad (rect-family pads are treated as plain rectangles)."""
+    import shapely.geometry as g
+    from shapely import affinity
+    cx, cy, w, h = p["cx"], p["cy"], p["w"], p["h"]
+    if p["shape"] == "circle":
+        return g.Point(cx, cy).buffer(w / 2, 32)
+    if p["shape"] == "oval":
+        r = min(w, h) / 2
+        dx, dy = (w / 2 - r, 0) if w >= h else (0, h / 2 - r)
+        sh = g.LineString([(cx - dx, cy - dy), (cx + dx, cy + dy)]).buffer(r, 32)
+    else:
+        sh = g.box(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+    return affinity.rotate(sh, p["angle"], origin=(cx, cy))   # shapely is CCW on a y-up plot, KiCad CCW on y-down
+
+
+THERMAL_RING = 0.15
+THERMAL_MAX_COPPER = 0.45     # thermal pads measured 11-30 %, solid 49-100 % (docs/audit/pcb-physical.md M1, M2)
+
+
+def g3_gnd_thermal(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G3.gnd_thermal", "G3", "GND pads: no solid zone override, thermal relief in the file and in the poured copper")
+    pcb, path = _pcb(chk)
+    if pcb is None:
+        return chk
+    import shapely
+    import shapely.ops as o
+    import shapely.geometry as g
+    zones = [z for z in pcb["zones"] if z["net"] and norm_net(z["net"]) == "GND" and not z["keepout"]]
+    if not zones:
+        return chk.not_run("no GND zones in the .kicad_pcb")
+    for z in zones:
+        if z["connect"] != "thermal":
+            chk.fail(f"GND zone on {z['layers']}: pad connection is '{z['connect']}', must be thermal relief")
+    for dru in find_one(ctx.p("PCB"), "*.kicad_dru"):
+        for line in chk.read(dru).splitlines():
+            if not line.lstrip().startswith("#") and re.search(r"constraint\s+zone_connection\s+solid", line):
+                chk.fail(f"{dru.name}: rule forces solid zone connection: {line.strip()}")
+    fill = {}
+    for z in zones:
+        for f in z["fills"]:
+            if len(f["pts"]) >= 3:
+                fill.setdefault(f["layer"], []).append(shapely.make_valid(g.Polygon(f["pts"])))
+    fill = {k: o.unary_union(v) for k, v in fill.items()}
+    if not fill:
+        chk.fail("GND zones are not filled: relief cannot be measured")
+    rows = []
+    for f in pcb["footprints"]:
+        for p in f["pads"]:
+            if norm_net(p["net"]) != "GND":
+                continue
+            name = f"{f['ref']} pad {p['num']}"
+            if p["zone_connect"] not in (None, 1):
+                chk.fail(f"{name}: zone_connect {p['zone_connect']} override (2 = solid), must inherit thermal")
+            if f.get("zone_connect") not in (None, 1):
+                chk.fail(f"{name}: footprint zone_connect {f['zone_connect']} override")
+            ring = pad_outline(p).buffer(THERMAL_RING).exterior
+            for lay, cu in fill.items():
+                if not any(l == lay or l == "*.Cu" or l == "F&B.Cu" for l in p["layers"]):
+                    continue
+                frac = ring.intersection(cu).length / ring.length
+                rows.append({"pad": name, "layer": lay, "ring_copper": round(frac, 3)})
+                if frac > THERMAL_MAX_COPPER:
+                    chk.fail(f"{name} on {lay}: {frac:.0%} of the ring around the pad is pour, no working thermal relief "
+                             f"(max {THERMAL_MAX_COPPER:.0%})")
+    if not rows:
+        chk.fail("no GND pad measured against a GND pour")
+    chk.details["pads_measured"] = len(rows)
+    chk.details["worst"] = sorted(rows, key=lambda r: -r["ring_copper"])[:8]
     return chk
 
 

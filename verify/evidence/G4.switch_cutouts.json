@@ -1,289 +1,167 @@
 {
   "check": "G4.switch_cutouts",
   "gate": "G4",
-  "title": "Top part: 9 switch cutouts 14.0 +/-0.1 on the design.json key pattern",
+  "title": "Top: a real switch fits, clips in, and sits on its design.json position",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
-    "production/Top.stl": "3e4e95d41e6297365763895cd0eb121c18298495c299c80f9de9ed437129a45f"
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca"
   },
   "details": {
-    "section_levels": [
+    "registration": {
+      "plate_normal": [
+        0.0,
+        -0.0,
+        -1.0
+      ],
+      "outline_mm": [
+        79.15,
+        97.15
+      ],
+      "rotation_sign": 1,
+      "feature_points_open_at_plate_top": "11/11",
+      "levels_h": [
+        0.0,
+        0.5,
+        1.0,
+        1.3,
+        1.5,
+        2.5,
+        3.2,
+        5.0,
+        5.43,
+        6.6,
+        12.0,
+        13.23,
+        16.0
+      ],
+      "section_volume_mm3": 43282.7,
+      "mesh_volume_mm3": 43282.7
+    },
+    "switches": [
       {
-        "frac": 0.05,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW1",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          11.525,
+          33.525
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.1,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW2",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          30.575,
+          33.525
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.15,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW3",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          49.625,
+          33.525
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.2,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW4",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          11.525,
+          52.575
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.25,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW5",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          30.575,
+          52.575
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.3,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW6",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          49.625,
+          52.575
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.35,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW7",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          11.525,
+          71.625
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.4,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
+        "ref": "SW8",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          30.575,
+          71.625
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       },
       {
-        "frac": 0.45,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.5,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.55,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.6,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.65,
-        "holes": 4,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.7,
-        "holes": 5,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.75,
-        "holes": 5,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.8,
-        "holes": 1,
-        "switch_like": 0,
-        "round": 0,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.85,
-        "holes": 11,
-        "switch_like": 9,
-        "round": 1,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.9,
-        "holes": 11,
-        "switch_like": 9,
-        "round": 1,
-        "oled_window_like": 0
-      },
-      {
-        "frac": 0.95,
-        "holes": 11,
-        "switch_like": 9,
-        "round": 1,
-        "oled_window_like": 1
+        "ref": "SW9",
+        "narrowest_mm": [
+          14.0,
+          14.0
+        ],
+        "centre": [
+          49.625,
+          71.625
+        ],
+        "clip_plate_mm": 1.5,
+        "housing_gap_mm": 0.1
       }
-    ],
-    "plate_normal": [
-      0.0,
-      -0.0,
-      -1.0
-    ],
-    "section_frac": 0.95,
-    "cutouts": [
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -19.05,
-          -30.05
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -19.05,
-          -11.0
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -0.0,
-          -30.05
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          19.05,
-          -30.05
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -0.0,
-          -11.0
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          19.05,
-          -11.0
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -19.05,
-          8.05
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          -0.0,
-          8.05
-        ]
-      },
-      {
-        "chords": [
-          14.0,
-          14.0
-        ],
-        "sides": [
-          14.0,
-          14.0
-        ],
-        "centre_2d": [
-          19.05,
-          8.05
-        ]
-      }
-    ],
-    "pattern_max_pairwise_dev_mm": 0.0,
-    "rigid_fit_max_residual_mm": 0.0
+    ]
   },
-  "timestamp": "2026-11-03T20:22:21+00:00",
-  "duration_s": 0.25
+  "timestamp": "2026-11-03T22:16:37+00:00",
+  "duration_s": 0.45
 }

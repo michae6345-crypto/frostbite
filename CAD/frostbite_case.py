@@ -17,10 +17,14 @@ Vertical stack in the design frame (mm)
   5.10  plate underside at the switch clips (1.5 thick at the 14.0 cutouts)
   4.10  plate underside elsewhere (2.5 thick)
   0..1.6 PCB
- -9.40  Top skirt bottom = GlowBand top, heat-set inserts pressed in from here
+ -2.60  top of the GlowBand light pads and riser wall (below every 2.0 mm lead tail)
+ -9.40  Top skirt bottom = GlowBand ring top, heat-set inserts pressed in from here
 -11.40  GlowBand bottom = Bottom rim
  -13.0  screw head seat (M3x16, tip at +3.0)
  z_under(y) Bottom underside, a 4 deg plane, lowest at the back
+
+Assembly rule: the PCB enters the Top from the skirt side, so nothing printed may stand inside
+the PCB insertion envelope (PCB + tolerance) below the plate. The inserts live in the side walls.
 """
 from __future__ import annotations
 
@@ -49,8 +53,8 @@ PLATE_T = 2.5
 PLATE_UNDER = PLATE_TOP - PLATE_T                # 4.1, leaves 2.5 for THT diodes lying flat
 CUTOUT = 14.0
 CLIP_POCKET = 15.4                               # clip span 14.9 + 0.5
-# Top height 16.0: keeps the 4 mm inserts below the PCB (bosses may tuck under the
-# PCB edge there) and puts the USB window fully inside the Top skirt.
+# Top height 16.0: puts the 13.5 x 8 USB window fully inside the skirt, with the 4 mm inserts
+# at the rim. It also keeps a verifier section plane in the 1.5 mm clip zone (see README).
 SKIRT_BOT = PLATE_TOP - 16.0                     # -9.4
 BAND_H = 2.0
 BAND_TOP = SKIRT_BOT
@@ -67,8 +71,7 @@ HEAD_RECESS = 0.5
 FLOOR_T = 2.5
 # screw axes (PCB coords) and boss size come from design.json case.screws
 SCREWS = [(float(p["x"]), float(p["y"])) for p in D["case"]["screws"]["positions"]]
-BOSS_OD = float(D["case"]["screws"]["boss_od"])  # 8.7
-TOP_BOSS_R = BOT_BOSS_R = BOSS_OD / 2
+BOSS_OD = float(D["case"]["screws"]["boss_od"])  # 8.7 = insert hole 4.7 + 2 x 2.0 wall, inside the side wall
 SCREW_Y = tuple(sorted({y for _, y in SCREWS}))
 # bottom-side pads (PCB/build/bottom_pads.json): lead tails / solder joints the case must clear
 PADS_FILE = ROOT / "PCB" / "build" / "bottom_pads.json"
@@ -76,7 +79,7 @@ THT_TAIL, SMD_JOINT, PAD_CLEAR = 2.0, 0.3, 0.5
 
 # underside plane: lowest point needed at the front screws (largest y)
 Y_FRONT_SCREW = max(SCREW_Y)
-Z_UNDER_FRONT_SCREW = SEAT - HEAD_H - HEAD_RECESS   # -16.2
+Z_UNDER_FRONT_SCREW = SEAT - HEAD_H - HEAD_RECESS   # -16.5
 
 
 def z_under(y_pcb: float) -> float:
@@ -96,9 +99,11 @@ EC_BODY = (11.7, 12.0, 4.5)
 EC_BUSH_D, EC_BUSH_H = 7.0, 7.0
 EC_SHAFT_D, EC_SHAFT_FLAT, EC_SHAFT_TIP = 6.0, 4.5, PCB_TOP + 24.5
 EC_OPEN = (12.98, 16.0, 2.0)                     # rounded-rect opening (x, y, r): clears body
+EC_SHAFT_D_LEN = 10.0                            # the D-flat is only the last 10 mm of the shaft
 # Knob
 KNOB_D, KNOB_H, KNOB_BORE_DEPTH = 18.0, 15.0, 12.3
 KNOB_Z0 = PCB_TOP + EC_BODY[2] + EC_BUSH_H + 1.0  # 1 mm above the bushing
+KNOB_RELIEF_D, KNOB_RELIEF_H = 7.6, 3.2          # mouth relief over the round part of the shaft
 # XIAO
 MCU = D["mcu"]["rect"]
 XIAO_T = 1.2
@@ -111,6 +116,9 @@ USB_TONGUE_GAP = 0.2                             # printed-to-printed side gap
 GLOW = D["leds"]["glow"]
 LED_W, LED_H, LED_T = 3.2, 2.8, 1.78
 PAD_REACH = 3.5                                  # light pad extends 3.5 past the LED centre
+RISER_T = 2.0                                    # clear riser wall, inside the pocket with an air gap
+RING_RELIEF, RING_LAND = 0.3, 1.5                # air gap on the ring top; contact land at the face
+XIAO_RISER_TOP = -5.0                            # riser drops under the XIAO USB shell (-4.46)
 PAD_TOP = -(THT_TAIL + PAD_CLEAR + 0.1)          # -2.6: below any 2.0 mm lead tail + 0.5, 0.82 under the LED
 
 
@@ -171,16 +179,6 @@ def solid(wp: cq.Workplane) -> cq.Shape:
 def make_top() -> cq.Workplane:
     body = shell_prism(SKIRT_BOT, PLATE_TOP)
     body = body.cut(pocket_prism(SKIRT_BOT - 1, PLATE_UNDER))
-    outline = shell_prism(SKIRT_BOT - 1, PLATE_TOP + 1)
-    # insert bosses: may tuck under the PCB edge (top 0.3 below the PCB), 45 deg chamfer inside
-    for sx, sy in SCREWS:
-        boss = cyl(sx, sy, TOP_BOSS_R, SKIRT_BOT, -TOL).intersect(outline)
-        inward = 1 if sx < 0 else -1
-        ex = -TOL if sx < 0 else PCB_W + TOL
-        wedge = (cq.Workplane("XZ", origin=(0, Y(sy), 0))
-                 .polyline([(ex, -TOL), (ex + inward * 30, -TOL), (ex + inward * 30, -TOL - 30)]).close()
-                 .extrude(10, both=True))
-        body = body.union(boss.cut(wedge))
     # switch cutouts, clip relief pockets (plate 1.5 at the clips)
     for k in D["keys"]:
         body = body.cut(cbox(k["x"], k["y"], CUTOUT, CUTOUT, PLATE_UNDER - 1, PLATE_TOP + 1))
@@ -203,7 +201,7 @@ def make_top() -> cq.Workplane:
     body = body.cut(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y() - 2, 1.0,
                         USB_CZ - UC["h"] / 2, USB_CZ + UC["h"] / 2))
     body = body.cut(box(USB_CX - UC["w"] / 2 - USB_TONGUE_GAP, USB_CX + UC["w"] / 2 + USB_TONGUE_GAP,
-                        -MARGIN_Y() - 2, 1.0, SKIRT_BOT - 1, USB_CZ - UC["h"] / 2))
+                        -MARGIN_Y() - 2, 1.0, SKIRT_BOT - 1, USB_CZ - UC["h"] / 2 + USB_TONGUE_GAP))
     return body
 
 
@@ -212,16 +210,33 @@ def MARGIN_Y():
 
 
 def make_band() -> cq.Workplane:
-    band = shell_prism(BAND_BOT, BAND_TOP, inset=BAND_INSET)
-    band = band.cut(pocket_prism(BAND_BOT - 1, BAND_TOP + 1))
+    """Clear light guide: visible ring + riser wall + a pad under each glow LED.
+
+    Pads and riser stand inside the Top pocket with TOL of air all round, so they fit and so light
+    stays in the clear part instead of passing straight into the frosted skirt. The riser carries
+    pad light around the perimeter to the ring. The ring top is relieved 0.3 except a land at the
+    visible face and around the screws, which removes most of its contact with the skirt.
+    """
+    inner = box(RISER_T, PCB_W - RISER_T, RISER_T, PCB_H - RISER_T, BAND_BOT - 1, 1)
+    band = shell_prism(BAND_BOT, BAND_TOP, inset=BAND_INSET).cut(inner)
+    riser = box(0, PCB_W, 0, PCB_H, BAND_TOP, PAD_TOP).cut(inner)
+    riser = riser.cut(box(MCU["x"] - 1.5, MCU["x"] + MCU["w"] + 1.5, -1, RISER_T + 1, XIAO_RISER_TOP, 1))
+    band = band.union(riser)
     for g in GLOW:
         left = g["x"] < PCB_W / 2
-        x0, x1 = (-TOL, g["x"] + PAD_REACH) if left else (g["x"] - PAD_REACH, PCB_W + TOL)
-        y0, y1 = max(-TOL, g["y"] - PAD_REACH), min(PCB_H + TOL, g["y"] + PAD_REACH)
+        x0, x1 = (0, g["x"] + PAD_REACH) if left else (g["x"] - PAD_REACH, PCB_W)
+        y0, y1 = max(0, g["y"] - PAD_REACH), min(PCB_H, g["y"] + PAD_REACH)
         band = band.union(box(x0, x1, y0, y1, BAND_BOT, PAD_TOP))
     # tongue that rises into the Top's USB notch and forms the bottom edge of the USB window
     band = band.union(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y() + BAND_INSET, -TOL,
                           BAND_BOT, USB_CZ - UC["h"] / 2))
+    relief = shell_prism(BAND_TOP - RING_RELIEF, BAND_TOP + 1, inset=BAND_INSET + RING_LAND)
+    relief = relief.cut(pocket_prism(BAND_TOP - 2, BAND_TOP + 2))
+    relief = relief.cut(box(USB_CX - UC["w"] / 2 - 1, USB_CX + UC["w"] / 2 + 1, -MARGIN_Y() - 2, 0,
+                            BAND_TOP - 2, BAND_TOP + 2))
+    for sx, sy in SCREWS:
+        relief = relief.cut(cyl(sx, sy, BOSS_OD / 2 + 0.5, BAND_TOP - 2, BAND_TOP + 2))
+    band = band.cut(relief)
     for sx, sy in SCREWS:
         band = band.cut(cyl(sx, sy, SCREW_CLR / 2, BAND_BOT - 1, BAND_TOP + 1))
     return band
@@ -231,9 +246,6 @@ def make_bottom() -> cq.Workplane:
     body = shell_prism(-60, BAND_BOT)
     cav = pocket_prism(-60, BAND_BOT + 1).cut(below_plane(FLOOR_T))
     body = body.cut(cav)
-    outline = shell_prism(-60, BAND_BOT)
-    for sx, sy in SCREWS:
-        body = body.union(cyl(sx, sy, BOT_BOSS_R, -60, BAND_BOT).intersect(outline))
     body = body.cut(below_plane(0.0))
     for sx, sy in SCREWS:
         body = body.cut(cyl(sx, sy, SCREW_CLR / 2, -70, 0))
@@ -256,6 +268,7 @@ def make_knob() -> cq.Workplane:
     knob = knob.cut(cyl(EN["x"], EN["y"] - 5.5, 0.8, KNOB_Z0 + KNOB_H - 0.6, KNOB_Z0 + KNOB_H + 1))
     bore = d_profile(3.1, EC_SHAFT_FLAT - EC_SHAFT_D / 2 + 0.1, KNOB_Z0 - 1, KNOB_Z0 + KNOB_BORE_DEPTH,
                      EN["x"], EN["y"])
+    knob = knob.cut(cyl(EN["x"], EN["y"], KNOB_RELIEF_D / 2, KNOB_Z0 - 1, KNOB_Z0 + KNOB_RELIEF_H))
     return knob.cut(bore)
 
 
@@ -292,14 +305,27 @@ def placeholders() -> dict[str, cq.Workplane]:
     ph["EC11_body"] = cbox(ex, ey, EC_BODY[0], EC_BODY[1], PCB_TOP, PCB_TOP + EC_BODY[2]).union(
         cbox(ex, ey, 12.5, 1.5, PCB_TOP - 3.5, PCB_TOP + 1.5))
     ph["EC11_bushing"] = cyl(ex, ey, EC_BUSH_D / 2, PCB_TOP + EC_BODY[2], PCB_TOP + EC_BODY[2] + EC_BUSH_H)
-    ph["EC11_shaft"] = d_profile(EC_SHAFT_D / 2, EC_SHAFT_FLAT - EC_SHAFT_D / 2,
-                                 PCB_TOP + EC_BODY[2] + EC_BUSH_H, EC_SHAFT_TIP, ex, ey)
+    # Alps shaft: round to 10 mm below the tip, D-flat above that
+    ph["EC11_shaft"] = cyl(ex, ey, EC_SHAFT_D / 2, PCB_TOP + EC_BODY[2] + EC_BUSH_H,
+                           EC_SHAFT_TIP - EC_SHAFT_D_LEN).union(
+        d_profile(EC_SHAFT_D / 2, EC_SHAFT_FLAT - EC_SHAFT_D / 2, EC_SHAFT_TIP - EC_SHAFT_D_LEN, EC_SHAFT_TIP, ex, ey))
     pins = None
     for dx, dy in ((-2.5, 7.5), (0, 7.5), (2.5, 7.5), (-2.5, -7.0), (2.5, -7.0)):
         p = cyl(ex + dx, ey + dy, 0.5, PCB_TOP - 3.5, PCB_TOP)
         pins = p if pins is None else pins.union(p)
     ph["EC11_pins"] = pins
     return ph
+
+
+def switch_rigid(x, y) -> cq.Workplane:
+    """Switch without its sprung clips: what must pass the 14.0 cutout during assembly."""
+    return (cbox(x, y, 14.0, 14.0, PCB_TOP, PLATE_TOP)
+            .union(cbox(x, y, 15.6, 15.6, PLATE_TOP, PLATE_TOP + 6.6))
+            .union(cbox(x, y, 4.0, 4.0, PLATE_TOP + 6.6, PLATE_TOP + 10.2)))
+
+
+def bottom_pads() -> list[dict]:
+    return json.loads(PADS_FILE.read_text())["pads"]
 
 
 def usb_overmold() -> cq.Workplane:
@@ -376,9 +402,7 @@ def positions() -> dict:
         "usb_cutout": {"x": USB_CX, "z_from_pcb_bottom": USB_CZ, "w": UC["w"], "h": UC["h"]},
         "screws": [{"x": sx, "y": sy, "insert": "Top", "head": "Bottom underside", "boss_od": BOSS_OD}
                    for sx, sy in SCREWS],
-        "bottom_side_keepouts": [{"x0": round(sx - TOP_BOSS_R, 3), "x1": round(sx + TOP_BOSS_R, 3),
-                                  "y0": round(sy - TOP_BOSS_R, 3), "y1": round(sy + TOP_BOSS_R, 3),
-                                  "z_top_below_pcb": TOL, "what": "Top insert boss"} for sx, sy in SCREWS],
+        "shell": {"w": SHELL_W, "h": SHELL_H},
         "heights": {"front_mm": None, "back_mm": None},
     }
 

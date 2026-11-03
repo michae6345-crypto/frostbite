@@ -14,6 +14,12 @@ log = logging.getLogger("frostbite.state")
 
 LINGER_DONE = 10 * 60.0     # finished slots stay green this long, then free
 LINGER_ERROR = 30 * 60.0    # failed slots stay red a bit longer
+QUIET_RUN = 60 * 60.0       # a Claude session this silent is not running: Stop never fires
+                            # after an interrupt, and a turn can end without any event
+DEAD_AFTER = 24 * 60 * 60.0 # any slot this silent is dead (crash, closed window, no SessionEnd)
+ANSWER_GRACE = 15.0         # Notification arrives ~6 s after the dialog: ignore it once answered
+OVERFLOW_TTL = 60 * 60.0    # how long a session with no free slot keeps the glow amber
+MAX_PENDING = 16
 FLASH_SECONDS = 3.0
 
 STATUS_WORD = {
@@ -51,11 +57,19 @@ def fit_lr(left: str, right: str, width: int = OLED_COLS) -> str:
     room = width - len(right) - 1
     if room <= 0:
         return right[:width]
-    return left[:room].ljust(room) + " " + right
+    return fit_middle(left, room).ljust(room) + " " + right
 
 
 def fit(text: str, width: int = OLED_COLS) -> str:
     return clean(text)[:width]
+
+
+def fit_middle(text: str, width: int) -> str:
+    """Too long: keep both ends, since project names tend to share a start or an end."""
+    if len(text) <= width:
+        return text
+    tail = (width - 1) // 2
+    return text[:width - 1 - tail] + "~" + (text[-tail:] if tail else "")
 
 
 def ago(seconds: float) -> str:
@@ -65,6 +79,15 @@ def ago(seconds: float) -> str:
     if s < 3600:
         return f"{s // 60}m"
     return f"{s // 3600}h{(s % 3600) // 60:02d}"
+
+
+@dataclass
+class Prompt:
+    """One open question from Claude Code. Dialogs queue, so a slot can hold several."""
+    text: str                 # what the OLED shows, e.g. "Bash(npm test)?"
+    tool: str = ""            # matched against PostToolUse to close it
+    agent: str | None = ""    # subagent id, "" for the main thread, None if unknown
+    kind: str = "permission"  # "permission" (Return answers it) or "question" (needs reading)
 
 
 @dataclass
@@ -80,20 +103,26 @@ class Slot:
     log_path: str | None = None
     terminal: dict = field(default_factory=dict)  # {"bundle": ..., "app": ..., "tty": ...}
     tool: str = ""           # last tool description (Claude), used for "needs" detail
+    pending: list[Prompt] = field(default_factory=list)  # oldest first
+    answered: float = -1e12  # when a prompt was last closed
 
     def title(self, index: int) -> str:
         n = index + 1
+        room = OLED_COLS - 5  # what is left next to a 4-letter status word
         if self.source == "claude":
-            return f"claude#{n} {self.name}".strip()
-        if self.source == "train":
-            return f"train#{n} {self.name}".strip()
-        return f"#{n} {self.name}".strip()
+            full, short = f"claude#{n} {self.name}", f"c#{n} {self.name}"
+        elif self.source == "train":
+            full, short = f"train#{n} {self.name}", f"t#{n} {self.name}"
+        else:
+            full = short = f"#{n} {self.name}"
+        return (full if len(full) <= room else short).strip()
 
     def to_dict(self, index: int) -> dict:
         return {
             "slot": index + 1, "key": self.key, "source": self.source, "name": self.name,
             "status": self.status.name.lower(), "detail": self.detail, "updated": self.updated,
             "since": self.since, "cwd": self.cwd, "log": self.log_path, "terminal": self.terminal,
+            "pending": [p.text for p in self.pending],
         }
 
 
@@ -103,7 +132,10 @@ class Board:
         self.selected = 0
         self.linger_done = linger_done
         self.linger_error = linger_error
-        self._flash: tuple[str, float] | None = None
+        self.quiet_run = QUIET_RUN
+        self.dead_after = DEAD_AFTER
+        self.overflow: dict[str, float] = {}  # sessions waiting on you with no slot to show it
+        self._flash: tuple[str, float, float] | None = None
 
     # ------------------------------------------------------------------ lookup / assignment
     def find(self, key: str) -> int | None:
@@ -116,8 +148,9 @@ class Board:
         for i, s in enumerate(self.slots):
             if s is None:
                 return i
-        # Full: evict the oldest lingering done/error slot, then the oldest idle one.
-        for wanted in ((Status.DONE, Status.ERROR), (Status.IDLE,)):
+        # Full: reuse a finished slot, then an idle one. A red slot may not have been seen
+        # yet, so it goes last. Running and waiting slots are never pushed out.
+        for wanted in ((Status.DONE,), (Status.IDLE,), (Status.ERROR,)):
             cands = [(s.since, i) for i, s in enumerate(self.slots) if s and s.status in wanted]
             if cands:
                 _, i = min(cands)
@@ -157,25 +190,71 @@ class Board:
                      status=status if status is not None else Status.IDLE)
             self.slots[i] = s
             log.info("slot %d <- %s (%s)", i + 1, key, s.name)
-        if name:
+        sticky = s.source == "claude"  # a session stays its project after `cd packages/ui`
+        if name and not sticky:
             s.name = clean(name, 40)
         if status is not None and status != s.status:
             s.status = Status(status)
             s.since = now
         if detail is not None:
             s.detail = clean(detail)
-        if cwd:
+        if cwd and not (sticky and s.cwd):
             s.cwd = cwd
         if log_path:
             s.log_path = log_path
         if terminal:
             s.terminal.update({k: v for k, v in terminal.items() if v})
+            self._drop_same_tty(i, s, now)
         if tool is not None:
             s.tool = clean(tool)
         s.updated = now
         return i
 
+    def _drop_same_tty(self, index: int, s: Slot, now: float) -> None:
+        """One tty runs one Claude session, so an older slot on it is dead. Left in place it
+        could pass the tty check and have Approve answer the wrong session."""
+        tty = s.terminal.get("tty")
+        if not tty or s.source != "claude":
+            return
+        for j, other in enumerate(self.slots):
+            if j != index and other and other.source == "claude" and other.terminal.get("tty") == tty:
+                log.info("slot %d freed: %s took over %s", j + 1, s.key, tty)
+                self.slots[j] = None
+
+    # ------------------------------------------------------------------ prompts
+    def answer(self, index: int, now: float, *, status: Status, detail: str,
+               all_prompts: bool = False) -> None:
+        """A keystroke was sent for this slot. No hook fires at that moment, so close the
+        prompt here. That also makes Approve one-shot."""
+        s = self.slots[index]
+        if s is None:
+            return
+        if all_prompts:
+            s.pending.clear()
+        elif s.pending:
+            s.pending.pop(0)
+        s.answered = now
+        s.updated = now
+        if s.pending:
+            s.detail = s.pending[0].text
+            return
+        if s.status != status:
+            s.status = status
+            s.since = now
+        s.detail = clean(detail)
+
+    def _close_prompt(self, s: Slot, resolve: dict, now: float) -> bool:
+        tool, agent = resolve.get("tool") or "", resolve.get("agent") or ""
+        for p in s.pending:
+            # A prompt raised by a Notification may know neither, so any finished tool closes it.
+            if (not p.tool or p.tool == clean(tool)) and (p.agent is None or p.agent == agent):
+                s.pending.remove(p)
+                s.answered = now
+                return True
+        return False
+
     def free(self, key: str) -> bool:
+        self.overflow.pop(key, None)
         i = self.find(key)
         if i is None:
             return False
@@ -191,13 +270,25 @@ class Board:
 
     def expire(self, now: float) -> bool:
         changed = False
+        for key, seen in list(self.overflow.items()):
+            if not 0 <= now - seen < OVERFLOW_TTL:
+                del self.overflow[key]
+                changed = True
         for i, s in enumerate(self.slots):
             if s is None:
                 continue
+            s.since, s.updated = min(s.since, now), min(s.updated, now)  # clock stepped back
             limit = {Status.DONE: self.linger_done, Status.ERROR: self.linger_error}.get(s.status)
-            if limit is not None and now - s.since >= limit:
+            quiet = now - s.updated
+            if (limit is not None and now - s.since >= limit) or quiet >= self.dead_after:
                 log.info("slot %d expired (%s %s)", i + 1, s.key, s.status.name.lower())
                 self.slots[i] = None
+                changed = True
+            elif s.source == "claude" and s.status == Status.RUN and quiet >= self.quiet_run:
+                log.info("slot %d went quiet (%s)", i + 1, s.key)
+                s.status = Status.IDLE
+                s.since = now
+                s.detail = f"quiet {ago(quiet)}"
                 changed = True
         return changed
 
@@ -205,10 +296,10 @@ class Board:
         self.selected = int(index) % NUM_SLOTS
 
     def flash(self, text: str, now: float, seconds: float = FLASH_SECONDS) -> None:
-        self._flash = (clean(text), now + seconds)
+        self._flash = (clean(text), now, seconds)
 
     def flash_active(self, now: float) -> bool:
-        return self._flash is not None and now < self._flash[1]
+        return self._flash is not None and 0 <= now - self._flash[1] < self._flash[2]
 
     # ------------------------------------------------------------------ apply IPC messages
     def apply(self, msg: dict, now: float) -> bool:
@@ -216,27 +307,7 @@ class Board:
         Returns True if anything visible may have changed."""
         op = msg.get("op")
         if op == "update":
-            key = msg.get("key")
-            if not key:
-                return False
-            status = msg.get("status")
-            st = Status.parse(status) if status is not None else None
-            detail = msg.get("detail")
-            i = self.find(key)
-            prev = self.slots[i] if i is not None else None
-            if st == Status.NEEDS and detail is None:
-                hint = msg.get("tool_hint")
-                if prev and prev.tool and (not hint or prev.tool.startswith(hint)):
-                    detail = prev.tool + "?"
-                else:
-                    detail = (hint or "permission") + "?"
-            if msg.get("register_only") and i is None and st is None:
-                st = Status.IDLE
-            return self.update(
-                key, msg.get("source", "ctl"), now, name=msg.get("name"), status=st,
-                detail=detail, cwd=msg.get("cwd"), log_path=msg.get("log"),
-                terminal=msg.get("terminal"), tool=msg.get("tool"), slot=msg.get("slot"),
-            ) is not None
+            return self._apply_update(msg, now)
         if op == "free":
             return self.free(str(msg.get("key")))
         if op == "set_slot":
@@ -252,6 +323,73 @@ class Board:
             self.select(int(msg["slot"]))
             return True
         return False
+
+    def _apply_update(self, msg: dict, now: float) -> bool:
+        key = msg.get("key")
+        terminal = msg.get("terminal")
+        if not key or not isinstance(key, str):
+            return False
+        # Check everything first: a bad message must not leave half a slot behind.
+        if terminal is not None and not isinstance(terminal, dict):
+            raise ValueError("terminal must be an object")
+        status = msg.get("status")
+        st = Status.parse(status) if status is not None else None
+        detail = msg.get("detail")
+        i = self.find(key)
+        prev = self.slots[i] if i is not None else None
+        source = prev.source if prev else msg.get("source", "ctl")
+        prompt = None
+        if source == "claude":
+            if prev and msg.get("clears"):
+                prev.pending.clear()
+            resolve = msg.get("resolve")
+            closed = bool(prev and isinstance(resolve, dict) and self._close_prompt(prev, resolve, now))
+            if st == Status.NEEDS:
+                if msg.get("notification") and prev:
+                    # A Notification names no tool, so it adds nothing to an open prompt,
+                    # and one arriving just after an answer is about the closed dialog.
+                    if prev.pending or now - prev.answered < ANSWER_GRACE:
+                        prev.updated = now
+                        return False
+                if detail is None:
+                    hint = msg.get("tool_hint")
+                    if prev and prev.tool and (not hint or prev.tool.startswith(hint)):
+                        detail = prev.tool + "?"
+                    else:
+                        detail = (hint or "permission") + "?"
+                tool = clean(msg.get("tool"))
+                agent = msg.get("agent") or ""
+                if msg.get("notification"):
+                    agent = None
+                    hint = msg.get("tool_hint")
+                    if prev and prev.tool and hint and prev.tool.startswith(hint):
+                        tool = prev.tool
+                prompt = Prompt(clean(detail), tool, agent, msg.get("kind") or "permission")
+            elif prev and prev.pending:
+                # Something else in this session moved on; the open prompt is still open.
+                st, detail = None, None
+            elif closed:
+                detail = msg.get("detail", prev.tool or "working")
+        if msg.get("register_only") and i is None and st is None:
+            st = Status.IDLE
+        i = self.update(
+            key, msg.get("source", "ctl"), now, name=msg.get("name"), status=st,
+            detail=detail, cwd=msg.get("cwd"), log_path=msg.get("log"),
+            terminal=terminal, tool=msg.get("tool"), slot=msg.get("slot"),
+        )
+        if i is None:
+            if st == Status.NEEDS:
+                self.overflow[key] = now
+            return False
+        self.overflow.pop(key, None)
+        s = self.slots[i]
+        if prompt is not None and not (prompt.kind == "question" and any(
+                p.kind == "question" and p.tool == prompt.tool and p.agent == prompt.agent
+                for p in s.pending)):
+            s.pending = (s.pending + [prompt])[-MAX_PENDING:]
+        if s.pending:
+            s.detail = s.pending[0].text  # the oldest prompt is the dialog on screen
+        return True
 
     # ------------------------------------------------------------------ rendering
     def oled_lines(self, now: float) -> tuple[str, str]:
@@ -286,7 +424,7 @@ class Board:
         sts = {s.status for s in self.slots if s is not None}
         if Status.ERROR in sts:
             return (*STATUS_RGB[Status.ERROR], 160)
-        if Status.NEEDS in sts:
+        if Status.NEEDS in sts or self.overflow:
             return (*STATUS_RGB[Status.NEEDS], 160)
         if Status.RUN in sts:
             return (*ICE_BLUE, 110)

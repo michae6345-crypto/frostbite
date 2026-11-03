@@ -4,15 +4,17 @@ Reads the hook JSON on stdin, maps it to a slot update, sends it over the local 
 It never blocks or fails the hook: hard 2 s deadline, 0.2 s socket timeout, prints
 nothing on stdout (UserPromptSubmit stdout would be added to Claude's context), exit 0.
 
-Mapping (hook_event_name -> slot status):
+Mapping (hook_event_name -> slot status). `needs` is tracked per prompt in the daemon, so
+events from sibling tools and subagents do not clear a prompt that is still open:
   SessionStart           register the session (idle if new)
-  UserPromptSubmit       run   (detail: the prompt)
-  PreToolUse             run   (detail: "Bash(npm test)")
+  UserPromptSubmit       run, closes any open prompt (detail: the prompt)
+  PreToolUse             run (detail: "Bash(npm test)"); AskUserQuestion / ExitPlanMode: needs
   PermissionRequest      needs (detail: "Bash(npm test)?")
-  PostToolUse(+Failure)  run   (clears needs after you approve)
+  PostToolUse(+Failure)  run, closes the prompt for that tool; an interrupted tool: done
   Notification           needs for permission prompts / questions; done for "waiting for input"
-  PreCompact             run   (detail: compacting)
-  Stop                   done
+  PreCompact             run (detail: compacting)
+  Stop                   done, closes open prompts
+  StopFailure            error (API error ended the turn), closes open prompts
   SubagentStop           ignored (folded into the parent session)
   SessionEnd             free the slot
 """
@@ -26,7 +28,10 @@ import select
 import sys
 from urllib.parse import urlparse
 
-MAX_STDIN = 1024 * 1024
+MAX_STDIN = 16 * 1024 * 1024  # PostToolUse carries tool output; dropping it leaves a prompt open
+
+# Their dialogs have several options, so a blind Return would pick one unseen.
+QUESTION_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 
 TERM_PROGRAM_BUNDLES = {
     "apple_terminal": "com.apple.Terminal",
@@ -119,7 +124,7 @@ def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
     if not event or not sid:
         return None
     cwd = _s(payload.get("cwd")) or env.get("CLAUDE_PROJECT_DIR", "")
-    name = os.path.basename(cwd.rstrip("/")) if cwd else "claude"
+    name = os.path.basename(cwd.rstrip("/")) or "claude"
     base = {
         "op": "update", "source": "claude", "key": f"claude:{sid}", "name": name,
         "cwd": cwd or None, "log": _s(payload.get("transcript_path")) or None,
@@ -131,20 +136,29 @@ def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
         m.update(kw)
         return {k: v for k, v in m.items() if v is not None}
 
-    tool = describe_tool(payload.get("tool_name"), payload.get("tool_input"))
+    tool_name = _s(payload.get("tool_name"))
+    tool = describe_tool(tool_name, payload.get("tool_input"))
+    agent = _s(payload.get("agent_id")) or None
+    question = "question" if tool_name in QUESTION_TOOLS else None
 
     if event == "SessionStart":
         return msg(register_only=True, terminal=terminal_info(env, want_tty=True))
     if event == "UserPromptSubmit":
         prompt = _one_line(_s(payload.get("prompt")), 80)
-        return msg(status="run", detail=("> " + prompt) if prompt else "working",
+        return msg(status="run", detail=("> " + prompt) if prompt else "working", clears=True,
                    terminal=terminal_info(env, want_tty=True))
     if event == "PreToolUse":
-        return msg(status="run", detail=tool or "working", tool=tool or None)
+        if question:
+            return msg(status="needs", detail="question?", tool=tool, agent=agent, kind=question,
+                       terminal=terminal_info(env, want_tty=True))
+        return msg(status="run", detail=tool or "working", tool=tool or None, agent=agent)
     if event == "PermissionRequest":
-        return msg(status="needs", detail=(tool + "?") if tool else None, tool=tool or None)
+        return msg(status="needs", detail=(tool + "?") if tool else None, tool=tool or None,
+                   agent=agent, kind=question, terminal=terminal_info(env, want_tty=True))
     if event in ("PostToolUse", "PostToolUseFailure"):
-        return msg(status="run")
+        if payload.get("is_interrupt") is True:  # Stop does not fire after an interrupt
+            return msg(status="done", detail="interrupted", clears=True)
+        return msg(status="run", resolve={"tool": tool, "agent": agent})
     if event == "PreCompact":
         return msg(status="run", detail="compacting")
     if event == "Notification":
@@ -152,16 +166,21 @@ def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
         text = _s(payload.get("message"))
         if ntype == "permission_prompt" or (not ntype and PERMISSION_RE.search(text)):
             m = TOOL_IN_MSG_RE.search(text)
-            return msg(status="needs", tool_hint=m.group(1) if m else None)
-        if ntype == "elicitation_dialog":
-            return msg(status="needs", detail=_one_line(text, 80) or "question?")
+            return msg(status="needs", tool_hint=m.group(1) if m else None, notification=True,
+                       terminal=terminal_info(env, want_tty=True))
+        if ntype in ("elicitation_dialog", "elicitation_url_dialog", "agent_needs_input"):
+            return msg(status="needs", detail=_one_line(text, 80) or "question?", kind="question",
+                       notification=True, terminal=terminal_info(env, want_tty=True))
         if ntype == "idle_prompt" or (not ntype and IDLE_RE.search(text)):
             return msg(status="done", detail="waiting for input")
         return None
     if event == "Stop":
         last = _s(payload.get("last_assistant_message"))
         first = next((ln for ln in last.splitlines() if ln.strip()), "")
-        return msg(status="done", detail=_one_line(first, 80) or "finished")
+        return msg(status="done", detail=_one_line(first, 80) or "finished", clears=True)
+    if event == "StopFailure":
+        reason = _s(payload.get("error")) or _s(payload.get("error_details")) or "API error"
+        return msg(status="error", detail=_one_line(reason, 80), clears=True)
     if event == "SessionEnd":
         return {"op": "free", "key": base["key"]}
     # SubagentStop and anything unknown: no change.
@@ -201,10 +220,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def entry() -> None:  # pragma: no cover
-    main()
-    os._exit(0)
-
-
 if __name__ == "__main__":  # pragma: no cover
-    entry()
+    sys.exit(main())

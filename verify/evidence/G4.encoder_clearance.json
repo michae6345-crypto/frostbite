@@ -1,0 +1,61 @@
+{
+  "check": "G4.encoder_clearance",
+  "gate": "G4",
+  "title": "Top clears the real EC11 body and bushing along the PCB's path, any opening shape",
+  "status": "PASS",
+  "fail_reasons": [],
+  "not_run_reason": null,
+  "notes": [],
+  "commands": [],
+  "inputs_sha256": {
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca",
+    "CAD/positions.json": "af7c29806eeb337b92787e52c5ca036fed24b850ae3f3bfc01c4ab0d0c9cd9d7"
+  },
+  "details": {
+    "registration": {
+      "plate_normal": [
+        0.0,
+        -0.0,
+        -1.0
+      ],
+      "outline_mm": [
+        79.15,
+        97.15
+      ],
+      "rotation_sign": 1,
+      "feature_points_open_at_plate_top": "11/11",
+      "levels_h": [
+        0.0,
+        0.5,
+        1.0,
+        1.3,
+        1.5,
+        2.5,
+        3.2,
+        5.0,
+        5.43,
+        6.6,
+        12.0,
+        13.23,
+        16.0
+      ],
+      "section_volume_mm3": 43282.7,
+      "mesh_volume_mm3": 43282.7
+    },
+    "body_gap_mm": 0.49,
+    "bushing_gap_mm": 2.99,
+    "measured_opening": {
+      "bounds": [
+        42.66,
+        5.0,
+        55.64,
+        21.0
+      ],
+      "w": 12.98,
+      "h": 16.0
+    }
+  },
+  "timestamp": "2026-11-03T22:16:37+00:00",
+  "duration_s": 0.0
+}

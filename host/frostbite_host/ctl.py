@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import sys
 
@@ -23,12 +24,14 @@ from . import ipc
 from .device import NUM_SLOTS, Status
 
 HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
-               "PostToolUse", "Notification", "PreCompact", "Stop", "SessionEnd"]
-TOOL_EVENTS = {"PreToolUse", "PermissionRequest", "PostToolUse"}
+               "PostToolUse", "PostToolUseFailure", "Notification", "PreCompact", "Stop",
+               "StopFailure", "SessionEnd"]
+TOOL_EVENTS = {"PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure"}
 
 
 def hooks_snippet(hook_path: str) -> dict:
-    entry = {"type": "command", "command": hook_path, "timeout": 5}
+    # Claude Code runs this through a shell, so a path with spaces has to be quoted.
+    entry = {"type": "command", "command": shlex.quote(hook_path), "timeout": 5}
     hooks = {}
     for ev in HOOK_EVENTS:
         group: dict = {"hooks": [dict(entry)]}

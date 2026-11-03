@@ -7,6 +7,9 @@
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.frostbite.daemon.plist
   Stop / remove:
     launchctl bootout gui/$(id -u)/com.frostbite.daemon
+  To watch a training run from boot, add these as array items under ProgramArguments:
+    the option watch-train with two leading hyphens, the log path, the option name with
+    two leading hyphens, the run name. (XML comments may not contain a double hyphen.)
 -->
 <plist version="1.0">
 <dict>
@@ -16,12 +19,6 @@
   <key>ProgramArguments</key>
   <array>
     <string>/Users/YOUR_USER/.local/bin/frostbite-daemon</string>
-    <!-- Optional: watch a training run from boot
-    <string>--watch-train</string>
-    <string>/Users/YOUR_USER/code/my-model/runs/latest/train.log</string>
-    <string>--name</string>
-    <string>my-model</string>
-    -->
   </array>
 
   <key>RunAtLoad</key>

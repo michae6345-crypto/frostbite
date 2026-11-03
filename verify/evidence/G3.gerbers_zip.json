@@ -8,8 +8,8 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "18a7aac65694fcbfd7a81fc18e887dd2685a7d220b96be489ad8a8f8a7cd0db6",
-    "production/gerbers.zip": "6d1c8053bf24313027784e0376a7b05394db1f0571ec5fdda55ceca5d23b7f02"
+    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "production/gerbers.zip": "dfeb9ce92a876ea1c5764342da446d0782858d279ba35e1ba50849f2acc0a99d"
   },
   "details": {
     "gerbonara_warnings": [
@@ -17,15 +17,15 @@
       "frostbite-PTH.drl:22 \"G90\": G90 header statement found after end of header"
     ],
     "layers_found": {
-      "top copper": "frostbite-F_Cu.gbr",
-      "top mask": "frostbite-F_Mask.gbr",
-      "top silk": "frostbite-F_Silkscreen.gbr",
-      "top paste": "frostbite-F_Paste.gbr",
-      "bottom copper": "frostbite-B_Cu.gbr",
-      "bottom mask": "frostbite-B_Mask.gbr",
-      "bottom silk": "frostbite-B_Silkscreen.gbr",
-      "bottom paste": "frostbite-B_Paste.gbr",
-      "mechanical outline": "frostbite-Edge_Cuts.gbr"
+      "top copper": "frostbite-F_Cu.gtl",
+      "top mask": "frostbite-F_Mask.gts",
+      "top silk": "frostbite-F_Silkscreen.gto",
+      "top paste": "frostbite-F_Paste.gtp",
+      "bottom copper": "frostbite-B_Cu.gbl",
+      "bottom mask": "frostbite-B_Mask.gbs",
+      "bottom silk": "frostbite-B_Silkscreen.gbo",
+      "bottom paste": "frostbite-B_Paste.gbp",
+      "mechanical outline": "frostbite-Edge_Cuts.gm1"
     },
     "drill_files": 4,
     "outline_mm": {
@@ -34,6 +34,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-03T20:22:07+00:00",
-  "duration_s": 0.06
+  "timestamp": "2026-11-03T22:16:13+00:00",
+  "duration_s": 0.08
 }

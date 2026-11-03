@@ -36,7 +36,6 @@
     },
     "rgb_matrix": {
         "driver": "ws2812",
-        "max_brightness": 200,
         "sleep": true,
         "default": {
             "animation": "solid_color",

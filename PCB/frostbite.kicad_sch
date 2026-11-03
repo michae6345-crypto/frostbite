@@ -3141,7 +3141,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm_CircularMountingHoles"
+		(property "Footprint" "frostbite:EC11E-Switch_Vertical_H20mm_Slot3.4x1.5"
 			(at 116.84 101.6 0)
 			(effects
 				(font

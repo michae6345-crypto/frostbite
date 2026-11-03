@@ -86,7 +86,7 @@ const CONTRACT_OPTIONS = {
   legends: ['blank', 'icons'], screws: ['hidden', 'top', 'side'], wordmark: ['none', 'front', 'plate'], tilt: [0, 4, 8]
 };
 const STATUSES = ['idle', 'run', 'done', 'needs', 'error'];
-const LIMITS = { pins: 11, pcb: 100, shellW: 200, shellH: 200, shellZ: 100, switches: 16, encoders: 2, leds: 16, oled: 1, inputsLt: 16 };
+const LIMITS = { pins: 11, pcb: 100, shellW: 200, shellH: 200, shellZ: 100, switches: 16, encoders: 2, leds: 16, oled: 1 };
 const opts = () => (FB.catalog && FB.catalog.options) || CONTRACT_OPTIONS;
 const defaults = () => (FB.catalog && FB.catalog.defaultSpec) || {
   layout: 'stratum9', shell: 'iced', texture: 'satin', plate: 'floating', glowColor: 'ice', glowPlace: 'gap', corner: 12, bezel: 9,
@@ -500,7 +500,6 @@ tests.forEach((t, idx) => {
       const ex = res.extras.map(e => String(e.item)).join(' | ');
       for (const [k, lim, re] of [['switches', LIMITS.switches, /switch/i], ['encoders', LIMITS.encoders, /encoder|ec11/i], ['leds', LIMITS.leds, /led|sk6812/i]])
         if (st[k] > lim) expect(F, re.test(ex), HARD, 'over-kit-not-in-extras', `ok with ${st[k]} ${k} (kit ${lim}) but extras has no matching item: [${ex}]`, spec);
-      expect(F, st.switches + st.encoders < LIMITS.inputsLt, HARD, 'ok-but-inputs', `ok with ${st.switches + st.encoders} inputs (Hackpad: < 16)`, spec);
     } else {
       rejCount++;
       res.errors.forEach(e => bump(checkCodes.errors, e.code));

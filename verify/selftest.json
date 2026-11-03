@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-03T20:17:29+00:00",
+  "timestamp": "2026-11-03T22:17:51+00:00",
   "status": "PASS",
   "cases": [
     {
@@ -161,39 +161,6 @@
       "ok": true
     },
     {
-      "case": "stl: one cutout 14.3 mm",
-      "check": "G4.switch_cutouts",
-      "clean_status": "PASS",
-      "clean_reasons": [],
-      "fault_status": "FAIL",
-      "fault_reasons": [
-        "cutout 4 at (37.58, -37.58) measures 14.300 x 14.300, want 14.0 +/-0.1"
-      ],
-      "ok": true
-    },
-    {
-      "case": "stl: one cutout moved 0.5 mm",
-      "check": "G4.switch_cutouts",
-      "clean_status": "PASS",
-      "clean_reasons": [],
-      "fault_status": "FAIL",
-      "fault_reasons": [
-        "cutout centre pattern deviates 0.500 mm from design key pattern (tol 0.1)"
-      ],
-      "ok": true
-    },
-    {
-      "case": "stl: encoder hole 1 mm off",
-      "check": "X.cross_positions",
-      "clean_status": "PASS",
-      "clean_reasons": [],
-      "fault_status": "FAIL",
-      "fault_reasons": [
-        "Top STL: encoder opening is 0.880 mm off the design pattern relative to the keys (tol 0.1)"
-      ],
-      "ok": true
-    },
-    {
       "case": "CAD positions: SW7 moved 0.4 mm",
       "check": "X.cross_positions",
       "clean_status": "PASS",
@@ -222,9 +189,11 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
-        "[design.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
-        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (57.435, 80.125), (64.15, 9.0)] (tol 0.1)"
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -4.350 mm from LED12 pad 4 [57.250,79.500 - 58.250,80.300] (min 0.5)",
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -3.575 mm from LED12 pad 3 [57.250,80.900 - 58.250,81.700] (min 0.5)",
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.965 mm from LED12 pad 1 [54.050,79.500 - 55.050,80.300] (min 0.5)",
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.842 mm from LED12 pad 2 [54.050,80.900 - 55.050,81.700] (min 0.5)",
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)"
       ],
       "ok": true
     },
@@ -235,9 +204,11 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
-        "[CAD/positions.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
-        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (57.435, 80.125), (64.15, 9.0)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] (tol 0.1)"
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -4.350 mm from LED12 pad 4 [57.250,79.500 - 58.250,80.300] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -3.575 mm from LED12 pad 3 [57.250,80.900 - 58.250,81.700] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.965 mm from LED12 pad 1 [54.050,79.500 - 55.050,80.300] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.842 mm from LED12 pad 2 [54.050,80.900 - 55.050,81.700] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)"
       ],
       "ok": true
     },
@@ -248,8 +219,8 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[design.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [1.500,8.500 - 2.500,9.500] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [1.500,8.500 - 2.500,9.500] (min 0.5)"
+        "[design.json vs PCB/build/bottom_pads.json] boss 0 at (-4.65, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [-0.150,8.500 - 0.850,9.500] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 0 at (-4.65, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [-0.150,8.500 - 0.850,9.500] (min 0.5)"
       ],
       "ok": true
     },
@@ -262,7 +233,287 @@
       "fault_reasons": [
         "[design.json vs PCB/build/bottom_pads.json] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
         "[design.json vs parsed .kicad_pcb] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
-        "CAD/positions.json: screws [(-3.0, 9.0), (-3.0, 62.1), (64.15, 9.0), (64.15, 62.1)] != design.json case.screws [(-3.0, 9.0), (-3.0, 62.1), (63.15, 67.815), (64.15, 9.0)] (tol 0.1)"
+        "CAD/positions.json: screws [(-4.65, 9.0), (-4.65, 62.1), (65.8, 9.0), (65.8, 62.1)] != design.json case.screws [(-4.65, 9.0), (-4.65, 62.1), (63.15, 67.815), (65.8, 9.0)] (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: older than design.json",
+      "check": "G4.stl_mesh",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top.stl is older than design.json: rebuild the case"
+      ],
+      "ok": true
+    },
+    {
+      "case": "top: one cutout 14.3 mm",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "SW5: narrowest opening 14.300 x 14.300, want 14.0 +/-0.1",
+        "SW5: clips engage 0.00 mm of plate, want 1.5 +/-0.15"
+      ],
+      "ok": true
+    },
+    {
+      "case": "top: one cutout moved 0.5 mm",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "SW5: opening centre (31.075, 52.575), design (30.575, 52.575) tol 0.1",
+        "SW5: a 13.8 mm switch housing hits the Top at depth [0.0, 0.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "top 13 mm tall: heights come from the part",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "SW1: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
+        "SW1: a 13.8 mm switch housing hits the Top at depth [0.0, 0.5] mm",
+        "SW2: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
+        "SW2: a 13.8 mm switch housing hits the Top at depth [1.3, 1.5] mm",
+        "SW3: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1"
+      ],
+      "ok": true
+    },
+    {
+      "case": "top: walls missing, slicer must not guess",
+      "check": "G4.switch_cutouts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top.stl outline 120.59 x 111.22 != design.json case.shell 79.15 x 97.15 (tol 0.2)",
+        "cross-sections integrate to 168.4 mm3, mesh volume is -233.8: the slicer lost material, no measurement here can be trusted",
+        "SW1: narrowest opening 120.000 x 120.000, want 14.0 +/-0.1",
+        "SW1: clips engage 0.00 mm of plate, want 1.5 +/-0.15",
+        "SW2: narrowest opening 120.000 x 120.000, want 14.0 +/-0.1"
+      ],
+      "ok": true
+    },
+    {
+      "case": "encoder: round 17.4 clears, 15.0 hits the body",
+      "check": "G4.encoder_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "EC11 body gap -4.076 mm at depth [0.5, 1.0] mm, want >= 0.2"
+      ],
+      "ok": true
+    },
+    {
+      "case": "encoder: 12.98 x 16 clears, 11.9 x 16 does not",
+      "check": "G4.encoder_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "EC11 body gap -1.200 mm at depth [0.5, 1.0] mm, want >= 0.2"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled: window smaller than the glass",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLED glass gap -11.500 mm at depth [0.0, 0.5] mm, want >= 0.1"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled: positions.json states the design window, not the cut",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "CAD/positions.json: oled_window cut {'x': 6.0, 'y': 7.25, 'w': 30.0, 'h': 11.5} != measured {'x': 5.7, 'y': 6.95, 'w': 30.6, 'h': 12.1}"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb insertion: bosses at old x -3.0 / 64.15",
+      "check": "X.pcb_insertion",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB cannot reach its seat: 344.99 mm3 of Top inside the 61.75 x 83.75 envelope on the way in; worst 31.36 mm2 at depth [5.0, 5.43] mm, bounds [-0.3, -0.3, 61.45, 83.45]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb insertion: the real audited B1 Top",
+      "check": "X.pcb_insertion",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB cannot reach its seat: 265.87 mm3 of Top inside the 61.75 x 83.75 envelope on the way in; worst 31.26 mm2 at depth [8.542, 12.0] mm, bounds [-0.3, -0.3, 61.45, 83.45]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: insert hole 0.5 mm off",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: insert hole 0 at (-4.150, 9.000), design (-4.65, 9.0)",
+        "Top STL: insert hole 1 at (66.300, 9.000), design (65.8, 9.0)",
+        "Top STL: insert hole 2 at (-4.150, 62.100), design (-4.65, 62.1)",
+        "Top STL: insert hole 3 at (66.300, 62.100), design (65.8, 62.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: USB opening 13.0 < 13.5 mm",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: USB opening 13.000 mm wide through the wall, design.json needs 13.5"
+      ],
+      "ok": true
+    },
+    {
+      "case": "usb: host VID/PID filter removed",
+      "check": "X.usb_ids",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "host opened ['keychron'] in scene 'other QMK board with the same Raw HID usage, listed first, plus the pad', must open ['frostbite-raw']",
+        "host opened ['keychron'] in scene 'only another QMK board', must open []",
+        "host opened ['sibling'] in scene 'same VID, other PID', must open []",
+        "host opened ['cousin'] in scene 'same PID, other VID', must open []"
+      ],
+      "ok": true
+    },
+    {
+      "case": "usb: keyboard.json PID differs",
+      "check": "X.usb_ids",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "keyboard.json usb 0xfeed:0x4643 != design.json firmware.usb 0xfeed:0x4642"
+      ],
+      "ok": true
+    },
+    {
+      "case": "usb: design.json PID differs",
+      "check": "X.usb_ids",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "keyboard.json usb 0xfeed:0x4642 != design.json firmware.usb 0xfeed:0x4643",
+        "host VENDOR_ID/PRODUCT_ID (65261, 17986) != design.json (65261, 17987)",
+        "host opened [] in scene 'other QMK board with the same Raw HID usage, listed first, plus the pad', must open ['frostbite-raw']"
+      ],
+      "ok": true
+    },
+    {
+      "case": "gnd: one pad set to full",
+      "check": "G3.gnd_thermal",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED1 pad 3: zone_connect 2 override (2 = solid), must inherit thermal"
+      ],
+      "ok": true
+    },
+    {
+      "case": "gnd: zone set to solid",
+      "check": "G3.gnd_thermal",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "GND zone on ['B.Cu']: pad connection is 'yes', must be thermal relief"
+      ],
+      "ok": true
+    },
+    {
+      "case": "gnd: pour floods the pads",
+      "check": "G3.gnd_thermal",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED1 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
+        "LED2 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
+        "LED3 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
+        "LED4 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
+        "LED5 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "gnd: real U1 pad 13 set to full",
+      "check": "G3.gnd_thermal",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "U1 pad 13: zone_connect 2 override (2 = solid), must inherit thermal"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: F1 blanking line back in keymap.c",
+      "check": "G6.oled_strip_panel",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "missing from harness output: 'PASS F1 idle screen: 0 I2C bytes in 1000 loops'",
+        "missing from harness output: 'PASS F1 HID: slot strip and HID reach the panel'",
+        "panel differs from the frame buffer: page3 buffer |1R 2? 3D 4! 5- 6R HID| panel |1- 2- 3- 4- 5- 6- KBD| bytes differing=40 never-written=0"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: harness fails with F1 back",
+      "check": "G6.firmware_harness",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness exited 1; FAIL F1 idle i2c 42000",
+        "FAIL F1 idle i2c 42000",
+        "FAIL F1 HID diff=40 |1- 2- 3- 4- 5- 6- KBD|",
+        "FAIL F3 strip |1- 2- 3- 4- 5- 6- KBD|"
+      ],
+      "ok": true
+    },
+    {
+      "case": "host: a failing test in host/tests",
+      "check": "G7.host_tests",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "pytest exited 1"
       ],
       "ok": true
     },
@@ -328,11 +579,41 @@
       "ok": true
     },
     {
+      "assert": "REPORT lists 'OLED flip' under Needs real parts",
+      "got": true,
+      "ok": true
+    },
+    {
+      "assert": "REPORT lists 'EC11 resolution' under Needs real parts",
+      "got": true,
+      "ok": true
+    },
+    {
+      "assert": "REPORT lists 'Glow brightness' under Needs real parts",
+      "got": true,
+      "ok": true
+    },
+    {
+      "assert": "REPORT lists 'LED data level' under Needs real parts",
+      "got": true,
+      "ok": true
+    },
+    {
+      "assert": "REPORT lists 'OLED flex clearance' under Needs real parts",
+      "got": true,
+      "ok": true
+    },
+    {
+      "assert": "exactly the 5 agreed Needs real parts items",
+      "got": 5,
+      "ok": true
+    },
+    {
       "assert": "pinned JLCPCB rules file matches its SHA-256",
       "got": true,
       "ok": true
     }
   ],
   "skipped": [],
-  "tmp": "/var/folders/2g/b60087014tq94njh6r4zdmhm0000gn/T/fbverify-selftest-xxqrm084"
+  "tmp": "/var/folders/2g/b60087014tq94njh6r4zdmhm0000gn/T/fbverify-selftest-erncqqzn"
 }
