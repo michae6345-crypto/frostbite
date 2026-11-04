@@ -1,0 +1,58 @@
+== long tool call and the 1 h rule
+after 1 h 1 s in one tool call: IDLE 'quiet 1h00'
+pad Stop: 'nothing to stop' presses []
+6 busy, a NEW idle session arrives; slot 1 is now: claude:new | long-running session still shown: False
+its PostToolUse after eviction: slot 0
+== interrupt in the terminal: no hook, Stop does not fire
+59 min after a real Esc: RUN
+== background subagent tool after Stop
+slot after main Stop then a background agent's PreToolUse: RUN (no further Stop for the main turn)
+== NEEDS lifetime
+needs after 23.9 h with no event: NEEDS glow (255, 176, 32, 160)
+Approve on it: presses [36] status RUN 'approved'
+59 min later that false RUN is still: RUN
+== a second session on the tty frees the first, whatever it was doing
+slots: [('claude:child', 'IDLE')]
+== resume elsewhere with a failed tty lookup keeps the OLD tty
+terminal after resume with no tty: {'bundle': 'com.apple.Terminal', 'tty': '/dev/ttys001'}
+== stale training logs
+  done=False `Trainer.fit` stopped: `max_epochs=10` reached.
+  done=False Epoch 10/10 - loss: 0.01
+  done=False 100%|##########| 500/500 [10:00<00:00]
+  done=True  Training completed. Do not forget to share your model
+  done=False wandb: Run summary:
+  done=True  Training complete
+  done=False Saved model to out/final.pt
+finished run, fresh start: RUN
+after 10 min: NEEDS 'quiet 10m e1 s10 loss 0.5' glow (255, 176, 32, 160)
+Approve: 'nothing to approve'
+Stop: 'nothing to stop'
+23.5 h later: NEEDS
+24.5 h later: None glow (159, 216, 255, 50)
+daemon restart on a 30-day-old log: RUN 'e1 s10 loss 0.5'
+  10 min later: NEEDS
+== legitimately quiet stretch
+15 min eval pass, nothing logged: NEEDS 'quiet 10m s1 loss 0.5'
+lines resume: RUN
+== growing log with no metrics, 24 h rule
+hour 23, log still growing: RUN
+hour 24, log still growing: SLOT GONE
+hour 25, log still growing: SLOT GONE
+== ctl slot
+ctl run after 24 h: None
+== OLED text fits
+flash texts over 21: ['agent waiting, no slot']
+== hooks snippet
+examples == ctl output: True
+spaced path command: '/Users/a b/frostbite-hook'
+== frontmost() with the real lsappinfo (read-only)
+'com.apple.loginwindow'
+== sessions that can never be proved, and questions
+com.microsoft.VSCode       tty=/dev/ttys001   presses=[] oled='answer in terminal'
+com.mitchellh.ghostty      tty=/dev/ttys001   presses=[] oled='answer in terminal'
+com.github.wez.wezterm     tty=/dev/ttys001   presses=[] oled='answer in terminal'
+(none)                     tty=/dev/ttys001   presses=[] oled='answer in terminal'
+com.apple.Terminal         tty=(none)         presses=[] oled='answer in terminal'
+com.apple.Terminal         tty=ttys001        presses=[] oled='answer in terminal'
+com.apple.Terminal         tty=/dev/console   presses=[] oled='answer in terminal'
+question dialog: presses [] 'answer in terminal'
