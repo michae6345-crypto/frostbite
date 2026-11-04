@@ -1,5 +1,5 @@
-"""Volumes of each production STEP and of the same part rebuilt from the current CAD source and design.json.
-Writes nothing. Run with CAD/.venv's python: probe_step.py <project root> <file.step> ..."""
+"""Print the volume of each production STEP and of the same part rebuilt from CAD source. Writes nothing.
+Run with CAD/.venv's python: probe_step.py <project root> <file.step> ..."""
 import json
 import sys
 from pathlib import Path

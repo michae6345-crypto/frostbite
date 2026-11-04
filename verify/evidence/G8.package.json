@@ -10,28 +10,24 @@
   "inputs_sha256": {
     "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906",
     "production/firmware.uf2": "046855ee04f45ef8adce095890e9fcd61bb5b6d5c49badc2046ca2d0e2eba76e",
-    "CAD/frostbite-assembly.step": "c56660b9af632786893e2717f7d6b4e907ee3208be6eb9b86763c8fb1829a38e",
+    "CAD/frostbite-assembly.step": "59075b8c79fe791f7156f3effec906c3416d0d50787d4b5fcc3b196fa7c790a8",
     "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
     "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
-    "production/OLEDSupport.step": "0c170fb7dbafaa5908d0d60b16c0e0032db21cbc68531116b684715289da2bf1",
-    "production/GlowBand.step": "ea6fe4dec50fbd4eddbc23eb7f3e9383975dcb4aae79b130c460c00db3931605",
-    "production/Top.step": "2a98cf93bdb7a78ce385acb3ee8c687c7f543a655b2b9e5ea3afd2bd0f39e3d3",
-    "production/Bottom.step": "e97d0f6432a801002b66769039a27d9cb8efbd7d2487f1d581a74304a955bd39",
+    "production/OLEDSupport.step": "dbd31eee41cc6043ac5e7c5c5dc873df4cd837abacde58c2b401c22db4526e97",
+    "production/GlowBand.step": "5137d655d087c73b5f877fe94c1990bd4c5ff6e9a1023396c0d39287ea99d2de",
+    "production/Top.step": "b1e4247318cc0c203b3e59eadaf4b399a15319b81bf79f4b0991f864ae14abc8",
+    "production/Bottom.step": "bd120fd3729495f5f8f9ea0dfc259bd18f6a7c4866c2eff07d449d0414aa0f43",
     "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
     "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
     "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e",
-    "production/Knob.step": "4860b8273eaeaad75db35a2b69c292cfb24d7e07c1456c7d0d50e27ba1f32825",
-    "README.md": "6d591a7b96ea5631fa5c9b47382beb94ebc5d55320e22209a5c2795a436f6437"
+    "production/Knob.step": "802e24c38cf3cee306a25c3bde4350e8a959dc71f9d3bbe5dae7238f3ea4cb0a",
+    "README.md": "f3274a9d7601e3c62491e228a2c38c8faee7359ea9d0913eb6548dc2061a8300"
   },
   "details": {
     "images": [
       {
         "alt": "",
-        "src": "docs/renders/10-frostbite-halo.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/status-cycle.gif"
+        "src": "docs/images/top.png"
       },
       {
         "alt": "",
@@ -39,19 +35,11 @@
       },
       {
         "alt": "",
+        "src": "docs/images/status-cycle.gif"
+      },
+      {
+        "alt": "",
         "src": "CAD/previews/exploded-iso.svg.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/top-dims.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/side.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/exploded.png"
       },
       {
         "alt": "",
@@ -64,21 +52,9 @@
       {
         "alt": "",
         "src": "PCB/images/pcb_render_bottom.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/pinout.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/studio.png"
-      },
-      {
-        "alt": "",
-        "src": "docs/images/presets-grid.png"
       }
     ]
   },
-  "timestamp": "2026-11-04T01:05:21+00:00",
+  "timestamp": "2026-11-04T04:20:27+00:00",
   "duration_s": 0.13
 }

@@ -24,6 +24,7 @@ import logging
 import queue
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Callable, Protocol
@@ -55,7 +56,7 @@ class Status(IntEnum):
     ERROR = 4
 
     @classmethod
-    def parse(cls, word: str) -> "Status":
+    def parse(cls, word: str) -> Status:
         w = str(word).strip().lower()
         aliases = {
             "idle": cls.IDLE, "run": cls.RUN, "running": cls.RUN, "working": cls.RUN,
@@ -87,8 +88,6 @@ KEY_APPROVE, KEY_TALK, KEY_STOP = 6, 7, 8
 TAP, HOLD = 1, 2
 CW, CCW = 1, 0xFF
 
-
-# --------------------------------------------------------------------------- messages
 
 @dataclass(frozen=True)
 class SetSlot:
@@ -156,8 +155,6 @@ HostMsg = SetSlot | SetAll | OledLine | SetGlow | Ping | SetSelected
 DeviceMsg = PingReply | KeyEvent | EncoderEvent | Unknown
 
 
-# --------------------------------------------------------------------------- encoding
-
 def _report(*payload: int) -> bytes:
     if len(payload) > REPORT_LEN:
         raise ValueError("report too long")
@@ -176,8 +173,6 @@ def _slot(slot: int) -> int:
 def to_ascii(text: str) -> str:
     """Printable ASCII only (0x20-0x7E): accents are stripped, whitespace controls become
     spaces, anything else becomes '?'. Spaces are preserved (layout padding)."""
-    import unicodedata
-
     subs = {"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-",
             "—": "-", "…": "...", "→": ">", "×": "x"}
     text = unicodedata.normalize("NFKD", "".join(subs.get(c, c) for c in str(text)))
@@ -214,7 +209,6 @@ def encode(msg: HostMsg) -> bytes:
 
 
 def encode_device(msg: DeviceMsg) -> bytes:
-    """Device-side encoding (used by FakeDevice and tests)."""
     match msg:
         case PingReply(version, selected):
             return _report(Cmd.PING, version, selected)
@@ -222,8 +216,6 @@ def encode_device(msg: DeviceMsg) -> bytes:
             return _report(Cmd.KEY, key, action)
         case EncoderEvent(direction, selected):
             return _report(Cmd.ENCODER, CW if direction > 0 else CCW, selected)
-        case Unknown(raw):
-            return bytes(raw[:REPORT_LEN]).ljust(REPORT_LEN, b"\0")
     raise TypeError(f"not a device message: {msg!r}")
 
 
@@ -233,7 +225,6 @@ def _norm(report: bytes | list[int]) -> bytes:
 
 
 def decode_host(report: bytes | list[int]) -> HostMsg | Unknown:
-    """Decode a host->device report (what the firmware receives)."""
     r = _norm(report)
     cmd = r[0]
     try:
@@ -285,8 +276,6 @@ def describe(msg: object) -> str:
     return repr(msg)
 
 
-# --------------------------------------------------------------------------- transports
-
 class Transport(Protocol):
     def write(self, report: bytes) -> None: ...
     def read(self, timeout_ms: int) -> bytes | None: ...
@@ -311,7 +300,7 @@ class HidTransport:
         ]
 
     @classmethod
-    def open(cls) -> "HidTransport | None":
+    def open(cls) -> HidTransport | None:
         import hid
 
         for info in cls.find():
@@ -339,7 +328,7 @@ class HidTransport:
     def close(self) -> None:
         try:
             self._dev.close()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
 
@@ -349,7 +338,7 @@ class DryRunTransport:
     def __init__(self, out=print):
         self.out = out
         self._pinged = False
-        self._replies: "queue.Queue[bytes]" = queue.Queue()
+        self._replies: queue.Queue[bytes] = queue.Queue()
         self._last_all: object = None
 
     def write(self, report: bytes) -> None:
@@ -379,11 +368,7 @@ class DryRunTransport:
 
 @dataclass
 class FakeDevice:
-    """Simulated firmware. Records every report, answers PING, emits KEY/ENCODER on demand.
-
-    Use `press()`, `turn()`, `unplug()`, `replug()` from tests; inspect `messages`,
-    `slots`, `oled`, `selected`, `glow`.
-    """
+    """Simulated firmware: records every report, answers PING, emits KEY and ENCODER on demand."""
 
     version: int = PROTOCOL_VERSION
     plugged: bool = True
@@ -397,10 +382,9 @@ class FakeDevice:
     echo: Callable[[str], None] | None = None
 
     def __post_init__(self):
-        self._inbox: "queue.Queue[bytes]" = queue.Queue()
+        self._inbox: queue.Queue[bytes] = queue.Queue()
         self._lock = threading.Lock()
 
-    # transport interface
     def write(self, report: bytes) -> None:
         if not self.plugged:
             raise OSError("fake device unplugged")
@@ -438,7 +422,6 @@ class FakeDevice:
     def close(self) -> None:
         pass
 
-    # simulation helpers
     def press(self, key: int | str, action: int = TAP) -> None:
         idx = KEY_NAMES.index(key) if isinstance(key, str) else key
         self._inbox.put(encode_device(KeyEvent(idx, action)))
@@ -461,7 +444,7 @@ class FakeDevice:
         self._inbox = queue.Queue()
         self.plugged = True
 
-    def opener(self) -> Callable[[], "FakeDevice | None"]:
+    def opener(self) -> Callable[[], FakeDevice | None]:
         return lambda: self if self.plugged else None
 
     def snapshot(self) -> dict:
@@ -470,20 +453,14 @@ class FakeDevice:
                     "selected": self.selected, "glow": self.glow}
 
 
-# --------------------------------------------------------------------------- link
-
 class DeviceLink:
-    """Owns the transport on a single I/O thread: writes queued reports, pings every 2 s,
-    reads device reports, reconnects after an unplug.
+    """Owns the transport on one I/O thread: writes queued reports, pings, reads, reconnects.
 
-    A newly opened device is not "connected" until it answers a PING with the expected
-    protocol version; until then it receives nothing but that PING. A connected device
-    that stops answering is closed and reopened.
+    A newly opened device gets nothing but a PING until it answers with our protocol version.
+    A connected device that stops answering is closed and reopened.
 
-    `keepalive()` may return one extra message written right after every PING, so the pad
-    recovers by itself from a gap in the PINGs. `on_event(obj)` receives decoded device
-    messages plus the strings "connected" / "disconnected". It is called from the I/O
-    thread; hand off to your own queue.
+    `keepalive()` may return a message to write right after every PING. `on_event(obj)` runs on
+    the I/O thread and gets decoded device messages plus "connected" and "disconnected".
     """
 
     def __init__(self, opener: Callable[[], Transport | None], on_event: Callable[[object], None],
@@ -498,7 +475,7 @@ class DeviceLink:
         self.ping_interval = ping_interval
         self.retry_interval = retry_interval
         self.read_timeout_ms = read_timeout_ms
-        self._out: "queue.Queue[bytes]" = queue.Queue()
+        self._out: queue.Queue[bytes] = queue.Queue()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.transport: Transport | None = None
@@ -563,7 +540,7 @@ class DeviceLink:
             if self.transport is None:
                 try:
                     t = self.opener()
-                except Exception as e:  # noqa: BLE001  e.g. a broken hidapi install
+                except Exception as e:  # e.g. a broken hidapi install
                     if str(e) != open_error:
                         open_error = str(e)
                         log.warning("cannot open the pad: %s", e)
@@ -578,7 +555,7 @@ class DeviceLink:
                 open_error = ""
                 try:
                     ok = self._handshake(t)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     log.info("handshake failed: %s", e)
                     ok = False
                 if not ok:
@@ -624,7 +601,7 @@ class DeviceLink:
                         log.info("dropped %s press: it may be from before a stall", msg.name)
                         continue
                     self.on_event(msg)
-            except Exception as e:  # noqa: BLE001  (OSError on unplug, anything else: reconnect)
+            except Exception as e:  # OSError on unplug, anything else too: reconnect
                 log.info("device I/O error: %s", e)
                 self._close()
                 self._stop.wait(self.retry_interval)

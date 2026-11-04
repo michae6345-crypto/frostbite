@@ -1,26 +1,19 @@
 (function (root) {
   const FB = root.FB = root.FB || {};
-  // Agent C: side elevation + exploded stack renderers, and FB.sideStats.
+  // Side elevation and exploded stack.
   //
-  // Body stack (mm, measured perpendicular to the plate, from the underside of the case):
-  //   floor 2.0 | XIAO cavity (xiao.t + 1.5) | PCB (pcbThickness) -> PCB top;
-  //   plate top zP = PCB top + switchHeightBelowPlate (dims: plate top -> PCB top), plate is plateThickness thick.
-  //   Top shell: slab from zP - 4 up to zP (+8 rim for deep-dish, +3 lip for tray).
+  // Stack in mm, measured perpendicular to the plate from the case underside:
+  //   floor 2.0, XIAO cavity (xiao.t + 1.5), PCB, then plate top zP = PCB top + switchHeightBelowPlate.
+  //   Top shell: slab from zP - 4 up to zP, +8 rim for deep-dish, +3 lip for tray.
   //   Gap between bottom-shell rim and top shell: floating 3.2, else 1.6 if glowPlace = gap, else 0.
-  //   Switch housing top = zP + switchHeightAbovePlate; cap skirt at zP + capRimAbovePlate; cap top = skirt + capHeight.
-  //   Knob top = PCB top + ec11.shaftAbovePcb + 0.5 (knob covers the shaft tip); knob height knobTypical.height
-  //   (puck 8 mm), so the EC11 bushing/shaft can show under the knob.
-  // Tilt: the bottom is a wedge resting flat on the desk; everything from the floor up is rotated by
-  // spec.tilt about the front edge, so the height of body-plane z at horizontal distance X from the
-  // front is  Y = lift + z / cos(t) + X * tan(t)   (lift = 2 mm light-guide foot when glowPlace = base).
+  //   Knob top = PCB top + ec11.shaftAbovePcb + 0.5, so the knob covers the shaft tip.
+  // Tilt: the bottom is a wedge flat on the desk and everything above it is rotated about the front edge,
+  // so body-plane z at distance X from the front has height Y = lift + z / cos(t) + X * tan(t).
+  // lift is the 2 mm light-guide foot when glowPlace = base.
 
-  // ---------- small helpers ----------
-  let PREC = 100;   // 2 decimals for the side view, 1 for the (bigger) exploded view
+  let PREC = 100;   // 2 decimals for the side view, 1 for the larger exploded view
   function num(n) {
-    if (typeof n !== "number" || !isFinite(n)) {
-      if (FB._strictSvg) throw new Error("render-side: non-finite number");
-      return "0";
-    }
+    if (typeof n !== "number" || !isFinite(n)) return "0";
     const r = Math.round(n * PREC) / PREC;
     return String(r === 0 ? 0 : r);
   }
@@ -42,9 +35,8 @@
   const first = o => o[Object.keys(o)[0]];
   const pick = (o, k) => (o && o[k] !== undefined ? o[k] : first(o));
 
-  // ---------- spec normalisation ----------
   function norm(spec) {
-    const C = FB.catalog || {}, def = C.defaultSpec || {}, O = C.options || {};
+    const def = FB.catalog.defaultSpec, O = FB.catalog.options;
     const s = Object.assign({}, def, spec || {});
     for (const k of Object.keys(O)) {
       if (k === "tilt" || k === "corner" || k === "bezel") continue;
@@ -59,51 +51,41 @@
   }
 
   function D() {
-    const d = FB.dims || {};
-    const g = (v, f) => (typeof v === "number" && isFinite(v) ? v : f);
-    const ec = d.ec11 || {}, ed = d.ec11Detail || {}, usb = d.xiaoUsbC || {}, xi = d.xiao || {}, om = d.oledModule || {}, oa = d.oledActive || {}, led = d.sk6812MiniE || {}, hs = d.heatSetInsert || {};
+    const d = FB.dims, ed = d.ec11Detail;
     return {
-      pitch: g(d.pitch, 19.05), cut: g(d.switchCutout, 14), plateT: g(d.plateThickness, 1.5), pcbT: g(d.pcbThickness, 1.6),
-      above: g(d.switchHeightAbovePlate, 6.6), below: g(d.switchHeightBelowPlate, 5), capBottom: g(d.capBottom, 18.2),
-      capTopDSA: g(d.capTopDSA, 12.7), capTopXDA: g(d.capTopXDA, 15.9), capHDSA: g(d.capHeightDSA, 7.6), capHXDA: g(d.capHeightXDA, 9.1),
-      oledW: g(om.w, 38), oledH: g(om.h, 12), oledT: g(om.t, 3.6), oledAW: g(oa.w, 22.4), oledAH: g(oa.h, 5.6),
-      ecBody: g(ec.body, 12.5), shaft: g(ec.shaftAbovePcb, 20), knobD: g(ec.knobDiameter, 18),
-      xiaoW: g(xi.w, 17.8), xiaoH: g(xi.h, 21), xiaoT: g(xi.t, 3.5), ledW: g(led.w, 3.2), ledH: g(led.h, 2.8),
-      insOD: g(hs.od, 4), insL: g(hs.length, 4), m3Head: g(d.m3Head, 5.5),
-      housingTop: g(d.switchHousingTop, 15.6), stemAbove: g(d.switchStemAboveHousing, 3.6),
-      capRim: g(d.capRimAbovePlate, g(d.switchHeightAbovePlate, 6.6) - 0.6),
-      knobH: g((d.knobTypical || {}).height, 15),
-      ecBodyH: g(ed.bodyH, 4.5), bushD: g(ed.bushingDiameter, 7), bushH: g(ed.bushingHeight, 7), shaftD: g(ed.shaftDiameter, 6),
-      usbW: g(usb.w, 9), usbH: g(usb.h, 3.3), usbOver: g(usb.overhang, 1.4),
-      bossOD: g(d.heatSetBossOd, 8), m3HeadH: g(d.m3HeadHeight, 3), m3Len: g(d.m3ScrewLength, 16),
-      oledTopAbovePcb: g(d.oledGlassTopAbovePcb, 5.2)
+      pitch: d.pitch, cut: d.switchCutout, plateT: d.plateThickness, pcbT: d.pcbThickness,
+      above: d.switchHeightAbovePlate, below: d.switchHeightBelowPlate, capBottom: d.capBottom,
+      capTopDSA: d.capTopDSA, capTopXDA: d.capTopXDA, capHDSA: d.capHeightDSA, capHXDA: d.capHeightXDA,
+      oledW: d.oledModule.w, oledH: d.oledModule.h, oledAW: d.oledActive.w, oledAH: d.oledActive.h,
+      ecBody: d.ec11.body, shaft: d.ec11.shaftAbovePcb, knobD: d.ec11.knobDiameter,
+      xiaoW: d.xiao.w, xiaoH: d.xiao.h, xiaoT: d.xiao.t, ledW: d.sk6812MiniE.w, ledH: d.sk6812MiniE.h,
+      insOD: d.heatSetInsert.od, m3Head: d.m3Head, stemAbove: d.switchStemAboveHousing,
+      capRim: d.capRimAbovePlate, knobH: d.knobTypical.height,
+      ecBodyH: ed.bodyH, bushD: ed.bushingDiameter, bushH: ed.bushingHeight, shaftD: ed.shaftDiameter,
+      usbW: d.xiaoUsbC.w, usbH: d.xiaoUsbC.h, usbOver: d.xiaoUsbC.overhang,
+      bossOD: d.heatSetBossOd, m3HeadH: d.m3HeadHeight, m3Len: d.m3ScrewLength,
+      oledTopAbovePcb: d.oledGlassTopAbovePcb
     };
   }
 
-  // ---------- colours (all derived from FB.catalog.palette) ----------
   function colors(s) {
-    const pal = (FB.catalog && FB.catalog.palette) || {};
-    const P = pal.parts || {};               // optional overrides if the catalog ever adds part colours
-    const shells = pal.shell || {};
-    const sh = pick(shells, s.shell);
-    const ink = P.ink || (shells.smoke ? shells.smoke.edge : sh.edge);
-    const white = P.white || (pal.glow && pal.glow.white) || sh.top;
-    const status = pal.status || {};
-    const alu = (pal.knob && pal.knob["knurled-alu"]) || pick(pal.knob, s.knob);
+    const pal = FB.catalog.palette, status = pal.status;
+    const sh = pick(pal.shell, s.shell), ink = pal.shell.smoke.edge, white = pal.glow.white;
+    const alu = pal.knob["knurled-alu"];
     return {
-      pal, sh, ink, white, status,
+      sh, ink, white, status,
       glow: pick(pal.glow, s.glowColor),
       knob: pick(pal.knob, s.knob),
       oled: pick(pal.oled, s.oledColor),
       cmd: pick(pal.commandCap, s.commandCap),
       agentBase: pick(pal.agentCapBase, s.agentCap),
-      pcb: P.pcb || mix(status.done || ink, ink, 0.62),
-      pad: P.pad || mix(pal.glow.warm || white, status.needs || ink, 0.45),
-      brass: P.brass || mix(status.needs || white, ink, 0.25),
-      metal: P.metal || alu.ring,
+      pcb: mix(status.done, ink, 0.62),
+      pad: mix(pal.glow.warm, status.needs, 0.45),
+      brass: mix(status.needs, ink, 0.25),
+      metal: alu.ring,
       metalLight: alu.face,
-      housing: P.housing || mix(pick(pal.agentCapBase, "milky"), sh.edge, 0.25),
-      stem: P.stem || status.needs || white
+      housing: mix(pal.agentCapBase.milky, sh.edge, 0.25),
+      stem: status.needs
     };
   }
   function statusOf(s, i, t) {
@@ -119,22 +101,17 @@
     }
     return which;
   }
-  function valueName(axis, v) {
-    const C = FB.catalog || {};
-    try { if (typeof C.valueLabel === "function") return C.valueLabel(axis, v); } catch (e) { /* ignore */ }
-    return String(v);
-  }
+  const valueName = (axis, v) => FB.catalog.valueLabel(axis, v);
 
-  // ---------- shared geometry ----------
   function geom(spec) {
     const s = norm(spec);
-    const L = (FB.layoutById && FB.layoutById(s.layout)) || FB.layouts[0];
+    const L = FB.layoutById(s.layout);
     const d = D();
     const b = s.bezel, depth = L.H + 2 * b, width = L.W + 2 * b;
     const t = s.tilt * Math.PI / 180, cos = Math.cos(t), sin = Math.sin(t), tan = Math.tan(t);
     const floor = 2.0;
     const pcbBot = floor + d.xiaoT + 1.5, pcbTop = pcbBot + d.pcbT;
-    const zP = pcbTop + d.below, plateBot = zP - d.plateT;   // switchHeightBelowPlate = plate top -> PCB top
+    const zP = pcbTop + d.below, plateBot = zP - d.plateT;
     const topBot = zP - 4;
     const gap = s.plate === "floating" ? 3.2 : (s.glowPlace === "gap" ? 1.6 : 0);
     const rimZ = topBot - gap;
@@ -147,12 +124,12 @@
     const puck = s.knob === "puck";
     const kh = puck ? 8 : s.knob === "soft-white" ? d.knobH - 1 : d.knobH;
     const knob = { r: (puck ? d.knobD * 1.3 : d.knobD) / 2, vt: knobTopV, vb: Math.max(1, knobTopV - kh) };
-    const Y = (X, z) => lift + z / cos + X * tan;          // world height of body plane z at X
+    const Y = (X, z) => lift + z / cos + X * tan;
     const P = d.pitch;
     const keys = L.keys.map((k, i) => ({ ...k, i, dc: b + (L.H - (k.y + P / 2)), cx: k.x + P / 2, cy: k.y + P / 2 }));
     let ai = 0; keys.forEach(k => { k.ai = k.role === "agent" ? ai++ : -1; });
     const dials = L.dials.map(q => ({ ...q, dc: b + (L.H - q.y) }));
-    // world position of a point given in a part's local frame (u along plate, v up from plate top)
+    // world position of a point in a part's local frame (u along the plate, v up from plate top)
     const world = (dc, u, v) => [dc + u * cos - v * sin, Y(dc, zP) + u * sin + v * cos];
     // screw / boss inset from the outer corner, kept inside the rounded outline
     const wall = 2.4, bossR = d.bossOD / 2, e = wall + bossR - 1;
@@ -162,7 +139,7 @@
     const keyTop = Math.min(...L.keys.map(k => k.y));
     const xiaoCx = keyTop >= 20 ? L.W / 2 : (Math.max(...L.keys.map(k => k.x)) + P + L.W) / 2;
     const xiao = [clamp(xiaoCx - d.xiaoW / 2, -2, L.W + 2 - d.xiaoW), -1.2, d.xiaoW, d.xiaoH];
-    return { keyTop, xiao, s, L, d, b, depth, width, t, cos, sin, tan, floor, pcbBot, pcbTop, plateBot, zP, topBot, gap, rimZ, rimH, topZ, lift,
+    return { xiao, s, L, d, b, depth, width, t, cos, sin, tan, floor, pcbBot, pcbTop, plateBot, zP, topBot, gap, rimZ, rimH, topZ, lift,
       cap, knob, Y, keys, dials, world, wall, bossR, q, rr };
   }
 
@@ -180,25 +157,14 @@
     });
     const r1 = x => Math.round(x * 10) / 10;
     return {
-      frontHeight: r1(g.Y(0, g.topZ)),       // desk -> top of the case at the front edge (no caps)
-      backHeight: r1(g.Y(g.depth, g.topZ)),  // desk -> top of the case at the back edge (no caps)
-      depth: r1(g.depth),                    // front-to-back footprint
-      width: r1(g.width),
-      maxHeight: r1(maxH),                   // desk -> highest point (cap or knob)
-      frontKeyTop: r1(frontKey),             // desk -> top of the front-row caps (typing height)
-      plateFront: r1(g.Y(0, g.zP)),          // desk -> plate top at the front edge
-      tilt: g.s.tilt
+      frontHeight: r1(g.Y(0, g.topZ)),       // case top at the front edge, caps excluded
+      backHeight: r1(g.Y(g.depth, g.topZ)),  // case top at the back edge, caps excluded
+      depth: r1(g.depth),
+      maxHeight: r1(maxH),                   // highest cap or knob
+      frontKeyTop: r1(frontKey)              // top of the front-row caps
     };
   }
 
-  /**
-   * FB.sideStats(spec) -> { frontHeight, backHeight, depth, width, maxHeight, frontKeyTop, plateFront, tilt }
-   * All mm, rounded to 0.1. frontHeight/backHeight = desk to the top of the case shell at the front/back edge
-   * (tilt and light-guide foot included, caps excluded). maxHeight includes caps and knob.
-   */
-  FB.sideStats = function (spec) { return stats(geom(spec)); };
-
-  // ---------- path helpers ----------
   function roundPoly(pts, radii) {
     const n = pts.length; let d = "";
     for (let i = 0; i < n; i++) {
@@ -213,9 +179,6 @@
     return d + "Z";
   }
 
-  // =====================================================================================
-  // Side elevation
-  // =====================================================================================
   FB.renderSide = function (spec, opts) {
     opts = opts || {};
     const p = String(opts.idPrefix || "side");
@@ -240,7 +203,6 @@
       return `url(#${p}-${id})`;
     }
 
-    // ---- defs ----
     const cr = Math.min(s.corner, Dp / 3), cf = num(cr / Dp);
     defs.push(`<filter id="${p}-blur" x="-30%" y="-300%" width="160%" height="700%"><feGaussianBlur stdDeviation="1.4"/></filter>`);
     defs.push(`<filter id="${p}-soft" x="-30%" y="-600%" width="160%" height="1300%"><feGaussianBlur stdDeviation="2.4"/></filter>`);
@@ -262,7 +224,7 @@
     const finish = dd => (texFill ? `<path d="${dd}" fill="${texFill}"/>` : "") + `<path d="${dd}" fill="url(#${p}-ends)"/>`;
     const op = c.sh.opacity == null ? 1 : c.sh.opacity;
 
-    // ---- desk, shadow, halo ----
+    // desk, shadow, halo
     const mL = opts.dims ? 25 : 7, mR = opts.dims ? 26 : 7;
     out.push(`<rect x="${num(-mL)}" y="0" width="${num(Dp + mL + mR)}" height="3.5" fill="${c.sh.edge}" opacity="0.12"/>`);
     out.push(`<line x1="${num(-mL)}" y1="0" x2="${num(Dp + mR)}" y2="0" stroke="${c.sh.edge}" stroke-width="0.3" opacity="0.8"/>`);
@@ -274,7 +236,7 @@
     }
     out.push(`<rect x="1" y="-0.5" width="${num(Dp - 2)}" height="0.6" fill="${c.ink}" opacity="${s.glowPlace === "base" ? 0.12 : 0.35}" filter="url(#${p}-sm)"/>`);
 
-    // ---- ghost internals seen through translucent shells ----
+    // internals seen through a translucent shell
     if (op < 0.97) {
       const ghost = 0.9 - op * 0.75;
       out.push(`<path d="${slab(g.b - 2, Dp - g.b + 2, g.pcbBot, g.pcbTop, 0, 0)}" fill="${c.pcb}" opacity="${num(ghost)}"/>`);
@@ -282,7 +244,7 @@
       out.push(`<path d="${slab(clamp(xd - d.xiaoH / 2, 3, Dp - 3), clamp(xd + d.xiaoH / 2, 3, Dp - 3), g.pcbBot - d.xiaoT, g.pcbBot, 0, 0)}" fill="${c.ink}" opacity="${num(ghost * 0.8)}"/>`);
     }
 
-    // ---- bottom shell (wedge) ----
+    // bottom shell (wedge)
     const bTopR = s.plate === "floating" || s.glowPlace === "gap" ? 1.0 : 0.4;
     const bshell = slab(0, Dp, null, g.rimZ, bTopR, 0.8, g.lift);
     out.push(`<path d="${bshell}" fill="url(#${p}-bshell)" fill-opacity="${op}" stroke="${c.sh.edge}" stroke-width="0.25"/>`);
@@ -294,7 +256,7 @@
       out.push(`<path d="${slab(0.6, Dp - 0.6, z0 + 0.8, z1 - 0.8, 0, 0)}" fill="${c.white}" opacity="0.7"/>`);
     }
     if (s.glowPlace === "gap") {
-      out.push(`<path d="${slab(0, Dp, g.rimZ - 6, g.rimZ, 0, 0)}" fill="${perpGrad("spill", g.rimZ, g.rimZ - 6, [[0, c.glow, 0.55], [1, c.glow, 0]])}"/>`);
+      out.push(`<path d="${slab(0, Dp, g.rimZ - 6, g.rimZ, 0, 0)}" fill="${perpGrad("spill", g.rimZ, g.rimZ - 6, [[0, c.glow, op >= 1 && darkShell ? 0.1 : 0.55], [1, c.glow, 0]])}"/>`);
     }
     if (s.screws === "side") {
       const zs = g.rimZ * 0.55;
@@ -307,7 +269,7 @@
     // top-edge highlight of the bottom shell
     out.push(`<path d="M${num(1.2)} ${num(sv(g.Y(1.2, g.rimZ)) + 0.25)}L${num(Dp - 1.2)} ${num(sv(g.Y(Dp - 1.2, g.rimZ)) + 0.25)}" stroke="${c.white}" stroke-width="0.35" opacity="${darkShell ? 0.25 : 0.7}"/>`);
 
-    // ---- light gap / dark gap ----
+    // light gap or dark gap
     if (g.gap > 0) {
       if (s.glowPlace === "gap") {
         out.push(`<path d="${slab(-1, Dp + 1, g.rimZ - 1.5, g.topBot + 1.5, 0, 0)}" fill="${c.glow}" opacity="0.6" filter="url(#${p}-blur)"/>`);
@@ -319,7 +281,7 @@
       }
     }
 
-    // ---- rigid parts: switches, caps, knobs (far column first) ----
+    // switches, caps and knobs, far column first
     const tf = dc => { const a = g.world(dc, 0, 0); return `translate(${num(a[0])} ${num(-a[1])}) rotate(${num(-deg)})`; };
     const usedStatus = {};
     const parts = [];
@@ -375,11 +337,7 @@
         if (s.knob === "knurled-alu" || s.knob === "ringlit") {
           o += `<path d="${body}" fill="url(#${p}-metal)" stroke="${mix(c.metal, c.ink, 0.4)}" stroke-width="0.2"/>`;
           let kl = "";
-          for (let u = -R + 1; u < R - 0.5; u += 1.1) {
-            const w = Math.sqrt(Math.max(0, 1 - (u / R) ** 2));
-            kl += `M${num(u)} ${num(-vb - 0.6)}V${num(-vt + 3.2)}`;
-            if (w < 0.3) continue;
-          }
+          for (let u = -R + 1; u < R - 0.5; u += 1.1) kl += `M${num(u)} ${num(-vb - 0.6)}V${num(-vt + 3.2)}`;
           o += `<path d="${kl}" stroke="${mix(c.metal, c.ink, 0.45)}" stroke-width="0.28" opacity="0.55"/>`;
           o += `<rect x="${num(-R + 0.2)}" y="${num(-vt + 0.9)}" width="${num(2 * R - 0.4)}" height="1.6" fill="${c.metalLight}" opacity="0.9"/>`;
         } else {
@@ -397,14 +355,14 @@
       }
     });
 
-    // ---- top shell / plate ----
+    // top shell or plate
     const tTopR = s.plate === "floating" ? 1.3 : s.plate === "flush" ? 1.0 : 1.6;
     const tBotR = g.gap > 0 ? (s.plate === "floating" ? 1.3 : 0.6) : 0;
     const tshell = slab(0, Dp, g.topBot, g.topZ, tTopR, tBotR);
     out.push(`<path d="${tshell}" fill="url(#${p}-tshell)" fill-opacity="${op}" stroke="${c.sh.edge}" stroke-width="0.25"/>`);
     out.push(finish(tshell));
     if (s.glowPlace === "gap" && g.gap > 0) {
-      out.push(`<path d="${slab(0, Dp, g.topBot, g.topBot + 2.6, 0, tBotR)}" fill="${perpGrad("spillT", g.topBot, g.topBot + 2.6, [[0, c.glow, 0.6], [1, c.glow, 0]])}"/>`);
+      out.push(`<path d="${slab(0, Dp, g.topBot, g.topBot + 2.6, 0, tBotR)}" fill="${perpGrad("spillT", g.topBot, g.topBot + 2.6, [[0, c.glow, op >= 1 && darkShell ? 0.1 : 0.6], [1, c.glow, 0]])}"/>`);
     }
     if (g.gap === 0) {
       out.push(`<path d="M0.4 ${num(sv(g.Y(0.4, g.topBot)))}L${num(Dp - 0.4)} ${num(sv(g.Y(Dp - 0.4, g.topBot)))}" stroke="${c.ink}" stroke-width="0.2" opacity="0.35"/>`);
@@ -417,12 +375,11 @@
       });
     }
 
-    // ---- bloom over everything ----
+    // bloom over everything
     if (s.glowPlace === "gap" && g.gap > 0) {
       out.push(`<path d="${slab(0, Dp, g.rimZ, g.topBot, 0, 0)}" fill="${c.glow}" opacity="0.35" filter="url(#${p}-blur)"/>`);
     }
 
-    // ---- dimensions ----
     if (opts.dims) {
       const ink = "currentColor", fs = 3.1;
       const tick = (x, y) => `<path d="M${num(x - 0.9)} ${num(y + 0.9)}L${num(x + 0.9)} ${num(y - 0.9)}" stroke="${ink}" stroke-width="0.3"/>`;
@@ -452,9 +409,6 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(num).join(" ")}" role="img" aria-label="${label}"><title>${label}</title><defs>${defs.join("")}</defs>${out.join("")}</svg>`;
   };
 
-  // =====================================================================================
-  // Exploded oblique stack
-  // =====================================================================================
   FB.renderExploded = function (spec, opts) {
     opts = opts || {};
     PREC = 10;
@@ -519,23 +473,21 @@
     const ell = (cx, cy, r, z, fill, attrs) => { const C = pr(cx, cy, z); return `<ellipse cx="${num(C[0])}" cy="${num(C[1])}" rx="${num(RX * r)}" ry="${num(RY * r)}" fill="${fill}" ${attrs || ""}/>`; };
     const shade = (col, k) => (k >= 0 ? mix(col, c.white, k) : mix(col, c.ink, -k));
 
-    // ---- plan geometry ----
     const ox = -b, oy = -b, ow = L.W + 2 * b, oh = L.H + 2 * b, R = g.rr;
     const outer = rr(ox, oy, ow, oh, R, 6);
     const inner = rr(ox + g.wall, oy + g.wall, ow - 2 * g.wall, oh - 2 * g.wall, Math.max(R - g.wall, 1), 6);
     const bosses = [[ox + g.q, oy + g.q], [ox + ow - g.q, oy + g.q], [ox + ow - g.q, oy + oh - g.q], [ox + g.q, oy + oh - g.q]];
     const pcbR = [-2, -2, L.W + 4, L.H + 4];
-    const keyTop = g.keyTop, xiao = g.xiao;
+    const xiao = g.xiao;
     const oledMod = L.oled ? [clamp(L.oled.x + L.oled.w / 2 - d.oledW / 2, -2, L.W + 2 - d.oledW), clamp(L.oled.y + L.oled.h / 2 - d.oledH / 2, -2, L.H + 2 - d.oledH), d.oledW, d.oledH] : null;
 
-    // ---- z layout (exploded) ----
+    // z layout of the exploded stack
     const G = 15;
     const layers = [];
     let z = 0;
     const glowLayer = s.glowPlace !== "none";
     if (s.glowPlace === "base") { layers.push({ id: "glow", z0: 0, z1: 2 }); z = 2 + G * 0.8; }
     const bot = { id: "bottom", z0: z, z1: z + g.rimZ }; layers.push(bot); z = bot.z1 + G;
-    if (s.screws === "hidden") { /* screws come from underneath: placed below the shell */ }
     if (glowLayer && s.glowPlace !== "base") { const h = s.glowPlace === "gap" ? Math.max(g.gap, 2.4) : 2.4; layers.push({ id: "glow", z0: z, z1: z + h }); z += h + G; }
     const xl = { id: "xiao", z0: z, z1: z + 1 + Math.max(d.usbH, 2.4) }; layers.push(xl); z = xl.z1 + 24;
     const pcb = { id: "pcb", z0: z, z1: z + d.pcbT }; layers.push(pcb); z = pcb.z1 + d.ecBodyH + d.bushH + 4 + G * 0.6;
@@ -547,7 +499,7 @@
     const kc = { id: "caps", z0: z + 4, z1: z + 4 + g.cap.h }; layers.push(kc);
     if (s.screws === "hidden") layers.unshift({ id: "screws", z0: (layers[0].z0) - G - d.m3Len - d.m3HeadH, z1: layers[0].z0 - G, below: true });
 
-    // ---- alignment axes (dashed), drawn in the gaps after each layer ----
+    // dashed alignment axes, drawn in the gaps after each layer
     const nearKey = L.keys.slice().sort((a, b2) => (b2.x + b2.y) - (a.x + a.y))[0];
     const axes = bosses.map(q => ({ x: q[0], y: q[1] }));
     if (nearKey) axes.push({ x: nearKey.x + P / 2, y: nearKey.y + P / 2, key: true });
@@ -557,7 +509,7 @@
     const anchorOf = (pts, z0) => { let best = null; pts.forEach(q => { const A = pr(q[0], q[1], z0); if (!best || A[0] > best[0]) best = A; }); return best; };
     const nAgent = L.keys.filter(k => k.role === "agent").length, nCmd = L.keys.length - nAgent;
 
-    const shellTop = shade(c.sh.top, 0.25), shellFront = c.sh.base, shellRight = mix(c.sh.base, c.sh.edge, 0.8);
+    const shellTop = darkShell ? c.sh.top : shade(c.sh.top, 0.25), shellFront = c.sh.base, shellRight = mix(c.sh.base, c.sh.edge, 0.8);
     const shellAttr = `fill-opacity="${op}" stroke="${c.sh.edge}" stroke-width="0.25" stroke-linejoin="round"`;
 
     const draw = {
@@ -605,7 +557,7 @@
         // components hang below the board (it is mounted face-down under the PCB)
         o += box(x + 4, y + 7, 7, 7, zb - 1, zb, mix(c.ink, c.white, 0.15), c.ink, c.ink);
         o += box(x + (w - d.usbW) / 2, y - d.usbOver, d.usbW, 7.3, zb - d.usbH, zb, c.metalLight, c.metal, mix(c.metal, c.ink, 0.3));
-        o += box(x, y, w, h, zb, ztop, mix(c.ink, c.status.run || c.ink, 0.25), c.ink, mix(c.ink, c.white, 0.08));
+        o += box(x, y, w, h, zb, ztop, mix(c.ink, c.status.run, 0.25), c.ink, mix(c.ink, c.white, 0.08));
         for (let i = 0; i < 7; i++) {
           const yy = y + 2.5 + i * 2.54;
           o += ell(x + 0.9, yy, 0.6, ztop, c.pad) + ell(x + w - 0.9, yy, 0.6, ztop, c.pad);
@@ -626,7 +578,7 @@
           o += ell(cx, cy, 2, zt, mix(c.pcb, c.ink, 0.6));
           o += ell(cx - 3.81, cy - 2.54, 0.75, zt, c.pad) + ell(cx + 2.54, cy - 5.08, 0.75, zt, c.pad);
           o += flat(quad(cx - d.ledW / 2, cy + 5.08 - d.ledH / 2, d.ledW, d.ledH), zt, c.white);
-          o += flat(quad(cx - 0.8, cy + 5.08 - 0.7, 1.6, 1.4), zt + 0.01, mix(c.white, c.status.done || c.white, 0.2));
+          o += flat(quad(cx - 0.8, cy + 5.08 - 0.7, 1.6, 1.4), zt + 0.01, mix(c.white, c.status.done, 0.2));
           o += flat(quad(cx + 3.6, cy + 5.5, 3.6, 1.6), zt, c.ink) + flat(quad(cx + 3.9, cy + 5.5, 0.6, 1.6), zt, c.metalLight);
           o += flat(quad(cx + 2.7, cy + 5.6, 0.8, 1.4), zt, c.pad) + flat(quad(cx + 7.3, cy + 5.6, 0.8, 1.4), zt, c.pad);
         });
@@ -640,7 +592,7 @@
           const [x, y, w, h] = oledMod;
           const zg = zt + d.oledTopAbovePcb, zbd = zg - 1.45;
           o += box(x + 1, y + 1.5, 2.5, h - 3, zt, zbd - 1.2, c.ink, c.ink, c.ink);
-          o += box(x, y, w, h, zbd - 1.2, zbd, mix(c.ink, c.status.run || c.ink, 0.3), c.ink, c.ink);
+          o += box(x, y, w, h, zbd - 1.2, zbd, mix(c.ink, c.status.run, 0.3), c.ink, c.ink);
           o += box(x + 4.5, y + 0.25, w - 8, h - 0.5, zbd, zg, c.ink, mix(c.ink, c.white, 0.1), c.ink);
           const ax = x + 4.5 + (w - 8 - d.oledAW) / 2, ay = y + (h - d.oledAH) / 2;
           o += flat(quad(ax, ay, d.oledAW, d.oledAH), zg, c.oled, 'opacity="0.9"');
@@ -651,7 +603,7 @@
         return o;
       },
       plate(l) {
-        const topC = shade(c.sh.top, 0.35);
+        const topC = darkShell ? c.sh.top : shade(c.sh.top, 0.35);
         const q = prism(outer, l.z0, l.z1, topC, shellFront, shellRight, shellAttr);
         let o = q.side + q.top;
         let faceZ = l.z1;
@@ -786,7 +738,7 @@
     });
     if (s.screws === "side") labels.push({ a: labelsSide[0] || [maxX, 0], t: "M3 screws", sub: "4 × M3×16 through the side walls" });
 
-    // ---- labels on the right ----
+    // labels on the right
     const fs = 4.2, fs2 = 3.1, lx = maxX + 12;
     labels.sort((a, b2) => a.a[1] - b2.a[1]);
     let last = -Infinity;
@@ -810,5 +762,5 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(num).join(" ")}" role="img" aria-label="${label}"><title>${label}</title><defs>${defs.join("")}</defs>${out.join("")}</svg>`;
   }
 
-  if (typeof module !== "undefined" && module.exports) module.exports = { renderSide: FB.renderSide, renderExploded: FB.renderExploded, sideStats: FB.sideStats };
+  if (typeof module !== "undefined" && module.exports) module.exports = { renderSide: FB.renderSide, renderExploded: FB.renderExploded };
 })(typeof window !== "undefined" ? window : globalThis);

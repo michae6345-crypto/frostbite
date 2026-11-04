@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -11,12 +12,14 @@ from pathlib import Path
 
 import pytest
 
+import frostbite_host.daemon as dm
 from frostbite_host import ipc
 from frostbite_host.actions import Actions
 from frostbite_host.daemon import Daemon, SocketServer
 from frostbite_host.device import (HOLD, TAP, DeviceLink, EncoderEvent, FakeDevice, KeyEvent,
                                    OledLine, SetSelected, Status, encode)
-from frostbite_host.state import Board
+from frostbite_host.hook import hook_to_message
+from frostbite_host.state import Board, Slot
 
 FIX = Path(__file__).parent / "fixtures"
 TTY = "/dev/ttys004"
@@ -59,8 +62,6 @@ def make(front="com.apple.Terminal", tab=TTY):
 
 
 def hook(d, name, reply=None, **over):
-    from frostbite_host.hook import hook_to_message
-
     payload = {**json.loads((FIX / "hooks" / name).read_text()), **over}
     msg = hook_to_message(payload, {"__CFBundleIdentifier": "com.apple.Terminal"})
     if "terminal" in msg:
@@ -86,10 +87,8 @@ def test_claude_session_flow_bytes():
     assert fake.slots[0] is Status.NEEDS
     assert fake.oled[0] == "claude#1 my-app  WAIT"
     assert fake.oled[1].rstrip() == "Bash(npm test)?"
-    # exact report for the status change
     all_reports = [r for r in fake.reports if r[0] == 0x02]
     assert all_reports[-1] == bytes([0x02, 3, 0, 0, 0, 0, 0]) + bytes(25)
-    # approve answers that hook and presses nothing
     d.handle(("dev", KeyEvent(6, TAP)))
     assert reply.get_nowait() == {"id": rid, "decision": "allow"}
     assert runner.calls == []
@@ -151,20 +150,14 @@ def test_talk_does_nothing():
 
 def test_agent_key_selects_and_focuses_terminal_tab():
     d, fake, runner, _ = make()
-    from frostbite_host.hook import hook_to_message
-
-    payload = json.loads((FIX / "hooks" / "user_prompt_submit.json").read_text())
-    payload["cwd"] = str(FIX)
-    msg = hook_to_message(payload, {"__CFBundleIdentifier": "com.apple.Terminal"})
-    msg["terminal"]["tty"] = "/dev/ttys004"
-    d.handle(("ipc", msg, None))
+    hook(d, "user_prompt_submit.json", cwd=str(FIX))
     d.handle(("ipc", {"op": "set_slot", "slot": 2, "status": "run", "name": "CI"}, None))
     d.handle(("dev", KeyEvent(2, TAP)))
     assert fake.selected == 2 and fake.oled[0].startswith("#3 CI")
     assert runner.calls == []                 # ctl slot: just select
     d.handle(("dev", KeyEvent(0, TAP)))
     assert fake.selected == 0
-    assert runner.calls[-1][:2] == ["osascript", "-e"] and runner.calls[-1][-1] == "/dev/ttys004"
+    assert runner.calls[-1][:2] == ["osascript", "-e"] and runner.calls[-1][-1] == TTY
 
 
 def test_agent_hold_opens_log(tmp_path):
@@ -190,14 +183,10 @@ def test_dry_run_sends_no_keystrokes():
     out = []
     runner = FakeRunner()
     a = Actions(dry_run=True, runner=runner, out=out.append)
-    from frostbite_host.state import Slot
-
     slot = Slot("k", "claude", "n", terminal={"bundle": "com.apple.Terminal", "tty": TTY})
     ok, msg = a.guarded_escape(slot, "stop sent")
     assert ok and runner.keystrokes() == [] and "key code 53" in out[-1]
 
-
-# ----------------------------------------------------------------- threaded end to end
 
 def wait_for(cond, timeout=5.0):
     end = time.time() + timeout
@@ -210,23 +199,21 @@ def wait_for(cond, timeout=5.0):
 
 @pytest.fixture
 def running():
-    tmp = tempfile.mkdtemp(prefix="fb")   # short path: AF_UNIX limit is 104 bytes on macOS
-    sock = Path(tmp) / "s.sock"
+    """A real daemon loop and socket on a fake pad."""
+    sock = Path(tempfile.mkdtemp(prefix="fb")) / "s.sock"   # short: AF_UNIX allows 104 bytes on macOS
     fake = FakeDevice()
     runner = FakeRunner()
-    board = Board()
-    holder = {}
-    d = Daemon(board, Actions(runner=runner, out=lambda s: None),
-               send=lambda m: holder["link"].send(m))
-    link = DeviceLink(fake.opener(), d.on_device, ping_interval=0.2, retry_interval=0.1,
+    d = Daemon(Board(), Actions(runner=runner, out=lambda s: None), send=lambda m: link.send(m))
+    link = DeviceLink(fake.opener(), d.on_device, ping_interval=0.2, retry_interval=0.05,
                       read_timeout_ms=10, keepalive=d.keepalive)
-    holder["link"] = link
+    d.connected = link.connected.is_set
     server = SocketServer(sock, d)
     server.start()
     link.start()
     t = threading.Thread(target=d.run, daemon=True)
     t.start()
-    yield d, fake, runner, sock, tmp
+    assert wait_for(link.connected.is_set)
+    yield d, fake, runner, sock
     d.stop_event.set()
     t.join(2)
     link.stop()
@@ -234,12 +221,12 @@ def running():
 
 
 def test_end_to_end_hook_ctl_train_unplug(running):
-    d, fake, runner, sock, tmp = running
+    d, fake, runner, sock = running
+    tmp = sock.parent
     assert oct(os.stat(sock).st_mode & 0o777) == "0o600"
     assert oct(os.stat(tmp).st_mode & 0o777) == "0o700"
     env = {**os.environ, "FROSTBITE_SOCKET": str(sock), "__CFBundleIdentifier": "com.apple.Terminal"}
 
-    # real frostbite-hook process -> socket -> daemon -> FakeDevice
     for name in ("user_prompt_submit.json", "pre_tool_use_bash.json", "notification_permission.json"):
         r = subprocess.run([sys.executable, "-m", "frostbite_host.hook"],
                            input=(FIX / "hooks" / name).read_text(), capture_output=True,
@@ -249,7 +236,6 @@ def test_end_to_end_hook_ctl_train_unplug(running):
     assert wait_for(lambda: fake.oled[1].rstrip() == "Bash(npm test)?")
     assert wait_for(lambda: fake.pings >= 2)
 
-    # frostbite-ctl
     r = subprocess.run([sys.executable, "-m", "frostbite_host.ctl", "set", "3", "run", "CI build"],
                        env=env, capture_output=True, text=True, timeout=5)
     assert r.returncode == 0, r.stderr
@@ -257,8 +243,7 @@ def test_end_to_end_hook_ctl_train_unplug(running):
     st = ipc.send({"op": "status"}, timeout=2, want_reply=True, path=sock)
     assert st["slots"][2]["name"] == "CI build"
 
-    # training watcher via ctl watch
-    log = Path(tmp) / "train.log"
+    log = tmp / "train.log"
     log.write_text("Epoch 3/10 | step 811 | loss: 0.4199\n")
     r = subprocess.run([sys.executable, "-m", "frostbite_host.ctl", "watch", str(log), "--name",
                         "my-model"], env=env, capture_output=True, text=True, timeout=5)
@@ -283,13 +268,11 @@ def test_end_to_end_hook_ctl_train_unplug(running):
 
 
 def test_second_daemon_refused_and_stale_socket_cleaned(running):
-    d, fake, runner, sock, tmp = running
+    d, fake, runner, sock = running
     with pytest.raises(SystemExit):
         SocketServer(sock, d).start()
-    stale = Path(tmp) / "stale.sock"
-    import socket as s
-
-    x = s.socket(s.AF_UNIX, s.SOCK_STREAM)
+    stale = sock.parent / "stale.sock"
+    x = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     x.bind(str(stale))
     x.close()                              # file left behind, nobody listening
     srv = SocketServer(stale, d)
@@ -297,10 +280,8 @@ def test_second_daemon_refused_and_stale_socket_cleaned(running):
     srv.stop()
 
 
-# ----------------------------------------------------------------- pad recovery and identity
-
 def test_set_all_goes_out_with_every_ping(running):
-    d, fake, runner, sock, tmp = running
+    d, fake, runner, sock = running
     ipc.send({"op": "set_slot", "slot": 1, "status": "run", "name": "x"}, path=sock)
     assert wait_for(lambda: fake.slots[1] is Status.RUN)
     start = fake.pings
@@ -430,8 +411,6 @@ def test_refused_at_the_keystroke_is_not_counted_as_stopped():
 
 
 def test_fake_flag_never_sends_real_keystrokes(monkeypatch):
-    import frostbite_host.daemon as dm
-
     seen = {}
 
     class Stop(Exception):

@@ -74,7 +74,7 @@ def test_minimal_payload_and_mcp_tool():
 @pytest.mark.parametrize("payload", [{}, [], "x", {"hook_event_name": "Stop"},
                                      {"session_id": "s"}, {"session_id": 5, "hook_event_name": 7},
                                      {"session_id": "s", "hook_event_name": "Weird"}])
-def test_defensive(payload):
+def test_bad_payloads_are_ignored(payload):
     assert hook_to_message(payload, {}) is None
 
 
@@ -125,15 +125,10 @@ def test_describe_tool():
     assert describe_tool(None, {}) == ""
 
 
-def _run_hook(stdin: str, sock: str):
-    env = {**os.environ, "FROSTBITE_SOCKET": sock}
-    return subprocess.run([sys.executable, "-m", "frostbite_host.hook"], input=stdin,
-                          capture_output=True, text=True, timeout=5, env=env)
-
-
 @pytest.mark.parametrize("stdin", ["", "not json", (FIX / "stop.json").read_text()])
 def test_hook_cli_never_fails_without_daemon(stdin):
-    d = tempfile.mkdtemp(prefix="fb")
-    r = _run_hook(stdin, os.path.join(d, "missing.sock"))
+    env = {**os.environ, "FROSTBITE_SOCKET": os.path.join(tempfile.mkdtemp(prefix="fb"), "missing.sock")}
+    r = subprocess.run([sys.executable, "-m", "frostbite_host.hook"], input=stdin,
+                       capture_output=True, text=True, timeout=5, env=env)
     assert r.returncode == 0
     assert r.stdout == ""

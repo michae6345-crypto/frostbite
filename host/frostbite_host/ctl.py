@@ -94,7 +94,6 @@ def main(argv: list[str] | None = None) -> int:
         path = args.hook or shutil.which("frostbite-hook") or "/ABSOLUTE/PATH/TO/frostbite-hook"
         print(json.dumps(hooks_snippet(os.path.abspath(path) if args.hook else path), indent=2))
         return 0
-    want_reply = args.cmd in ("status", "watch", "unwatch")
     if args.cmd == "set":
         msg = {"op": "set_slot", "slot": args.slot, "status": args.status,
                "name": args.name, "detail": args.detail, "log": args.log}
@@ -114,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         msg = {"op": "unwatch", "name": args.name}
     try:
-        reply = ipc.send(msg, timeout=2.0, want_reply=want_reply)
+        reply = ipc.send(msg, timeout=2.0, want_reply=args.cmd in ("status", "watch", "unwatch"))
     except OSError as e:
         print(f"frostbite-ctl: daemon not reachable at {ipc.socket_path()} ({e})", file=sys.stderr)
         return 2
@@ -136,5 +135,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     sys.exit(main())

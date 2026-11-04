@@ -44,11 +44,11 @@ function checkShape(res, label) {
   assert(res.ok === (res.errors.length === 0), `${label}: ok matches errors`);
 }
 
-// ---- Catalog shape ---------------------------------------------------------------------------
+// Catalog shape
 const C = FB.catalog;
 const seedAxes = {
   layout: ["stratum9", "mirror9", "pocket6", "stagger9", "twin9", "wide9", "console4"],
-  shell: ["iced", "milk", "glacier", "smoke", "lilac", "mint"], texture: ["satin", "layer-lines", "speckle"],
+  shell: ["black", "iced", "milk", "glacier", "smoke", "lilac", "mint"], texture: ["satin", "layer-lines", "speckle"],
   plate: ["floating", "flush", "deep-dish", "tray"], glowColor: ["ice", "white", "cyan", "lavender", "mint", "warm"],
   glowPlace: ["gap", "band", "base", "none"], corner: [4, 8, 12, 16], bezel: [6, 9, 12],
   knob: ["knurled-alu", "frosted", "soft-white", "ringlit", "puck"], oledColor: ["white", "ice", "blue"],
@@ -63,11 +63,11 @@ for (const [axis, vals] of Object.entries(seedAxes)) {
     assert(info && info.name && typeof info.desc === "string", `valueInfo.${axis}.${v}`);
   }
 }
-for (const k of ["iced", "milk", "glacier", "smoke", "lilac", "mint"]) assert(C.palette.shell[k], `palette.shell.${k}`);
+for (const k of ["black", "iced", "milk", "glacier", "smoke", "lilac", "mint"]) assert(C.palette.shell[k], `palette.shell.${k}`);
 const uiAxes = C.axesForUI.flatMap(g => g.axes);
 assert(uiAxes.length === Object.keys(C.options).length && Object.keys(C.options).every(a => uiAxes.includes(a)), "axesForUI covers every axis exactly once");
 
-// ---- Presets ---------------------------------------------------------------------------------
+// Presets
 assert(C.presets.length >= 30 && C.presets.length <= 40, `30–40 presets (got ${C.presets.length})`);
 const ids = new Set();
 for (const p of C.presets) {
@@ -82,7 +82,7 @@ assert(C.presets[0].id === "frostbite", "first preset is Frostbite");
 const specKey = (s) => JSON.stringify(Object.keys(C.options).map(a => s[a]));
 assert(new Set(C.presets.map(p => specKey(p.spec))).size === C.presets.length, "presets are all distinct specs");
 
-// ---- Known-bad specs -------------------------------------------------------------------------
+// Known-bad specs
 function expectError(over, code, label) {
   const res = FB.check(spec(over));
   checkShape(res, label);
@@ -141,7 +141,7 @@ try {
 }
 assert(C.options.layout.length === 7 && FB.layouts.length === 7, "fake layouts removed");
 
-// ---- Warnings + extras -----------------------------------------------------------------------
+// Warnings + extras
 expectWarning({ shell: "smoke" }, "smoke-glow", "smoke + gap");
 expectWarning({ agentCap: "clear" }, "clear-caps", "clear caps");
 expectWarning({ knob: "ringlit" }, "led-count", "ringlit stratum9 = 17 LEDs");
@@ -166,13 +166,13 @@ assert(FB.check(spec({ tilt: 0 })).stats.shell.height < base.stats.shell.height,
 const xda = FB.check(spec({ capProfile: "XDA" }));
 assert(xda.extras.some(x => /XDA/.test(x.item)), "XDA: buys XDA caps");
 
-// ---- Every layout × a few variants: shape + finiteness ---------------------------------------
+// Every layout × a few variants: shape + finiteness
 for (const L of C.options.layout) for (const knob of C.options.knob) for (const plate of C.options.plate) {
   const res = FB.check(spec({ layout: L, knob, plate, glowPlace: plate === "floating" ? "gap" : "band" }));
   checkShape(res, `${L}/${knob}/${plate}`);
 }
 
-// ---- randomSpec ------------------------------------------------------------------------------
+// randomSpec
 let randOk = 0;
 for (let seed = 1; seed <= 1000; seed++) {
   const s = C.randomSpec(null, mulberry32(seed));
@@ -209,7 +209,7 @@ assert(impossible.glowPlace === "gap" && impossible.plate === "flush", "impossib
   assert(ok === 500, `randomSpec without constraints.js still yields ok specs (${ok}/500)`);
 }
 
-// ---- Report ----------------------------------------------------------------------------------
+// Report
 const allCodes = new Set();
 for (const p of C.presets) for (const w of FB.check(p.spec).warnings) allCodes.add(w.code);
 console.log(`presets: ${C.presets.length}; preset warning codes seen: ${[...allCodes].sort().join(", ")}`);

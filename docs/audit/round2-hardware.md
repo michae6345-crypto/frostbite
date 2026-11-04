@@ -281,7 +281,7 @@ Two steps still fail or are unclear: H1 and m9.
 
 ## Scripts and sources
 
-Scripts, plots and solver output are in `/private/tmp/claude-501/-Users-tripi-Documents-frostbite/c28e1ea7-1ef6-4d14-b065-e25be6b901fb/scratchpad/r2/`: `export_cu.py`, `conn.py`, `spokes.py`, `solve.py`, `graph5v.py`, `necks.py`, `gaps.py`, `lug2.py`, `lug3.py`, `case1.py`, `case2.py`, `flex2.py`, `flex3.py`, `silk3.py`, `silk4.py`, `tails.py`, `refill.py`, and `gerb_regen/`.
+Scripts, plots and solver output are in `(temporary folder, since deleted)/r2/`: `export_cu.py`, `conn.py`, `spokes.py`, `solve.py`, `graph5v.py`, `necks.py`, `gaps.py`, `lug2.py`, `lug3.py`, `case1.py`, `case2.py`, `flex2.py`, `flex3.py`, `silk3.py`, `silk4.py`, `tails.py`, `refill.py`, and `gerb_regen/`.
 
 - [JLCPCB capabilities](https://jlcpcb.com/capabilities/pcb-capabilities), fetched 2026-11-03: slot width and ratio, PTH ring ≥ 0.20, hole tolerance, silk limits.
 - Alps `EC11E-15SW.STEP`, Seeed's XIAO RP2040 back pinout render, and the datasheet reading in `docs/audit/electrical.md`. The Alps catalogue PDF could not be rendered here, so lug figures come from the STEP.

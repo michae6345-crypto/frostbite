@@ -1,50 +1,50 @@
-"""Frostbite case, generated from design.json (CadQuery).
+"""Frostbite case, generated from design.json with CadQuery.
 
-Run:  CAD/.venv/bin/python CAD/frostbite_case.py
-Writes production/{Top,Bottom,GlowBand,Knob}.{step,stl} (print orientation),
-CAD/frostbite-assembly.step (desk orientation, with PCB and placeholder parts),
-CAD/positions.json and CAD/previews/*.svg|png.
+Run from the repo root: CAD/.venv/bin/python CAD/frostbite_case.py
+Writes production/{Top,Bottom,GlowBand,OLEDSupport,Knob}.{step,stl} in print orientation,
+CAD/frostbite-assembly.step on the desk with the PCB and placeholder parts,
+CAD/positions.json and CAD/previews/*.svg.
 
-Frames
-------
-Design frame: X = PCB x, Y = -PCB y (back edge y=0 is +Y, the user is at -Y),
-Z = 0 at the PCB underside. Every part is modelled here. The assembly STEP is the
-design frame rotated +tilt about X so the Bottom underside sits flat on Z = 0.
+Design frame, used for every part: X = PCB x, Y = -PCB y (back edge y=0 is +Y, the user is at -Y),
+Z = 0 at the PCB underside. The assembly STEP is this frame rotated +tilt about X, which puts the
+Bottom underside flat on Z = 0.
 
-Vertical stack in the design frame (mm)
----------------------------------------
-  6.60  Top face = MX plate top (PCB top + 5.0, fixed by the switch)
+Stack in the design frame (mm):
+  6.60  Top face = MX plate top (PCB top + 5.0, set by the switch)
   5.10  plate underside at the switch clips (1.5 thick at the 14.0 cutouts)
   4.10  plate underside elsewhere (2.5 thick)
   0..1.6 PCB
  -2.60  top of the GlowBand light pads and riser wall (below every 2.0 mm lead tail)
- -9.40  Top skirt bottom = GlowBand ring top, heat-set inserts pressed in from here
+ -9.40  Top skirt bottom = GlowBand ring top; heat-set inserts press in from here
 -11.40  GlowBand bottom = Bottom rim
- -13.0  screw head seat (M3x16, tip at +3.0)
- z_under(y) Bottom underside, a 4 deg plane, lowest at the back
+-13.00  screw head seat (M3x16, tip at +3.0)
+-16.50  Bottom underside at the front screws; the 4 deg plane drops toward the back
 
-Assembly rule: the PCB enters the Top from the skirt side, so nothing printed may stand inside
-the PCB insertion envelope (PCB + tolerance) below the plate. The inserts live in the side walls.
+The PCB enters the Top from the skirt side, so nothing printed may stand inside the PCB insertion
+envelope (PCB + tolerance) below the plate. That is why the inserts sit in the side walls.
 """
 from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 
 import cadquery as cq
+from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
+from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
 
 CAD = Path(__file__).resolve().parent
 ROOT = CAD.parent
 PROD = ROOT / "production"
 D = json.loads((ROOT / "design.json").read_text())
 
-# ------------------------------------------------------------------ parameters
 TOL = D["case"]["tolerance"]                    # 0.3 per side where print meets PCB
 PCB_W, PCB_H, PCB_T = D["pcb"]["w"], D["pcb"]["h"], 1.6
 SH = D["case"]["shell"]
 SHELL_W, SHELL_H, CORNER, TILT = SH["w"], SH["h"], SH["corner"], SH["tilt_deg"]
 TAN = math.tan(math.radians(TILT))
+MARGIN_Y = (SHELL_H - PCB_H) / 2                 # front and back wall thickness
 
 PCB_TOP = PCB_T
 PLATE_TOP = PCB_TOP + 5.0                        # MX: plate top 5.0 above PCB top
@@ -53,8 +53,8 @@ PLATE_T = 2.5
 PLATE_UNDER = PLATE_TOP - PLATE_T                # 4.1, leaves 2.5 for THT diodes lying flat
 CUTOUT = 14.0
 CLIP_POCKET = 15.4                               # clip span 14.9 + 0.5
-# Top height 16.0: puts the 13.5 x 8 USB window fully inside the skirt, with the 4 mm inserts
-# at the rim. It also keeps a verifier section plane in the 1.5 mm clip zone (see README).
+# Top height 16.0 puts the 13.5 x 8 USB window fully inside the skirt, with the 4 mm inserts
+# at the rim.
 SKIRT_BOT = PLATE_TOP - 16.0                     # -9.4
 BAND_H = 2.0
 BAND_TOP = SKIRT_BOT
@@ -69,27 +69,20 @@ SCREW_TIP = 3.0                                  # tip z; Top skin above the bli
 SEAT = SCREW_TIP - SCREW_LEN                     # -13.0
 HEAD_RECESS = 0.5
 FLOOR_T = 2.5
-# screw axes (PCB coords) and boss size come from design.json case.screws
 SCREWS = [(float(p["x"]), float(p["y"])) for p in D["case"]["screws"]["positions"]]
 BOSS_OD = float(D["case"]["screws"]["boss_od"])  # 8.7 = insert hole 4.7 + 2 x 2.0 wall, inside the side wall
 SCREW_Y = tuple(sorted({y for _, y in SCREWS}))
-# bottom-side pads (PCB/build/bottom_pads.json): lead tails / solder joints the case must clear
+# Lead tails and solder joints on the PCB underside that the case must clear
 PADS_FILE = ROOT / "PCB" / "build" / "bottom_pads.json"
 THT_TAIL, SMD_JOINT, PAD_CLEAR = 2.0, 0.3, 0.5
 
-# underside plane: lowest point needed at the front screws (largest y)
+# The underside plane is set by the head recess at the front screws (largest y)
 Y_FRONT_SCREW = max(SCREW_Y)
 Z_UNDER_FRONT_SCREW = SEAT - HEAD_H - HEAD_RECESS   # -16.5
 
 
-def z_under(y_pcb: float) -> float:
-    """Bottom underside z at PCB-y (design frame). Lower toward the back (y=0)."""
-    return Z_UNDER_FRONT_SCREW - (Y_FRONT_SCREW - y_pcb) * TAN
-
-
-# OLED (module on a 2.5 mm header)
+# OLED. The header plastic comes off: the module rests on the printed OLEDSupport, which sets the height.
 OL = D["oled"]
-# The header plastic comes off: the module rests on the printed OLEDSupport, which sets the height.
 SUP = D["case"]["oled_support"]
 OLED_GAP, OLED_TAPE = float(SUP["module_gap"]), float(SUP["tape"])  # 1.8, 0.2
 OLED_BOARD_T, OLED_GLASS_T = 1.2, 1.45
@@ -103,7 +96,7 @@ OLED_RECESS_TOP = PLATE_TOP - OLED_LIP_T         # 5.6, 1.0 of air above the mod
 OLED_WIN_CLR_X, OLED_WIN_CLR_Y = 0.5, 0.74       # window 31.0 x 12.98 around the 30 x 11.5 design window
 OLED_RECESS_FAR, OLED_RECESS_Y = 1.1, 0.8        # recess past the far end / past each long side
 OLED_YAW_DEG, OLED_SHIFT = 1.0, 0.1              # misalignment the path check must survive
-# x0, x1, y0, y1 in PCB coords. Free PCB top: U1 pad rows at x 10.5-14.2 and 25.8-31.4, y up to 19.0; J1 pads from x 38.15
+# x0, x1, y0, y1 in PCB coords, on free PCB top: U1 pad rows at x 10.5-14.2 and 25.8-31.4, y up to 19.0; J1 pads from x 38.15
 SUPPORT_FAR, SUPPORT_NEAR = (3.5, 9.5, 7.6, 21.1), (32.2, 37.4, 8.0, 21.1)
 SUPPORT_RAIL = (3.5, 37.4, 19.5, 21.1)
 RIBBON_UP, RIBBON_OUT = 0.8, 0.8                 # unknown ribbon: room left above the board and past its end
@@ -137,13 +130,12 @@ XIAO_RISER_TOP = -5.0                            # riser drops under the XIAO US
 PAD_TOP = -(THT_TAIL + PAD_CLEAR + 0.1)          # -2.6: below any 2.0 mm lead tail + 0.5, 0.82 under the LED
 
 
-# ------------------------------------------------------------------ helpers
 def Y(y_pcb: float) -> float:
     return -y_pcb
 
 
 def box(x0, x1, y0, y1, z0, z1) -> cq.Workplane:
-    """Axis box from PCB-coordinate ranges."""
+    """Box from PCB-coordinate ranges (y is flipped into the design frame)."""
     return (cq.Workplane("XY")
             .box(x1 - x0, y1 - y0, z1 - z0, centered=False)
             .translate((x0, Y(y1), z0)))
@@ -171,7 +163,7 @@ def pocket_prism(z0, z1, extra=TOL):
 
 
 def below_plane(offset=0.0):
-    """Half-space under the 4 deg underside plane (+offset), as a big box."""
+    """Everything under the 4 deg underside plane (+offset), as a big box."""
     b = cq.Workplane("XY").box(600, 600, 300, centered=(True, True, False)).translate((0, 0, -300))
     b = b.rotate((0, 0, 0), (1, 0, 0), -TILT)
     return b.translate((PCB_W / 2, Y(Y_FRONT_SCREW), Z_UNDER_FRONT_SCREW + offset))
@@ -190,7 +182,6 @@ def solid(wp: cq.Workplane) -> cq.Shape:
     return s
 
 
-# ------------------------------------------------------------------ parts
 def oled_recess(z0, z1) -> cq.Workplane:
     m = OL["module"]
     return box(m["x"] - OLED_RECESS_FAR, m["x"] + m["w"] + TOL,
@@ -200,11 +191,11 @@ def oled_recess(z0, z1) -> cq.Workplane:
 def make_top() -> cq.Workplane:
     body = shell_prism(SKIRT_BOT, PLATE_TOP)
     body = body.cut(pocket_prism(SKIRT_BOT - 1, PLATE_UNDER))
-    # switch cutouts, clip relief pockets (plate 1.5 at the clips)
+    # switch cutouts, with clip pockets that thin the plate to 1.5
     for k in D["keys"]:
         body = body.cut(cbox(k["x"], k["y"], CUTOUT, CUTOUT, PLATE_UNDER - 1, PLATE_TOP + 1))
         body = body.cut(cbox(k["x"], k["y"], CLIP_POCKET, CLIP_POCKET, PLATE_UNDER - 1, PLATE_TOP - PLATE_T_CLIP))
-    # OLED: glass window (design window + tol) through, module recess from below
+    # OLED window through the plate, module recess from below
     w = OL["window"]
     body = body.cut(box(w["x"] - OLED_WIN_CLR_X, w["x"] + w["w"] + OLED_WIN_CLR_X,
                         w["y"] - OLED_WIN_CLR_Y, w["y"] + w["h"] + OLED_WIN_CLR_Y,
@@ -212,31 +203,25 @@ def make_top() -> cq.Workplane:
     body = body.cut(oled_recess(PLATE_UNDER - 1, OLED_RECESS_TOP))
     # encoder: the plate is only 0.5 above the EC11 body, so the opening clears the body
     body = body.cut(rrect(EN["x"], EN["y"], EC_OPEN[0], EC_OPEN[1], EC_OPEN[2], PLATE_UNDER - 1, PLATE_TOP + 1))
-    # heat-set insert holes + screw continuation (blind, hidden)
+    # heat-set insert holes, then a blind continuation for the screw tip
     for sx, sy in SCREWS:
         body = body.cut(cyl(sx, sy, INSERT_HOLE / 2, SKIRT_BOT - 1, SKIRT_BOT + INSERT_DEPTH))
         body = body.cut(cyl(sx, sy, SCREW_CLR / 2, SKIRT_BOT, SCREW_TIP + 0.4))
-    # USB-C window in the back skirt, centred on the receptacle
-    # The window reaches below the bottom edge as a notch that the GlowBand tongue fills, so the
-    # Top has no 13 mm bridge when printed upside down and the band closes the window from below.
-    body = body.cut(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y() - 2, 1.0,
+    # USB-C window. It runs out of the skirt as a notch that the GlowBand tongue fills, so the Top
+    # has no 13 mm bridge when printed upside down and the band closes the window from below.
+    body = body.cut(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y - 2, 1.0,
                         USB_CZ - UC["h"] / 2, USB_CZ + UC["h"] / 2))
     body = body.cut(box(USB_CX - UC["w"] / 2 - USB_TONGUE_GAP, USB_CX + UC["w"] / 2 + USB_TONGUE_GAP,
-                        -MARGIN_Y() - 2, 1.0, SKIRT_BOT - 1, USB_CZ - UC["h"] / 2 + USB_TONGUE_GAP))
+                        -MARGIN_Y - 2, 1.0, SKIRT_BOT - 1, USB_CZ - UC["h"] / 2 + USB_TONGUE_GAP))
     return body
 
 
-def MARGIN_Y():
-    return (SHELL_H - PCB_H) / 2
-
-
 def make_band() -> cq.Workplane:
-    """Clear light guide: visible ring + riser wall + a pad under each glow LED.
+    """Clear light guide: visible ring, riser wall and a pad under each glow LED.
 
-    Pads and riser stand inside the Top pocket with TOL of air all round, so they fit and so light
-    stays in the clear part instead of passing straight into the frosted skirt. The riser carries
-    pad light around the perimeter to the ring. The ring top is relieved 0.3 except a land at the
-    visible face and around the screws, which removes most of its contact with the skirt.
+    Pads and riser stand in the Top pocket with TOL of air all round, which keeps light in the clear
+    part and out of the skirt. The ring top is relieved 0.3 except at the visible face and around the
+    screws, for the same reason.
     """
     inner = box(RISER_T, PCB_W - RISER_T, RISER_T, PCB_H - RISER_T, BAND_BOT - 1, 1)
     band = shell_prism(BAND_BOT, BAND_TOP, inset=BAND_INSET).cut(inner)
@@ -248,12 +233,12 @@ def make_band() -> cq.Workplane:
         x0, x1 = (0, g["x"] + PAD_REACH) if left else (g["x"] - PAD_REACH, PCB_W)
         y0, y1 = max(0, g["y"] - PAD_REACH), min(PCB_H, g["y"] + PAD_REACH)
         band = band.union(box(x0, x1, y0, y1, BAND_BOT, PAD_TOP))
-    # tongue that rises into the Top's USB notch and forms the bottom edge of the USB window
-    band = band.union(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y() + BAND_INSET, -TOL,
+    # tongue that forms the bottom edge of the USB window
+    band = band.union(box(USB_CX - UC["w"] / 2, USB_CX + UC["w"] / 2, -MARGIN_Y + BAND_INSET, -TOL,
                           BAND_BOT, USB_CZ - UC["h"] / 2))
     relief = shell_prism(BAND_TOP - RING_RELIEF, BAND_TOP + 1, inset=BAND_INSET + RING_LAND)
     relief = relief.cut(pocket_prism(BAND_TOP - 2, BAND_TOP + 2))
-    relief = relief.cut(box(USB_CX - UC["w"] / 2 - 1, USB_CX + UC["w"] / 2 + 1, -MARGIN_Y() - 2, 0,
+    relief = relief.cut(box(USB_CX - UC["w"] / 2 - 1, USB_CX + UC["w"] / 2 + 1, -MARGIN_Y - 2, 0,
                             BAND_TOP - 2, BAND_TOP + 2))
     for sx, sy in SCREWS:
         relief = relief.cut(cyl(sx, sy, BOSS_OD / 2 + 0.5, BAND_TOP - 2, BAND_TOP + 2))
@@ -265,8 +250,7 @@ def make_band() -> cq.Workplane:
 
 def make_bottom() -> cq.Workplane:
     body = shell_prism(-60, BAND_BOT)
-    cav = pocket_prism(-60, BAND_BOT + 1).cut(below_plane(FLOOR_T))
-    body = body.cut(cav)
+    body = body.cut(pocket_prism(-60, BAND_BOT + 1).cut(below_plane(FLOOR_T)))
     body = body.cut(below_plane(0.0))
     for sx, sy in SCREWS:
         body = body.cut(cyl(sx, sy, SCREW_CLR / 2, -70, 0))
@@ -275,17 +259,17 @@ def make_bottom() -> cq.Workplane:
 
 
 def make_oled_support() -> cq.Workplane:
-    """C-shaped spacer: fills the gap under the module and carries finger load on the glass to the PCB.
+    """C-shaped spacer that carries finger load on the glass to the PCB.
 
-    One foot under the far end, one beside J1, joined by a rail outside the module and past the XIAO
-    pad rows. Taped to the module first, so the module positions it. 0.2 tape above and below.
+    One foot under the far end, one beside J1, joined by a rail that clears the XIAO pad rows.
+    It is taped to the module first, so the module positions it (0.2 tape above and below).
     """
     z0, z1 = PCB_TOP + OLED_TAPE, OLED_BOARD_Z0 - OLED_TAPE
-    return (box(*SUPPORT_FAR, z0, z1).union(box(*SUPPORT_NEAR, z0, z1)).union(box(*SUPPORT_RAIL, z0, z1)))
+    return box(*SUPPORT_FAR, z0, z1).union(box(*SUPPORT_NEAR, z0, z1)).union(box(*SUPPORT_RAIL, z0, z1))
 
 
 def make_knob() -> cq.Workplane:
-    """18 mm knob for a 6 mm D-shaft, 30 printable vertical knurl ribs, design frame."""
+    """18 mm knob for a 6 mm D-shaft, with 30 vertical knurl ribs that print without supports."""
     n, ro, ri = 30, KNOB_D / 2, KNOB_D / 2 - 0.5
     pts = []
     for i in range(2 * n):
@@ -303,7 +287,6 @@ def make_knob() -> cq.Workplane:
     return knob.cut(bore)
 
 
-# ------------------------------------------------------------------ placeholders
 def placeholders() -> dict[str, cq.Workplane]:
     ph: dict[str, cq.Workplane] = {}
     ph["PCB"] = box(0, PCB_W, 0, PCB_H, 0, PCB_T)
@@ -326,7 +309,7 @@ def placeholders() -> dict[str, cq.Workplane]:
         ph[f"glow{g['led']}_led"] = cbox(g["x"], g["y"], LED_W, LED_H, -LED_T, 0)
     m, w, h = OL["module"], OL["window"], OL["header"]
     pins = None
-    for i in range(4):                          # bare header pins, plastic removed, flush on the module
+    for i in range(4):                          # bare header pins, plastic removed
         p = cbox(h["pin_row_x"], h["centre_y"] + (i - 1.5) * h["pitch"], 0.64, 0.64, -THT_TAIL, OLED_BOARD_Z1)
         pins = p if pins is None else pins.union(p)
     ph["OLED_pins"] = pins
@@ -353,7 +336,7 @@ def placeholders() -> dict[str, cq.Workplane]:
 
 
 def oled_envelopes() -> dict[str, cq.Workplane]:
-    """Room deliberately left for things the design cannot know yet (no drawing of the module)."""
+    """Room left for parts of the module that have no drawing yet."""
     m, h = OL["module"], OL["header"]
     ribbon = box(m["x"] - RIBBON_OUT, OL["window"]["x"], m["y"], m["y"] + m["h"],
                  OLED_BOARD_Z0, OLED_BOARD_Z1 + RIBBON_UP)
@@ -365,7 +348,7 @@ def oled_envelopes() -> dict[str, cq.Workplane]:
 
 
 def switch_rigid(x, y) -> cq.Workplane:
-    """Switch without its sprung clips: what must pass the 14.0 cutout during assembly."""
+    """Switch without its sprung clips, which is what must pass the 14.0 cutout."""
     return (cbox(x, y, 14.0, 14.0, PCB_TOP, PLATE_TOP)
             .union(cbox(x, y, 15.6, 15.6, PLATE_TOP, PLATE_TOP + 6.6))
             .union(cbox(x, y, 4.0, 4.0, PLATE_TOP + 6.6, PLATE_TOP + 10.2)))
@@ -381,7 +364,6 @@ def usb_overmold() -> cq.Workplane:
         box(-100, 200, -1.9, 100, -50, 50))
 
 
-# ------------------------------------------------------------------ frames
 def to_desk(s: cq.Shape) -> cq.Shape:
     return s.rotate(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), TILT)
 
@@ -406,8 +388,8 @@ def build() -> dict:
             "ph": {k: solid(v) for k, v in placeholders().items()}}
 
 
-COLORS = {"Top": (0.80, 0.90, 0.97, 0.55), "GlowBand": (0.45, 0.80, 1.0, 0.8), "Bottom": (0.80, 0.90, 0.97, 0.55),
-          "Knob": (0.85, 0.92, 0.98, 1.0), "OLEDSupport": (0.25, 0.25, 0.28, 1.0)}
+BLACK = (0.08, 0.08, 0.09, 1.0)
+COLORS = {"Top": BLACK, "GlowBand": (0.45, 0.80, 1.0, 0.8), "Bottom": BLACK, "Knob": BLACK, "OLEDSupport": BLACK}
 
 
 def ph_color(name):
@@ -454,8 +436,16 @@ def positions() -> dict:
         "screws": [{"x": sx, "y": sy, "insert": "Top", "head": "Bottom underside", "boss_od": BOSS_OD}
                    for sx, sy in SCREWS],
         "shell": {"w": SHELL_W, "h": SHELL_H},
-        "heights": {"front_mm": None, "back_mm": None},
     }
+
+
+def height_at(shape: cq.Shape, y: float) -> float:
+    """Highest Z of the shape on a vertical line at (shell centre x, y)."""
+    it = IntCurvesFace_ShapeIntersector()
+    it.Load(shape.wrapped, 1e-6)
+    it.Perform(gp_Lin(gp_Pnt(PCB_W / 2, y, 200), gp_Dir(0, 0, -1)), 0, 400)
+    ws = [it.WParameter(i) for i in range(1, it.NbPnt() + 1)]
+    return 200 - min(ws) if ws else float("nan")
 
 
 def export_all(model: dict) -> dict:
@@ -466,38 +456,24 @@ def export_all(model: dict) -> dict:
         cq.exporters.export(p, str(PROD / f"{name}.step"))
         cq.exporters.export(p, str(PROD / f"{name}.stl"), tolerance=0.01, angularTolerance=0.1)
         out[name] = p
-    a = assembly(model)
-    a.export(str(CAD / "frostbite-assembly.step"))
+    assembly(model).export(str(CAD / "frostbite-assembly.step"))
     pos = positions()
     desk = {k: to_desk(s) for k, s in model["parts"].items() if k != "Knob"}
     bb = cq.Compound.makeCompound(list(desk.values())).BoundingBox()
     off = desk_offset(model["parts"]["Bottom"])
-    # case height above the desk at the front and back skin (without keycaps/knob)
+    # Top face above the desk just inside the front and back skin
     top_d = to_desk(model["parts"]["Top"]).translate(cq.Vector(0, 0, off))
-    tb = top_d.BoundingBox()
     c, sn = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
-    y_back, y_front = MARGIN_Y() - 0.5, -(PCB_H + MARGIN_Y() - 0.5)     # design-frame Y just inside the skin
-    pos["heights"] = {"front_mm": round(_height_at(top_d, y_front * c - PLATE_TOP * sn), 2),
-                      "back_mm": round(_height_at(top_d, y_back * c - PLATE_TOP * sn), 2),
+    y_back, y_front = MARGIN_Y - 0.5, -(PCB_H + MARGIN_Y - 0.5)
+    pos["heights"] = {"front_mm": round(height_at(top_d, y_front * c - PLATE_TOP * sn), 2),
+                      "back_mm": round(height_at(top_d, y_back * c - PLATE_TOP * sn), 2),
                       "_note": "Top face above the desk at the front / back skin, centre line; keycaps add ~13.6 above the plate",
                       "case_bbox_desk_mm": [round(bb.xlen, 2), round(bb.ylen, 2), round(bb.zlen, 2)]}
     (CAD / "positions.json").write_text(json.dumps(pos, indent=2) + "\n")
     return out
 
 
-def _height_at(shape: cq.Shape, y: float) -> float:
-    """Highest Z of the shape along a vertical line at (shell centre x, y)."""
-    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
-    from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
-    it = IntCurvesFace_ShapeIntersector()
-    it.Load(shape.wrapped, 1e-6)
-    x = PCB_W / 2
-    it.Perform(gp_Lin(gp_Pnt(x, y, 200), gp_Dir(0, 0, -1)), 0, 400)
-    ws = [it.WParameter(i) for i in range(1, it.NbPnt() + 1)]
-    return 200 - min(ws) if ws else float("nan")
-
-
-def _view(shape: cq.Shape, az: float, el: float) -> cq.Shape:
+def view(shape: cq.Shape, az: float, el: float) -> cq.Shape:
     """Turn the model so a camera on +Z sees it from azimuth az (deg, about Z) and elevation el."""
     o = cq.Vector(0, 0, 0)
     return shape.rotate(o, cq.Vector(0, 0, 1), az).rotate(o, cq.Vector(1, 0, 0), -(90 - el))
@@ -510,17 +486,14 @@ def previews(model: dict):
                 strokeWidth=0.25, showHidden=False, projectionDir=(0, 0, 1))
     asm = assembly(model).toCompound()
     exp = assembly(model, explode=16).toCompound()
-    cq.exporters.export(_view(asm, 30, 35), str(pv / "assembly-iso.svg"), opt=opts)
-    cq.exporters.export(_view(exp, 30, 25), str(pv / "exploded-iso.svg"), opt=opts)
+    cq.exporters.export(view(asm, 30, 35), str(pv / "assembly-iso.svg"), opt=opts)
+    cq.exporters.export(view(exp, 30, 25), str(pv / "exploded-iso.svg"), opt=opts)
     cq.exporters.export(model["parts"]["Top"], str(pv / "top-plan.svg"), opt=opts)
-    # left side elevation on the desk: shows the 4 deg wedge and the glow band line
-    cq.exporters.export(_view(asm, 90, 0), str(pv / "side-left.svg"), opt=opts)
-    # back elevation: USB-C window
-    cq.exporters.export(_view(asm, 180, 0), str(pv / "back-usb.svg"), opt=opts)
+    cq.exporters.export(view(asm, 90, 0), str(pv / "side-left.svg"), opt=opts)
+    cq.exporters.export(view(asm, 180, 0), str(pv / "back-usb.svg"), opt=opts)
 
 
 if __name__ == "__main__":
-    import sys
     m = build()
     export_all(m)
     if "--no-previews" not in sys.argv:

@@ -18,7 +18,7 @@
       ],
       "cwd": "~/qmk_firmware",
       "exit_code": 0,
-      "duration_s": 3.17,
+      "duration_s": 2.34,
       "stdout_tail": [
         "",
         "",
@@ -37,13 +37,13 @@
     }
   ],
   "inputs_sha256": {
-    "Firmware/qmk/keyboards/frostbite/config.h": "17d88a78f241a9aa44ea7db9afce78969df925d4a9f8613c43355d5ec1630153",
-    "Firmware/qmk/keyboards/frostbite/frostbite.c": "069048c92b5a4b3b101dad783a527005b07dd4563a21056e4fc43472b4611656",
+    "Firmware/qmk/keyboards/frostbite/config.h": "df982d23fc68072bf674aedf93d89850c405c611ddff5e792883162a6ddb4f0e",
+    "Firmware/qmk/keyboards/frostbite/frostbite.c": "a9b3fc7a9957416c92cb126ecfbc2cfb9528500940b1a0943f4cc7d9904fcaa6",
     "Firmware/qmk/keyboards/frostbite/halconf.h": "c4dc51661d0426b5266e4bd8ae14b29877af6717108041ad119d19821cf556c2",
     "Firmware/qmk/keyboards/frostbite/keyboard.json": "374b3af90756f13e276b292544878355222d3da26e12699d2880f25489a3203b",
-    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "68b4cd7d5879021066f14987002b31aff6312a64b05fbdeef3545e77bc3eb04a",
-    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "7c959162848aaf69a0f030fe9c789b0f742e3ea8be2c2d0ba3b1fbae36ff63e5",
-    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "6e97d1c02b04f6961ed3bffff9647c5fdc63ea34816b32db76e505f86b43b004"
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "aeeb5db67c073798662e2e4c7fac8ff165bfdb628b927b10d80a4435998c6894",
+    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "34a0415f108ffc854d78f117b6fa7566de569fd300f999baa35601a526952245",
+    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "ed196fe4bd634d2669843cbdfd76109b8e14c3b76e67c38db6128798bee33eb3"
   },
   "details": {
     "qmk_link": "~/Documents/frostbite/Firmware/qmk/keyboards/frostbite",
@@ -68,6 +68,6 @@
       ]
     }
   },
-  "timestamp": "2026-11-04T01:04:55+00:00",
-  "duration_s": 3.17
+  "timestamp": "2026-11-04T04:20:04+00:00",
+  "duration_s": 2.34
 }

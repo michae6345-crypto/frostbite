@@ -1,13 +1,8 @@
 (function (root) {
   const FB = root.FB = root.FB || {};
-  // Agent B owns this file. Every axis, value and palette key from the lead's seed is kept unchanged
-  // (renderers depend on them). Added: axisLabels, valueInfo (display names + short descriptions),
-  // axesForUI (configurator grouping), presets (curated specs that all pass FB.check) and a
-  // constraint-aware randomSpec.
-
   const options = {
     layout: ["stratum9", "mirror9", "pocket6", "stagger9", "twin9", "wide9", "console4"],
-    shell: ["iced", "milk", "glacier", "smoke", "lilac", "mint"],
+    shell: ["black", "iced", "milk", "glacier", "smoke", "lilac", "mint"],
     texture: ["satin", "layer-lines", "speckle"],
     plate: ["floating", "flush", "deep-dish", "tray"],
     glowColor: ["ice", "white", "cyan", "lavender", "mint", "warm"],
@@ -27,6 +22,7 @@
 
   const palette = {
     shell: {
+      black:   { top: "#26282b", base: "#1b1d1f", edge: "#101112", opacity: 1.0 },
       iced:    { top: "#e8eef1", base: "#d4dde1", edge: "#c3cdd2", opacity: 0.92 },
       milk:    { top: "#f4f4f1", base: "#e2e2dd", edge: "#cfcfc9", opacity: 1.0 },
       glacier: { top: "#dbe9f2", base: "#c4d8e4", edge: "#a9c2d1", opacity: 0.9 },
@@ -48,7 +44,6 @@
     oled: { white: "#eef6ff", ice: "#a8ecff", blue: "#5aa7ff" }
   };
 
-  // ---- Display names -------------------------------------------------------------------------
   const axisLabels = {
     layout: "Layout", shell: "Shell", texture: "Texture", plate: "Plate", glowColor: "Glow colour",
     glowPlace: "Glow placement", corner: "Corner radius", bezel: "Bezel", knob: "Knob",
@@ -57,24 +52,12 @@
     tilt: "Tilt", statuses: "Agent statuses"
   };
 
-  function layoutInfo() {
-    const out = {};
-    const fallback = {
-      stratum9: "Frostbite 9", mirror9: "Mirror 9", pocket6: "Pocket 6", stagger9: "Stagger 9",
-      twin9: "Twin 9", wide9: "Wide 9", console4: "Console 4"
-    };
-    for (const id of options.layout) {
-      const L = Array.isArray(FB.layouts) ? FB.layouts.find(l => l.id === id) : null;
-      out[id] = { name: L ? L.name : fallback[id], desc: L ? L.blurb : "" };
-    }
-    return out;
-  }
-
-  // valueInfo[axis][value] = { name, desc }. Every value of every axis has an entry.
+  // valueInfo[axis][value] = { name, desc }
   const valueInfo = {
-    layout: layoutInfo(),
+    layout: Object.fromEntries(FB.layouts.map(L => [L.id, { name: L.name, desc: L.blurb }])),
     shell: {
-      iced:    { name: "Iced", desc: "Translucent frosted PETG, the signature Frostbite look." },
+      black:   { name: "Black", desc: "Opaque matte black PETG. Hides grime, but absorbs stray glow, so test the band first." },
+      iced:    { name: "Iced", desc: "Translucent frosted PETG. Pretty, but it shows dirt." },
       milk:    { name: "Milk", desc: "Opaque soft white. Calm, appliance-like." },
       glacier: { name: "Glacier", desc: "Pale blue translucent PETG with deeper edges." },
       smoke:   { name: "Smoke", desc: "Dark translucent grey. Moody, but swallows glow." },
@@ -176,8 +159,7 @@
     return v ? v.name : String(value);
   }
 
-  // Ordered groups for the configurator. `axes` are enumerated option axes (keys of `options`);
-  // `text` lists free-text fields shown in that group.
+  // Configurator groups. `axes` are keys of `options`, `text` lists free-text fields.
   const axesForUI = [
     { id: "layout",   name: "Layout",        axes: ["layout"] },
     { id: "shell",    name: "Shell & light", axes: ["shell", "texture", "glowColor", "glowPlace"] },
@@ -188,7 +170,7 @@
   ];
 
   const defaultSpec = {
-    layout: "stratum9", shell: "iced", texture: "satin", plate: "floating", glowColor: "ice", glowPlace: "gap",
+    layout: "stratum9", shell: "black", texture: "satin", plate: "floating", glowColor: "ice", glowPlace: "gap",
     corner: 12, bezel: 9, knob: "knurled-alu", oledColor: "white", capProfile: "DSA", agentCap: "frosted",
     commandCap: "white", legends: "blank", screws: "hidden", wordmark: "front", wordmarkText: "frostbite",
     tilt: 4, statuses: ["run", "done", "run", "needs", "idle", "error"]
@@ -199,13 +181,12 @@
     out.statuses = Array.isArray(s.statuses) ? s.statuses.slice() : defaultSpec.statuses.slice();
     return out;
   }
-  const mk = (over) => cloneSpec({ ...defaultSpec, ...over });
+  const mk = (over) => cloneSpec({ ...defaultSpec, shell: "iced", ...over });
 
-  // ---- Presets -------------------------------------------------------------------------------
-  // All presets must pass FB.check(spec).ok (enforced by test/constraints.test.js).
+  // All presets must pass FB.check (enforced by test/constraints.test.js).
   const presets = [
-    { id: "frostbite", name: "Frostbite", note: "The original: iced shell, floating plate over an ice-blue light gap.",
-      spec: mk({}) },
+    { id: "frostbite", name: "Frostbite", note: "The build: matte black shell, floating plate over an ice-blue light gap.",
+      spec: cloneSpec(defaultSpec) },
     { id: "frostbite-halo", name: "Frostbite Halo", note: "The original with a ring-lit dial that glows with the busiest agent.",
       spec: mk({ knob: "ringlit" }) },
     { id: "glacier", name: "Glacier", note: "Pale-blue shell, glacier command caps and an ice-tinted OLED.",
@@ -280,9 +261,7 @@
       spec: mk({ shell: "smoke", glowColor: "warm", glowPlace: "base", commandCap: "graphite", oledColor: "white" }) }
   ];
 
-  // ---- Random spec ----------------------------------------------------------------------------
-  // Axis-only rules, mirrored from constraints.js so randomSpec still works when constraints.js
-  // is not loaded. When FB.check exists it is the authority.
+  // The axis-only rules from constraints.js, so randomSpec works without it. FB.check wins when loaded.
   function basicOk(s) {
     if (s.glowPlace === "gap" && s.plate !== "floating") return false;
     if (s.screws === "top" && s.bezel < 9) return false;
@@ -301,15 +280,12 @@
     if (opts && typeof opts[0] === "number" && typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
     return v;
   }
-  // locked may be:
-  //   - an object { axis: value, ... }  (only those axes are kept), or
-  //   - an array / Set of axis names, in which case values come from `base` (defaults to defaultSpec).
-  // rng: () => [0, 1). Defaults to Math.random.
+  // locked is { axis: value } or an array/Set of axis names, whose values come from base or defaultSpec.
   function normalizeLocked(locked, base) {
     const out = {};
     if (!locked) return out;
     const src = base || defaultSpec;
-    if (Array.isArray(locked) || (typeof Set !== "undefined" && locked instanceof Set)) {
+    if (Array.isArray(locked) || locked instanceof Set) {
       for (const k of locked) if (src[k] !== undefined) out[k] = coerce(k, src[k]);
       return out;
     }
@@ -331,16 +307,12 @@
       if (Array.isArray(lock.statuses)) s.statuses = lock.statuses.slice();
       if (isOk(s)) return s;
     }
-    const fb = cloneSpec({ ...defaultSpec, ...lock });
-    if (Array.isArray(lock.statuses)) fb.statuses = lock.statuses.slice();
-    return fb;
+    return cloneSpec({ ...defaultSpec, ...lock });
   }
-
-  function presetById(id) { return presets.find(p => p.id === id) || presets[0]; }
 
   FB.catalog = {
     options, palette, labels, axisLabels, valueInfo, valueLabel, axesForUI,
-    defaultSpec, presets, presetById, randomSpec
+    defaultSpec, presets, randomSpec
   };
   if (typeof module !== "undefined" && module.exports) module.exports = FB.catalog;
 })(typeof window !== "undefined" ? window : globalThis);

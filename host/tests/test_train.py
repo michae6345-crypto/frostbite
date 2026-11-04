@@ -1,7 +1,9 @@
 import math
 import os
+import time
 from pathlib import Path
 
+from frostbite_host.state import Board
 from frostbite_host.train import RunState, TrainWatcher, parse_line
 
 FIX = Path(__file__).parent / "fixtures" / "train"
@@ -203,3 +205,30 @@ def test_rotated_run_keeps_status_until_new_content(tmp_path):
     p.write_text("step 2 loss 0.4\n")
     w.poll_once()
     assert w.state.step == 2 and w.state.lines == 1
+
+
+def test_old_log_is_quiet_at_once(tmp_path):
+    p = tmp_path / "old.log"
+    p.write_text("step 10 loss 0.5\n")
+    month = time.time() - 30 * 86400
+    os.utime(p, (month, month))
+    out = []
+    w = TrainWatcher(str(p), "r", out.append)
+    w.poll_once()
+    assert out[-1]["status"] == "idle" and out[-1]["detail"].startswith("quiet")
+
+
+def test_lightning_final_line():
+    assert parse_line("`Trainer.fit` stopped: `max_epochs=10` reached.").done is True
+
+
+def test_growing_log_with_no_metrics_keeps_its_slot(tmp_path):
+    clock = [0.0]
+    b = Board()
+    w = TrainWatcher(str(tmp_path / "x"), "r", lambda m: b.apply(m, clock[0]), clock=lambda: clock[0])
+    for hour in range(30):
+        for _ in range(6):
+            clock[0] += 600
+            w.feed_text("still working\n")
+        b.expire(clock[0])
+    assert b.find(w.key) is not None

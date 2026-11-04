@@ -142,7 +142,7 @@ def test_quiet_run_goes_idle_then_frees():
     assert b.slots[0] is None
 
 
-def test_a_tool_in_flight_stays_running_longer_and_is_not_evicted():
+def test_tool_in_flight_stays_running_longer():
     b = Board()
     b.apply({"op": "update", "source": "claude", "key": "claude:x", "name": "n", "status": "run",
              "detail": "Bash(x)", "tool": "Bash(x)"}, 0)
@@ -264,3 +264,22 @@ def test_glow_worst_status():
     assert b.glow()[:3] == (0xFF, 0xB0, 0x20)
     b.update("b", "ctl", 0, status=Status.ERROR)
     assert b.glow()[:3] == (0xFF, 0x4D, 0x4F)
+
+
+def test_quiet_training_slot_frees_itself():
+    b = Board()
+    b.apply({"op": "update", "source": "train", "key": "t", "name": "t", "status": "idle",
+             "detail": "quiet 10m"}, 0)
+    assert not b.expire(599)
+    assert b.expire(600) and b.slots[0] is None
+
+
+def test_tool_in_flight_is_not_evicted():
+    b = Board()
+    b.apply({"op": "update", "source": "claude", "key": "c0", "name": "n", "status": "run",
+             "tool": "Bash(x)", "detail": "Bash(x)"}, 0)
+    b.slots[0].status = Status.IDLE
+    for i in range(1, 6):
+        b.apply({"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"}, 0)
+    assert b.apply({"op": "update", "source": "claude", "key": "new", "name": "n", "register_only": True}, 1) is False
+    assert b.find("c0") == 0

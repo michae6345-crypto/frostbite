@@ -1,30 +1,30 @@
 # Frostbite Studio verification report
 
-Generated 2026-11-04T01:07:47.790Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
+Generated 2026-11-04T04:17:41.734Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
 
-**Result: PASS** — 0 hard failures, 33 warnings.
+**Result: PASS**: 0 hard failures, 33 warnings.
 
 ## Modules
 
-| file | loaded | stub | bytes | note |
-|---|---|---|---|---|
-| dims.js | yes | - | 5357 |  |
-| layouts.js | yes | - | 3533 |  |
-| catalog.js | yes | - | 20223 |  |
-| constraints.js | yes | - | 20369 |  |
-| render-top.js | yes | - | 32720 |  |
-| render-side.js | yes | - | 56390 |  |
+| file | loaded | bytes | note |
+|---|---|---|---|
+| dims.js | yes | 5175 |  |
+| layouts.js | yes | 3533 |  |
+| catalog.js | yes | 18926 |  |
+| constraints.js | yes | 17043 |  |
+| render-top.js | yes | 31910 |  |
+| render-side.js | yes | 52949 |  |
 
 ## Test set
 
-1889 specs: 37 preset, 1344 exhaustive, 500 random, 8 robustness. Exhaustive = layout × plate × glowPlace × bezel × corner with other axes at defaultSpec. Robustness specs (empty statuses, `&<>` in wordmark, extremes) only produce warnings.
+1889 specs: 37 preset, 1344 exhaustive, 500 random, 8 edge cases. Exhaustive = layout × plate × glowPlace × bezel × corner with other axes at defaultSpec. Edge-case specs (empty statuses, `&<>` in wordmark, extremes) only produce warnings.
 
 ## Summary
 
 | check family | checks | hard | soft | status |
 |---|---|---|---|---|
 | modules | 6 | 0 | 0 | pass |
-| catalog contract | 128 | 0 | 7 | warn |
+| catalog contract | 130 | 0 | 7 | warn |
 | spec validity | 10205 | 0 | 0 | pass |
 | harness self-test | 10 | 0 | 0 | pass |
 | FB.check shape | 3770 | 0 | 0 | pass |
@@ -34,7 +34,7 @@ Generated 2026-11-04T01:07:47.790Z by `node verify/run.js` (seed 20261103, 500 r
 | renderTop | 4031 | 0 | 0 | pass |
 | renderSide | 1881 | 0 | 0 | pass |
 | renderExploded | 1881 | 0 | 0 | pass |
-| robustness | 32 | 0 | 0 | pass |
+| edge cases | 32 | 0 | 0 | pass |
 | geometry (layout) | 7 | 0 | 6 | warn |
 | geometry (shell) | 84 | 0 | 20 | warn |
 
@@ -43,18 +43,18 @@ Generated 2026-11-04T01:07:47.790Z by `node verify/run.js` (seed 20261103, 500 r
 Strict specs checked: 1314 ok, 567 rejected (0 rejected specs also have geometry issues, i.e. correctly rejected).
 
 - Error codes: `corner-clip` ×336, `glow-gap-plate` ×252, `deep-dish-bezel` ×112
-- Warning codes: `few-commands` ×523, `insert-boss` ×518, `xda-not-kit` ×253, `icon-caps` ×243, `clear-caps` ×156, `graphite-not-kit` ×95, `led-count` ×60, `smoke-glow` ×59, `side-screws-thin` ×34, `thin-tilt` ×24
+- Warning codes: `few-commands` ×523, `insert-boss` ×518, `xda-not-kit` ×253, `icon-caps` ×243, `clear-caps` ×156, `graphite-not-kit` ×95, `led-count` ×60, `smoke-glow` ×38, `side-screws-thin` ×34, `thin-tilt` ×24
 
 ## SVG output
 
-| render | stub | renders | min bytes | avg bytes | max bytes |
-|---|---|---|---|---|---|
-| renderTop | - | 1889 | 13716 | 20264 | 26205 |
-| renderTop+dims | - | 1889 | 15010 | 21229 | 27116 |
-| renderSide | - | 1889 | 7895 | 11675 | 14955 |
-| renderExploded | - | 1889 | 24724 | 39273 | 44925 |
+| render | renders | min bytes | avg bytes | max bytes |
+|---|---|---|---|---|
+| renderTop | 1889 | 13716 | 20123 | 26205 |
+| renderTop+dims | 1889 | 15010 | 21088 | 27116 |
+| renderSide | 1889 | 7846 | 11537 | 14790 |
+| renderExploded | 1889 | 24724 | 39263 | 44910 |
 
-Colours not in `FB.catalog.palette` (info only; contract says renderers read palette colours): `#ffc766` ×89431, `#be8724` ×29798, `#de9c22` ×29798, `#d5d8d7` ×23094, `#bec1c0` ×23094, `#273f33` ×14899, `#cdefde` ×14899, `#7a8186` ×13223, `#c2c5c4` ×13013, `#a4a7a8` ×11547, `#a2a5a6` ×11547, `#bbbebe` ×11547
+Colours not in `FB.catalog.palette` (info only; contract says renderers read palette colours): `#ffc766` ×89431, `#be8724` ×29798, `#de9c22` ×29798, `#aeaeac` ×22512, `#9c9c9b` ×22512, `#273f33` ×14899, `#cdefde` ×14899, `#7a8186` ×13223, `#9f9f9e` ×12687, `#888988` ×11256, `#868787` ×11256, `#999a99` ×11256
 
 ## Geometry per layout
 
@@ -76,17 +76,17 @@ None.
 
 ## Warnings (33)
 
-### `insert-boss` ×20 — geometry (shell)
-- stratum9 bezel 6 corner 4: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts — FB.check approves it
-- stratum9 bezel 6 corner 8: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts — FB.check approves it
+### `insert-boss` ×20, geometry (shell)
+- stratum9 bezel 6 corner 4: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts (FB.check approves it)
+- stratum9 bezel 6 corner 8: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts (FB.check approves it)
 - stratum9 bezel 6 corner 12: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts
 
-### `layout-no-spare-gpio` ×7 — catalog contract
+### `layout-no-spare-gpio` ×7, catalog contract
 - stratum9 uses 11/11 GPIO: zero spare pins for fixes (e.g. encoder push, LED level shifting)
 - mirror9 uses 11/11 GPIO: zero spare pins for fixes (e.g. encoder push, LED level shifting)
 - pocket6 uses 11/11 GPIO: zero spare pins for fixes (e.g. encoder push, LED level shifting)
 
-### `xiao-under-oled` ×6 — geometry (layout)
+### `xiao-under-oled` ×6, geometry (layout)
 - stratum9: XIAO only fits under the OLED board (back edge, x=19.75); trim XIAO pins flush and raise the OLED on its header
 - mirror9: XIAO only fits under the OLED board (back edge, x=19.75); trim XIAO pins flush and raise the OLED on its header
 - pocket6: XIAO only fits under the OLED board (back edge, x=19.75); trim XIAO pins flush and raise the OLED on its header
@@ -95,4 +95,3 @@ None.
 
 - `checker-gap:*` = FB.check said ok but the geometry check found a physical problem: constraints.js should reject or warn.
 - `geometry (shell)` warnings list every layout × bezel × corner combination with a problem, whether or not FB.check approves it.
-- `[stub]` = the renderer file still says it is a stub; re-run after Agents A/C land.

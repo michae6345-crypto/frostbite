@@ -1,6 +1,6 @@
 # Real host encode/decode and Daemon against the real keymap.c in the harness. Usage: proto_test.py <harness binary>
 # Run inside the host project: uv run --project host python Firmware/tests/proto_test.py <harness>
-import subprocess, sys, json, re, time
+import subprocess, sys
 from frostbite_host import device as D
 from frostbite_host.daemon import Daemon
 from frostbite_host.state import Board
@@ -12,8 +12,8 @@ def cmd(line):
     while True:
         l=h.stdout.readline().rstrip('\n')
         if l.startswith('R '): reps.append(bytes.fromhex(l[2:]))
-        else: 
-            p=l[2:].split('|'); 
+        else:
+            p=l[2:].split('|')
             return reps,dict(st=[int(x) for x in p[0].split()],sel=int(p[1]),l0=p[2],l1=p[3],glow=tuple(int(x) for x in p[4].split()),hm=int(p[5]),oled=int(p[6]))
 def host(msg): return cmd('H '+D.encode(msg).hex())
 ok=0;bad=0

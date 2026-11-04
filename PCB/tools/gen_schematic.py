@@ -1,13 +1,13 @@
 """Generate PCB/frostbite.kicad_sch from design.json.
 
-Every pin is tied to its net with a 2.54 mm wire stub ending in a net label (signals) or a power
-symbol (GND/+5V/+3V3).  Unused pins get no-connect flags.  Symbols are copied from the KiCad
-standard library and the Hack Club care package into the schematic's lib_symbols cache.
+Every pin gets a 2.54 mm wire stub ending in a net label or power symbol. Unused pins get no-connect
+flags. Symbols are copied from KiCad's library and the Hack Club care package into lib_symbols.
 
-Run with any Python 3:  python3 PCB/tools/gen_schematic.py
+usage: python3 PCB/tools/gen_schematic.py
 """
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 import uuid
@@ -20,7 +20,7 @@ PCB = Path(__file__).resolve().parents[1]
 ROOT = PCB.parent
 STD = Path.home() / "Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols"
 DESIGN = json.loads((ROOT / "design.json").read_text())
-NS = uuid.UUID("6f1c3a52-0b7e-4f1e-9a51-f7057b17e000")  # deterministic UUIDs
+NS = uuid.UUID("6f1c3a52-0b7e-4f1e-9a51-f7057b17e000")  # deterministic UUIDs keep the PCB linked
 ROOT_UUID = str(uuid.uuid5(NS, "root"))
 
 
@@ -28,7 +28,6 @@ def uid(tag: str) -> str:
     return str(uuid.uuid5(NS, tag))
 
 
-# ---------------------------------------------------------------- footprints / values
 FP = {
     "SW": "hackpad:MX-Solderable-1U",
     "D": "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal",
@@ -57,17 +56,16 @@ def normalise_hide(e):
     """Old-format bare `hide` atoms -> (hide yes)."""
     for node in walk(e):
         for i, x in enumerate(node):
-            if x == "hide" and not (i == 0):
+            if x == "hide" and i != 0:
                 node[i] = ["hide", "yes"]
 
 
-# keep quote information precisely: parse again instead of json copying
-def load_symbol_exact(lib_id):
+def load_symbol(lib_id):
     path, name = LIBS[lib_id]
     lib = parse(path.read_text())
     sym = next(s for s in find(lib, "symbol") if s[1] == name)
     assert not find(sym, "extends"), lib_id
-    sym = parse(dump(sym))  # deep copy preserving Q
+    sym = parse(dump(sym))  # deep copy that keeps Q atoms
     normalise_hide(sym)
     sym[1] = Q(lib_id)
     return sym
@@ -84,12 +82,11 @@ def pins_of(sym):
     return pins
 
 
-SYMS = {k: load_symbol_exact(k) for k in LIBS}
+SYMS = {k: load_symbol(k) for k in LIBS}
 PINS = {k: pins_of(v) for k, v in SYMS.items()}
 
-items = []          # schematic body items
-pwr_count = [0]
-flg_count = [0]
+items = []
+pwr_count = itertools.count(1)
 
 
 def eff(size=1.27, hide=False, justify=None):
@@ -139,11 +136,9 @@ def wire(a, b):
                   ["stroke", ["width", 0], ["type", "default"]], ["uuid", Q(uid(f"w{a}{b}"))]])
 
 
-def power_symbol(net, p, tag, angle=0, out=None):
-    """Power symbol with its pin at p.  `out` = direction the symbol graphic points (sch coords);
-    the net-name text goes just beyond the graphic."""
-    pwr_count[0] += 1
-    ref = f"#PWR{pwr_count[0]:02d}"
+def power_symbol(net, p, angle=0, out=None):
+    """Power symbol with its pin at p. `out` is the direction the graphic points (sch coords)."""
+    ref = f"#PWR{next(pwr_count):02d}"
     out = out or ((0, 1) if net == "GND" else (0, -1))
     val = (round(p[0] + out[0] * 3.81, 4), round(p[1] + out[1] * (4.45 if net == "GND" else 3.81), 4))
     just = {(1, 0): "left", (-1, 0): "right"}.get(out)
@@ -160,15 +155,14 @@ def connect(lib_id, ref, num, x, y, net):
         items.append(["no_connect", ["at", p[0], p[1]], ["uuid", Q(uid(f"nc{ref}.{num}"))]])
         return
     end = (round(p[0] + d[0] * 2.54, 4), round(p[1] + d[1] * 2.54, 4))
+    wire(p, end)
     if net in POWER:
-        wire(p, end)
-        # rotate the power symbol so its graphic points away from the pin
+        # point the graphic away from the pin
         down = net == "GND"
         ang = {(0, 1): 0 if down else 180, (0, -1): 180 if down else 0,
                (1, 0): 90 if down else 270, (-1, 0): 270 if down else 90}[d]
-        power_symbol(net, end, f"{ref}.{num}", ang, out=d)
+        power_symbol(net, end, ang, out=d)
     else:
-        wire(p, end)
         ang = {(-1, 0): 180, (1, 0): 0, (0, -1): 90, (0, 1): 270}[d]
         # global labels keep net names un-prefixed ("ROW0", not "/ROW0"), matching design.json
         items.append(["global_label", Q(net), ["shape", "passive"], ["at", end[0], end[1], ang],
@@ -179,10 +173,8 @@ def connect(lib_id, ref, num, x, y, net):
                        eff(hide=True)]])
 
 
-# ---------------------------------------------------------------- netlist intent
 def build():
     G = 2.54
-    # U1 -------------------------------------------------------------------
     xiao = "XIAO_RP2040:Seeed XIAO RP2040 board"
     ux, uy = 24 * G, 30 * G
     place(xiao, "U1", "XIAO RP2040", ux, uy, FP["U"], ref_at=(ux, uy - 12.7), val_at=(ux, uy + 12.7))
@@ -191,7 +183,6 @@ def build():
     for num in PINS[xiao]:
         connect(xiao, "U1", num, ux, uy, pinnet[num])
 
-    # J1 OLED header: GND VCC SCL SDA ---------------------------------------
     hdr = DESIGN["oled"]["header"]["pins_top_to_bottom"]
     jnet = {"GND": "GND", "VCC": "+3V3", "SCL": "SCL", "SDA": "SDA"}
     conn = "Connector_Generic:Conn_01x04"
@@ -200,7 +191,6 @@ def build():
     for i, name in enumerate(hdr):
         connect(conn, "J1", str(i + 1), jx, jy, jnet[name])
 
-    # ENC1 -------------------------------------------------------------------
     enc = "Device:RotaryEncoder_Switch_MP"
     ex, ey = 46 * G, 40 * G
     place(enc, "ENC1", "EC11E", ex, ey, FP["ENC"], ref_at=(ex, ey - 7.62), val_at=(ex + 7.62, ey + 7.62),
@@ -208,7 +198,6 @@ def build():
     for num, net in {"A": "ENC_A", "B": "ENC_B", "C": "GND", "S1": None, "S2": None, "MP": "GND"}.items():
         connect(enc, "ENC1", num, ex, ey, net)
 
-    # Matrix -----------------------------------------------------------------
     sw, dio = "Switch:SW_Push", "Device:D"
     for k, key in enumerate(DESIGN["keys"], start=1):
         r, c = key["row"], key["col"]
@@ -221,7 +210,6 @@ def build():
         connect(dio, f"D{k}", "2", dx, dy, f"SW{k}_D")   # anode from switch
         connect(dio, f"D{k}", "1", dx, dy, f"ROW{r}")    # cathode to row
 
-    # LEDs -------------------------------------------------------------------
     led = "SK6812MINI-E:SK6812MINI-E"
     n = DESIGN["leds"]["count"]
     for i in range(n):
@@ -236,15 +224,12 @@ def build():
         connect(led, ref, "4", lx, ly, "LED_DIN" if i == 0 else f"LED_D{i}")
         connect(led, ref, "2", lx, ly, f"LED_D{i + 1}" if i < n - 1 else None)
 
-    # PWR_FLAGs on each supply ------------------------------------------------
     for j, net in enumerate(["GND", "+5V", "+3V3"]):
         fx, fy = (10 + 12 * j) * G, 98 * G
-        flg_count[0] += 1
-        place("power:PWR_FLAG", f"#FLG{flg_count[0]:02d}", "PWR_FLAG", fx, fy, val_at=(fx, fy - 5.08))
+        place("power:PWR_FLAG", f"#FLG{j + 1:02d}", "PWR_FLAG", fx, fy, val_at=(fx, fy - 5.08))
         wire((fx, fy), (fx + 2 * G, fy))
-        power_symbol(net, (fx + 2 * G, fy), f"flag{net}")
+        power_symbol(net, (fx + 2 * G, fy))
 
-    # notes
     items.append(["text", Q("Frostbite 9 - 3x3 COL2ROW matrix, 13 x SK6812 MINI-E chain (LEDn = chain index n-1),\\n"
                             "EC11E (push not wired), 0.91in I2C OLED on J1 (GND VCC SCL SDA). Generated by PCB/tools/gen_schematic.py from design.json."),
                   ["exclude_from_sim", "no"], ["at", 10 * G, 106 * G, 0], eff(justify="left"),

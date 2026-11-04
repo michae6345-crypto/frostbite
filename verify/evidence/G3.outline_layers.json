@@ -8,7 +8,7 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
+    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
     "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd"
   },
   "details": {
@@ -23,6 +23,6 @@
       "h": 83.15
     }
   },
-  "timestamp": "2026-11-04T01:04:09+00:00",
-  "duration_s": 0.05
+  "timestamp": "2026-11-04T04:19:31+00:00",
+  "duration_s": 0.04
 }

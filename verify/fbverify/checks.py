@@ -1,15 +1,15 @@
-"""All checks. Each function takes a Ctx, returns a finished Check (written by the caller).
+"""The checks. Each takes a Ctx and returns a finished Check, which the caller writes.
 
-Rules: a status comes only from a tool exit code or a value parsed out of a file and compared
-with a number from design.json. Missing input or tool -> NOT_RUN, never PASS."""
+A status comes only from a tool exit code, or a value parsed from a file and compared with
+design.json. A missing input or tool is NOT_RUN, never PASS."""
 from __future__ import annotations
 
 import json
 import math
-import os
 import re
 import shutil
 import time
+import warnings
 from pathlib import Path
 
 from . import geom, sexpr
@@ -21,7 +21,7 @@ XIAO_RP2040_GPIO = {"D0": "GP26", "D1": "GP27", "D2": "GP28", "D3": "GP29", "D4"
 # XIAO castellated pad numbering: 1..7 = D0..D6 down the left, 8..11 = D7..D10, 12 3V3, 13 GND, 14 5V.
 XIAO_PADNUM = {**{str(i + 1): f"D{i}" for i in range(7)}, "8": "D7", "9": "D8", "10": "D9", "11": "D10",
                "12": "3V3", "13": "GND", "14": "5V"}
-# Hackpad kit (task brief + docs/VERIFICATION.md "Kit max" row; XIAO from the same rules table).
+# Hackpad kit contents, from the Hackpad parts page (docs/VERIFICATION.md).
 KIT = {"switches": 16, "keycaps": 16, "diodes": 20, "encoders": 2, "oled": 1, "leds": 16,
        "screws": 6, "inserts": 6, "mcu_xiao_rp2040": 1}
 JLC_DRU = "verify/rules/JLCPCB-2L-1oz.kicad_dru"
@@ -30,7 +30,6 @@ JLC_PTH_ANNULAR_MIN = 0.20   # jlcpcb.com/capabilities/pcb-capabilities; the pin
 PARTS = ("Top", "Bottom", "GlowBand", "Knob", "OLEDSupport")
 POS_TOL = 0.05
 OUTLINE_TOL = 0.1
-CUTOUT = 14.0
 CUTOUT_TOL = 0.1
 CAD_POS_TOL = 0.1
 # Real part dimensions (docs/DIMENSIONS.md, Alps EC11E drawing; audited in docs/audit/case.md).
@@ -54,8 +53,6 @@ USB_WALL_Y = (-0.5, -3.5, -6.5)
 SWEEP_LIMIT = 0.01          # mm3 of material inside the PCB envelope, over the whole path
 KB_DIR = "Firmware/qmk/keyboards/frostbite"
 
-
-# ---------------------------------------------------------------- shared loaders
 
 def design(chk: Check):
     p = chk.ctx.p("design.json")
@@ -150,15 +147,10 @@ def bbox(pts):
     return min(xs), min(ys), max(xs), max(ys)
 
 
-# ================================================================ G0
-
 def _studio_copy(ctx: Ctx, chk: Check):
     src = ctx.p("studio")
-    if not src.is_dir():
-        return None
     dst = ctx.work / "studio_copy"
-    if dst.exists():
-        shutil.rmtree(dst)
+    shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("node_modules", "img"))
     for f in sorted(src.rglob("*.js")):
         chk.hash(f)
@@ -167,7 +159,7 @@ def _studio_copy(ctx: Ctx, chk: Check):
 
 def g0_studio_run(ctx: Ctx) -> Check:
     chk = Check(ctx, "G0.studio_run", "G0", "Studio harness: node studio/verify/run.js (run on a copy so studio/ is not written)")
-    if not (ctx.p("studio/verify/run.js")).is_file():
+    if not ctx.p("studio/verify/run.js").is_file():
         return chk.not_run("studio/verify/run.js missing")
     if not shutil.which("node", path=ctx.env["PATH"]):
         return chk.not_run("node not on PATH")
@@ -199,25 +191,22 @@ def g0_design_json(ctx: Ctx) -> Check:
     d = design(chk)
     if d is None:
         return chk
-    try:
-        import jsonschema
-        schema = {
-            "type": "object",
-            "required": ["pins", "matrix", "pcb", "keys", "leds", "encoder", "oled", "case", "mcu", "firmware"],
-            "properties": {
-                "pins": {"type": "array", "items": {"type": "object", "required": ["xiao", "gpio", "net"]}},
-                "keys": {"type": "array", "items": {"type": "object", "required": ["ref", "row", "col", "x", "y", "led"]}},
-                "pcb": {"type": "object", "required": ["w", "h", "layers"]},
-                "matrix": {"type": "object", "required": ["rows", "cols", "diode_direction"]},
-                "leds": {"type": "object", "required": ["count", "glow"]},
-            }}
-        errs = sorted(jsonschema.Draft202012Validator(schema).iter_errors(d), key=lambda e: list(e.path))
-        for e in errs:
-            chk.fail(f"schema: {'/'.join(map(str, e.path))}: {e.message}")
-        if errs:
-            return chk
-    except ImportError:
-        chk.note("jsonschema not installed; schema step skipped")
+    import jsonschema
+    schema = {
+        "type": "object",
+        "required": ["pins", "matrix", "pcb", "keys", "leds", "encoder", "oled", "case", "mcu", "firmware"],
+        "properties": {
+            "pins": {"type": "array", "items": {"type": "object", "required": ["xiao", "gpio", "net"]}},
+            "keys": {"type": "array", "items": {"type": "object", "required": ["ref", "row", "col", "x", "y", "led"]}},
+            "pcb": {"type": "object", "required": ["w", "h", "layers"]},
+            "matrix": {"type": "object", "required": ["rows", "cols", "diode_direction"]},
+            "leds": {"type": "object", "required": ["count", "glow"]},
+        }}
+    errs = sorted(jsonschema.Draft202012Validator(schema).iter_errors(d), key=lambda e: list(e.path))
+    for e in errs:
+        chk.fail(f"schema: {'/'.join(map(str, e.path))}: {e.message}")
+    if errs:
+        return chk
     pins = d["pins"]
     for k in ("xiao", "gpio", "net"):
         vals = [p[k] for p in pins]
@@ -262,13 +251,11 @@ def g0_design_json(ctx: Ctx) -> Check:
     if d["firmware"]["raw_hid"]["report_bytes"] != 32:
         chk.fail("firmware.raw_hid.report_bytes != 32")
     inputs_count = len(keys) + 1  # + encoder
-    if len(keys) > 16:  # kit limit; the old "< 16 inputs" rule is not on the live Hackpad pages (docs/audit/hackpad-rules.md)
+    if len(keys) > 16:  # kit limit; the "< 16 inputs" rule is not on the live pages (docs/audit/hackpad-rules.md)
         chk.fail(f"{len(keys)} switches > 16 in the kit")
     chk.details = {"pins": len(pins), "keys": len(keys), "leds": d["leds"]["count"], "inputs": inputs_count}
     return chk
 
-
-# ================================================================ G2
 
 def _keymap_layer0_count(text: str):
     text = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.S)
@@ -327,7 +314,6 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
         chk.fail(f"ws2812.pin {ws.get('pin')} != design LED_DIN {G('LED_DIN')}")
     if ws.get("driver") != "vendor":
         chk.fail(f"ws2812.driver {ws.get('driver')!r} != 'vendor' (RP2040 PIO, design.json pins note)")
-    # LED count
     rgbm = kb.get("rgb_matrix") or {}
     layout = rgbm.get("layout")
     led_count = len(layout) if layout is not None else (kb.get("rgblight") or {}).get("led_count")
@@ -342,7 +328,6 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
                 chk.fail(f"rgb_matrix.layout[{i}].matrix {mtx} != design {k['ref']} [{k['row']}, {k['col']}] (led {i})")
             if k is None and mtx is not None:
                 chk.fail(f"rgb_matrix.layout[{i}] has matrix {mtx} but design led {i} is a glow LED")
-    # layout / matrix size
     lays = kb.get("layouts") or {}
     if len(lays) != 1:
         chk.fail(f"{len(lays)} layouts defined, expected 1")
@@ -358,7 +343,6 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
             if tuple(e.get("matrix", [])) != (k["row"], k["col"]):
                 chk.fail(f"layout {name}: entry order differs from design keys[] at {k['ref']} (protocol key index)")
                 break
-    # config.h: I2C + OLED + raw HID
     cfg = ctx.p(KB_DIR) / "config.h"
     if not cfg.is_file():
         chk.fail("config.h missing (I2C pins cannot be checked)")
@@ -383,7 +367,6 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
                 chk.fail(f"{key} {have} != design {want}")
     if not (kb.get("features") or {}).get("raw"):
         chk.fail("features.raw is not true (Raw HID protocol needs RAW_ENABLE)")
-    # keymaps: layer 0 count
     for km in ("default", "ledtest"):
         kp = ctx.p(KB_DIR) / "keymaps" / km / "keymap.c"
         if not kp.is_file():
@@ -401,7 +384,7 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
 
 
 def _pin_role(node, comp_kind):
-    """Map a netlist node to a role name, by pinfunction first, then by a documented pin number table."""
+    """Role of a netlist node: from its pinfunction, else from the pin number tables."""
     pf = (node.get("pinfunction") or "").upper()
     pin = node["pin"]
     if comp_kind == "xiao":
@@ -496,7 +479,7 @@ def check_netlist(chk: Check, d: dict, nl: dict):
         if got is None or not is_net(got, *POWER_ALIASES[rail]):
             chk.fail(f"XIAO {rail} pin net {got!r} is not a {rail} net")
     netname = {r: pin_net.get((X, r)) for r in ("5V", "3V3", "GND")}
-    # matrix: COLc -[SW]- n -[D A->K]- ROWr  (or diode first)
+    # Matrix path: COLc, switch, diode A->K, ROWr, or the diode first.
     by_ref = {k["ref"]: k for k in d["keys"]}
     diodes = [r for r, k in kinds.items() if k == "diode"]
     for ref, k in by_ref.items():
@@ -520,7 +503,6 @@ def check_netlist(chk: Check, d: dict, nl: dict):
                 break
         if not ok:
             chk.fail(f"{ref}: no {col} -> switch -> diode(A->K) -> {row} path (COL2ROW) found; switch nets {sw_nets}")
-    # OLED header order
     oleds = [r for r, k in kinds.items() if k == "oled"]
     if len(oleds) != 1:
         chk.fail(f"expected 1 OLED component/header, found {oleds}")
@@ -532,7 +514,6 @@ def check_netlist(chk: Check, d: dict, nl: dict):
             got = pin_net.get((O, f"#{i}"))
             if not is_net(got, *alias[role]):
                 chk.fail(f"OLED {O} pin {i} net {got!r}, expected {role} ({'/'.join(alias[role])})")
-    # LEDs
     leds = [r for r, k in kinds.items() if k == "led"]
     if len(leds) != d["leds"]["count"]:
         chk.fail(f"{len(leds)} SK6812 LEDs in schematic != design {d['leds']['count']}")
@@ -551,7 +532,6 @@ def check_netlist(chk: Check, d: dict, nl: dict):
     chk.details["led_chain"] = chain
     if len(chain) != d["leds"]["count"]:
         chk.fail(f"LED chain from XIAO D6 (LED_DIN) reaches {len(chain)} LEDs ({chain}), design needs {d['leds']['count']}")
-    # encoder
     encs = [r for r, k in kinds.items() if k == "enc"]
     if len(encs) != 1:
         chk.fail(f"expected 1 encoder, found {encs}")
@@ -590,8 +570,6 @@ def g2_erc(ctx: Ctx) -> Check:
         chk.fail(f"ERC exit {code}, {len(viol)} error violations" + (f"; first: {viol[0]}" if viol else ""))
     return chk
 
-
-# ================================================================ G3
 
 def _pcb(chk: Check):
     kf = kicad_files(chk.ctx)
@@ -691,8 +669,7 @@ def _drc(ctx: Ctx, cid: str, title: str, jlc: bool) -> Check:
     if not need_kicad(chk):
         return chk
     dst = ctx.work / ("drc_jlc" if jlc else "drc")
-    if dst.exists():
-        shutil.rmtree(dst)
+    shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(ctx.p("PCB"), dst, ignore=shutil.ignore_patterns("*-backups", "*.lck"))
     for f in find_one(ctx.p("PCB"), "*.kicad_*"):
         chk.hash(f)
@@ -751,12 +728,8 @@ def pcb_origin(pcb):
 
 
 def fp_by(pcb, kind):
-    out = []
-    for f in pcb["footprints"]:
-        c = {"ref": f["ref"] or "", "value": f["value"] or "", "footprint": f["lib"], "lib": f["lib"]}
-        if classify(c) == kind:
-            out.append(f)
-    return out
+    return [f for f in pcb["footprints"] if classify({"ref": f["ref"] or "", "value": f["value"] or "",
+                                                      "footprint": f["lib"], "lib": f["lib"]}) == kind]
 
 
 def g3_outline_layers(ctx: Ctx) -> Check:
@@ -867,7 +840,6 @@ def pcb_positions(chk: Check, d: dict, pcb: dict):
         want = (r["x"] + r["w"] / 2, r["y"] + r["h"] / 2)
         if abs(meas["xiao"][0] - want[0]) > POS_TOL or abs(meas["xiao"][1] - want[1]) > POS_TOL:
             chk.fail(f"XIAO centre ({meas['xiao'][0]:.3f}, {meas['xiao'][1]:.3f}) [{rules['xiao']}], design ({want[0]}, {want[1]})")
-    # LEDs: glow positions, chain order -> keys
     leds = fp_by(pcb, "led")
     if len(leds) != d["leds"]["count"]:
         chk.fail(f"{len(leds)} LED footprints != design {d['leds']['count']}")
@@ -950,7 +922,7 @@ def _gerber_stack_check(chk: Check, stack, d):
             from gerbonara.utils import MM
             ws = [o.aperture.equivalent_width(MM) for o in stack.outline.objects if getattr(o, "aperture", None)]
             stroke = max(ws) if ws else 0.0
-        except Exception as e:  # pragma: no cover - API drift
+        except Exception as e:
             chk.note(f"outline stroke width not read: {e}")
         w, h = x1 - x0 - stroke, y1 - y0 - stroke
         chk.details["outline_mm"] = {"w": round(w, 4), "h": round(h, 4), "stroke": stroke}
@@ -958,6 +930,18 @@ def _gerber_stack_check(chk: Check, stack, d):
             chk.fail(f"gerber outline {w:.3f} x {h:.3f} != design {d['pcb']['w']} x {d['pcb']['h']}")
         if w > 100 or h > 100:
             chk.fail(f"gerber outline {w:.3f} x {h:.3f} exceeds 100 x 100")
+
+
+def _read_gerbers(chk: Check, src: Path, d, label: str):
+    from gerbonara import LayerStack
+    try:
+        with warnings.catch_warnings(record=True) as ws:
+            warnings.simplefilter("always")
+            stack = LayerStack.open(src)
+        chk.details["gerbonara_warnings"] = [str(w.message).split("/")[-1][:200] for w in ws[:10]]
+        _gerber_stack_check(chk, stack, d)
+    except Exception as e:
+        chk.fail(f"gerbonara could not open {label}: {e}")
 
 
 def g3_gerbers(ctx: Ctx) -> Check:
@@ -969,24 +953,14 @@ def g3_gerbers(ctx: Ctx) -> Check:
     if not need_kicad(chk):
         return chk
     out = ctx.work / "gerbers"
-    if out.exists():
-        shutil.rmtree(out)
+    shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     c1, *_ = chk.run([ctx.kicad_cli, "pcb", "export", "gerbers", "-o", str(out) + "/", path])
     c2, *_ = chk.run([ctx.kicad_cli, "pcb", "export", "drill", "-o", str(out) + "/", path])
     if c1 or c2:
         chk.fail(f"gerber export exit {c1}, drill export exit {c2}")
         return chk
-    from gerbonara import LayerStack
-    try:
-        import warnings
-        with warnings.catch_warnings(record=True) as ws:
-            warnings.simplefilter("always")
-            stack = LayerStack.open(out)
-        chk.details["gerbonara_warnings"] = [str(w.message).split("/")[-1][:200] for w in ws[:10]]
-        _gerber_stack_check(chk, stack, d)
-    except Exception as e:
-        chk.fail(f"gerbonara could not open the export: {e}")
+    _read_gerbers(chk, out, d, "the export")
     return chk
 
 
@@ -999,20 +973,9 @@ def g3_gerbers_zip(ctx: Ctx) -> Check:
     if not z.is_file():
         return chk.not_run("production/gerbers.zip missing")
     chk.hash(z)
-    from gerbonara import LayerStack
-    try:
-        import warnings
-        with warnings.catch_warnings(record=True) as ws:
-            warnings.simplefilter("always")
-            stack = LayerStack.open(z)
-        chk.details["gerbonara_warnings"] = [str(w.message).split("/")[-1][:200] for w in ws[:10]]
-        _gerber_stack_check(chk, stack, d)
-    except Exception as e:
-        chk.fail(f"gerbonara could not open gerbers.zip: {e}")
+    _read_gerbers(chk, z, d, "gerbers.zip")
     return chk
 
-
-# ================================================================ G4
 
 def g4_check_fit(ctx: Ctx) -> Check:
     chk = Check(ctx, "G4.check_fit", "G4", "CAD/.venv/bin/python CAD/check_fit.py --no-build (checks the shipped files, rewrites nothing)")
@@ -1038,8 +1001,7 @@ def stl_files(ctx: Ctx):
 def load_mesh(chk: Check, p: Path):
     import trimesh
     chk.hash(p)
-    m = trimesh.load(str(p), force="mesh", process=True)
-    return m
+    return trimesh.load(str(p), force="mesh", process=True)
 
 
 def g4_stl_mesh(ctx: Ctx) -> Check:
@@ -1308,8 +1270,6 @@ def g4_step_parts(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ G5
-
 def g5_bom_kit(ctx: Ctx) -> Check:
     chk = Check(ctx, "G5.bom_kit", "G5", "Part counts (design.json, PCB footprints) vs Hackpad kit")
     d = design(chk)
@@ -1333,8 +1293,7 @@ def g5_bom_kit(ctx: Ctx) -> Check:
         pcb_counts = {"switches": len(fp_by(pcb, "switch")), "diodes": len(fp_by(pcb, "diode")),
                       "encoders": len(fp_by(pcb, "enc")), "oled": len(fp_by(pcb, "oled")),
                       "leds": len(fp_by(pcb, "led")), "mcu_xiao_rp2040": len(fp_by(pcb, "xiao"))}
-        others = [f["ref"] for f in pcb["footprints"] if classify({"ref": f["ref"] or "", "value": f["value"] or "",
-                                                                  "footprint": f["lib"], "lib": f["lib"]}) == "other"]
+        others = [f["ref"] for f in fp_by(pcb, "other")]
         for k, v in pcb_counts.items():
             if v > KIT[k]:
                 chk.fail(f"PCB has {v} {k} footprints, kit has {KIT[k]}")
@@ -1349,8 +1308,6 @@ def g5_bom_kit(ctx: Ctx) -> Check:
                         "spare_in_kit": {k: KIT[k] - v for k, v in need.items() if v is not None}})
     return chk
 
-
-# ================================================================ G6
 
 def fw_sources(ctx: Ctx):
     """Files that change the build: everything under the keyboard dir except docs."""
@@ -1448,13 +1405,19 @@ def g6_production_uf2(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ G6 firmware behaviour on the desk
-
 F1_LINES = ("PASS F1 KBD: panel matches buffer on all 4 pages", "PASS F1 idle screen: 0 I2C bytes in 1000 loops",
             "PASS F1 HID: slot strip and HID reach the panel", "PASS F1 divider all 42 dots on panel")
 
 
-def _harness(chk: Check) -> str | None:
+def _uv_host(ctx: Ctx):
+    """uv and the env that keeps the host project's venv in verify/.cache."""
+    uv = shutil.which("uv", path=ctx.env["PATH"]) or str(Path.home() / ".local/bin/uv")
+    venv = Path(__file__).resolve().parents[1] / ".cache" / "host-venv"
+    return uv, {"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def _harness(chk: Check):
+    """(exit code, stdout, output dir) of Firmware/tests/run.sh, run once per Ctx. None -> status already set."""
     ctx = chk.ctx
     run = ctx.p("Firmware/tests/run.sh")
     if not run.is_file():
@@ -1471,21 +1434,19 @@ def _harness(chk: Check) -> str | None:
     key = ("fw_harness", str(run))
     if key not in ctx.cache:
         out = ctx.work / "fwtest"
-        if out.exists():
-            shutil.rmtree(out)
+        shutil.rmtree(out, ignore_errors=True)
         out.mkdir(parents=True)
         code, so, se = chk.run(["bash", run, out], timeout=300, env={"QMK_HOME": str(ctx.qmk_home)})
         ctx.cache[key] = (code, so, out)
-    code, so, out = ctx.cache[key]
-    return so if code is not None else None
+    return ctx.cache[key]
 
 
 def g6_firmware_harness(ctx: Ctx) -> Check:
     chk = Check(ctx, "G6.firmware_harness", "G6", "Real keymap.c + real QMK OLED driver on the desk under ASan/UBSan, plus the host<->firmware protocol")
-    so = _harness(chk)
-    if so is None:
+    h = _harness(chk)
+    if h is None:
         return chk
-    code, _, out = ctx.cache[("fw_harness", str(ctx.p("Firmware/tests/run.sh")))]
+    code, so, out = h
     passed = [l for l in so.splitlines() if l.startswith("PASS ")]
     failed = [l for l in so.splitlines() if l.startswith("FAIL ")]
     chk.details["harness"] = {"exit_code": code, "pass": len(passed), "fail": len(failed)}
@@ -1497,10 +1458,8 @@ def g6_firmware_harness(ctx: Ctx) -> Check:
         chk.fail("harness printed no PASS lines")
     binary, proto = out / "harness", ctx.p("Firmware/tests/proto_test.py")
     if binary.is_file() and proto.is_file() and ctx.p("host/pyproject.toml").is_file():
-        uv = shutil.which("uv", path=ctx.env["PATH"]) or str(Path.home() / ".local/bin/uv")
-        venv = Path(__file__).resolve().parents[1] / ".cache" / "host-venv"
-        c2, o2, e2 = chk.run([uv, "run", "--project", ctx.p("host"), "python", proto, binary], timeout=300,
-                             env={"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"})
+        uv, env = _uv_host(ctx)
+        c2, o2, e2 = chk.run([uv, "run", "--project", ctx.p("host"), "python", proto, binary], timeout=300, env=env)
         m = re.search(r"^ok (\d+) bad (\d+)", o2, re.M)
         chk.details["protocol"] = {"exit_code": c2, "ok": int(m.group(1)) if m else None, "bad": int(m.group(2)) if m else None}
         if c2 != 0 or not m or m.group(2) != "0" or m.group(1) == "0":
@@ -1512,10 +1471,10 @@ def g6_firmware_harness(ctx: Ctx) -> Check:
 
 def g6_oled_strip_panel(ctx: Ctx) -> Check:
     chk = Check(ctx, "G6.oled_strip_panel", "G6", "F1 regression: slot strip and divider reach the simulated SSD1306, not just the frame buffer")
-    so = _harness(chk)
-    if so is None:
+    h = _harness(chk)
+    if h is None:
         return chk
-    lines = so.splitlines()
+    lines = h[1].splitlines()
     for want in F1_LINES:
         if want not in lines:
             chk.fail(f"missing from harness output: '{want}'")
@@ -1530,8 +1489,6 @@ def g6_oled_strip_panel(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ G7
-
 def g7_host_tests(ctx: Ctx) -> Check:
     chk = Check(ctx, "G7.host_tests", "G7", "uv run --project host pytest -q, every test file, audit tests included")
     proj = ctx.p("host/pyproject.toml")
@@ -1542,9 +1499,7 @@ def g7_host_tests(ctx: Ctx) -> Check:
         return chk.not_run("no host/tests/test_*.py")
     for f in find_one(ctx.p("host"), "*.py") + [proj] + find_one(ctx.p("host/tests/fixtures"), "*"):
         chk.hash(f)
-    uv = shutil.which("uv", path=ctx.env["PATH"]) or str(Path.home() / ".local/bin/uv")
-    venv = Path(__file__).resolve().parents[1] / ".cache" / "host-venv"
-    env = {"UV_PROJECT_ENVIRONMENT": str(venv), "PYTHONDONTWRITEBYTECODE": "1"}
+    uv, env = _uv_host(ctx)
     code, so, se = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
                             "-rx", "--tb=short"], cwd=ctx.p("host"), timeout=600, env=env)
     if code == 5:
@@ -1562,10 +1517,9 @@ def g7_host_tests(ctx: Ctx) -> Check:
     audit = find_one(ctx.p("docs/audit/host-tests"), "test_*.py")
     left = [f for f in audit if f.name not in names]
     if left:
-        # Run a private copy: the audit stub predates F12 (tap_code_delay), and docs/audit is a record, not ours to edit.
+        # A private copy, because docs/audit is not edited and its stub lacks tap_code_delay.
         mirror = ctx.work / "audit-mirror"
-        if mirror.exists():
-            shutil.rmtree(mirror)
+        shutil.rmtree(mirror, ignore_errors=True)
         dst = mirror / "docs/audit/host-tests"
         shutil.copytree(ctx.p("docs/audit/host-tests"), dst, ignore=shutil.ignore_patterns("__pycache__"))
         (mirror / "Firmware").symlink_to(ctx.p("Firmware").resolve())
@@ -1584,8 +1538,6 @@ def g7_host_tests(ctx: Ctx) -> Check:
             chk.fail(f"{f.name} (docs/audit/host-tests) exited {c2}")
     return chk
 
-
-# ================================================================ G8
 
 IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|<img[^>]*src=[\"']([^\"']+)[\"'][^>]*>", re.I)
 
@@ -1648,8 +1600,6 @@ def g8_package(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ cross-consistency
-
 def load_cad_positions(ctx: Ctx, chk: Check):
     for rel in ("CAD/positions.json", "production/positions.json", "CAD/build/positions.json"):
         p = ctx.p(rel)
@@ -1667,7 +1617,6 @@ def x_cross_positions(ctx: Ctx) -> Check:
     if d is None:
         return chk
     ran = []
-    # design <-> PCB
     meas = ctx.cache.get("pcb_meas")
     if meas is None:
         pcb, _ = _pcb(Check(ctx, "_tmp", "X", ""))
@@ -1684,7 +1633,6 @@ def x_cross_positions(ctx: Ctx) -> Check:
     if meas:
         ran.append("design<->PCB")
         chk.details["pcb"] = {k: [round(v[0], 3), round(v[1], 3)] for k, v in meas.items()}
-    # design <-> CAD positions file
     cp, rel = load_cad_positions(ctx, chk)
     if cp is not None:
         ran.append(f"design<->{rel}")
@@ -1723,7 +1671,7 @@ def x_cross_positions(ctx: Ctx) -> Check:
             chk.fail(f"{rel}: no oled_window entry")
         elif any(abs(w[k] - ow[k]) > CAD_POS_TOL for k in ("x", "y", "w", "h")):
             chk.fail(f"{rel}: oled_window {w} != design {ow}")
-    # design <-> what the Top mesh really is (registered from its outline; no positions file involved)
+    # Measured from the Top mesh; no positions file involved.
     if top_stl(ctx):
         M = top_model(chk, d)
         if M is not None:
@@ -1764,8 +1712,6 @@ def x_cross_positions(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ PCB path into the Top
-
 def x_pcb_insertion(ctx: Ctx) -> Check:
     chk = Check(ctx, "X.pcb_insertion", "X", "PCB envelope (design.json pcb + tolerance) swept from the skirt rim to its seat through Top.stl")
     d = design(chk)
@@ -1794,8 +1740,6 @@ def x_pcb_insertion(ctx: Ctx) -> Check:
                  f"on the way in; worst {worst[0]:.2f} mm2 at depth {worst[2]} mm, bounds {worst[1]}")
     return chk
 
-
-# ================================================================ USB IDs
 
 def x_usb_ids(ctx: Ctx) -> Check:
     chk = Check(ctx, "X.usb_ids", "X", "Host VID/PID filter = keyboard.json usb = design.json firmware.usb, and enforced when opening")
@@ -1835,8 +1779,6 @@ def x_usb_ids(ctx: Ctx) -> Check:
             chk.fail(f"host opened {sc['opened']} in scene '{name}', must open {sc['want']}")
     return chk
 
-
-# ================================================================ GND thermal relief
 
 def pad_outline(p):
     """True copper outline of a pad (rect-family pads are treated as plain rectangles)."""
@@ -1910,8 +1852,6 @@ def g3_gnd_thermal(ctx: Ctx) -> Check:
     return chk
 
 
-# ================================================================ bosses vs bottom pads
-
 BOSS_CLEARANCE = 0.5
 KICAD_PY = Path.home() / "Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
 
@@ -1954,7 +1894,7 @@ def x_boss_vs_pads(ctx: Ctx) -> Check:
     if pcb is None:
         return chk
     sources = {}
-    # source 1: PCB/build/bottom_pads.json (pcbnew export), regenerated into verify/.cache if missing or stale
+    # Two pad sources, judged separately: the pcbnew export (regenerated if missing or stale) and our own parse.
     bp = ctx.p("PCB/build/bottom_pads.json")
     fresh = bp.is_file() and bp.stat().st_mtime >= pcb_path.stat().st_mtime
     if not fresh:
@@ -1977,7 +1917,6 @@ def x_boss_vs_pads(ctx: Ctx) -> Check:
             sources[bp.name if bp.parent == ctx.work else "PCB/build/bottom_pads.json"] = json.loads(chk.read(bp))["pads"]
         except (json.JSONDecodeError, KeyError) as e:
             chk.fail(f"{bp}: unreadable ({e})")
-    # source 2: independent parse of the .kicad_pcb
     sources["parsed .kicad_pcb"] = parser_bottom_pads(pcb)
     cp, rel = load_cad_positions(ctx, chk)
     boss_sets = {"design.json": bosses}
@@ -2009,7 +1948,6 @@ def x_boss_vs_pads(ctx: Ctx) -> Check:
         chk.details["json_pads_not_inside_parsed_bbox"] = unc[:30]
         if unc:
             chk.note(f"{len(unc)} pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree)")
-    # CAD positions must use the same screw positions
     if cp is not None:
         cs = cp.get("screws")
         if not isinstance(cs, list):

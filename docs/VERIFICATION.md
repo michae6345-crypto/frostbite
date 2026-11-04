@@ -1,218 +1,89 @@
-# Frostbite verification workflow
+# Verification
 
-From a design spec in the Studio to a working macropad on the desk. The PCB is ordered once
-(JLCPCB, $15 grant) and the full case is printed once by someone else (Printing Legion), after the small test prints in
-`docs/coupons/`. Neither can be patched later, so the checks before submission carry most of the weight.
+Nothing in this repo has been built or tested on hardware. The firmware has only run in a desktop
+harness, and the host code has only talked to a fake `hid` module. A PASS means the files agree with
+each other and with `design.json`. It does not mean the macropad works.
 
-**Principles**
-1. **One source of truth.** The chosen spec plus `FB.layoutById` produce `build/design.json`: switch
-   and dial centres, OLED window, XIAO position, screw positions, pin map, LED order. KiCad placement,
-   the CadQuery case, QMK `keyboard.json` and the host script are generated from it or diffed against it.
-   Nobody types a coordinate or pin twice.
-2. **Every gate is a command with an exit code.** Agents run it, paste its output, and do not mark a gate
-   passed by reading files.
-3. **Fail back to the owner of the cause.** A failure loops to the earliest stage that owns the fact
-   (a USB cutout that misses the plug goes back to the XIAO position in design.json, not to CAD tweaks).
-4. **The verifier did not build it.** Gates are run by the verification agent, not by the agent whose work is checked.
+The PCB is ordered once and the case is printed once, so these checks run before either is paid for.
+[`verify/README.md`](../verify/README.md) covers running them. Results are in `verify/REPORT.md`.
 
-## Rules being enforced (with source)
+## What is checked
 
-| Rule | Value | Source |
-|---|---|---|
-| MCU | Seeed XIAO RP2040, 11 GPIO D0–D10, USB head past Edge.Cuts | Hackpad submission page, tutorial |
-| I²C | OLED on D4 (SDA, GP6) / D5 (SCL, GP7); analog only D0–D3 (A0–A3) | CONTRACT, XIAO pinout |
-| OLED | 0.91" 128×32, pin order **GND-VCC-SCL-SDA**, max 1 (fixed 0x3C address) | Parts page |
-| Switches | ≤ 16 in the kit (the old "< 16 inputs" rule is not on the live pages, see docs/audit/hackpad-rules.md) | `/parts` |
-| Kit max | 16 MX switches, 16 DSA white caps, 2 EC11, 1 OLED, 16 SK6812 MINI-E, 20 1N4148, M3×16 screws, M3 heat-set inserts | Parts page |
-| PCB | ≤ 100 × 100 mm, 2 layers, project name on silkscreen, "XIAO HERE" on the XIAO side | Submission page, tutorial |
-| Case | ≤ 200 × 200 × 100 mm, 3D printed only (no acrylic / laser / CNC), name on a hidden face | Submission page, FAQ |
-| Fits | 0.2 mm gap between printed parts; 0.2–0.4 mm printed part ↔ PCB | Resources page, CONTRACT |
-| Holes | insert 4.7 mm Ø × 4 mm deep; screw pass-through 3.4 mm; self-tap 2.9 mm; PCB holes = KiCad M3 MountingHole footprints, not Edge.Cuts | Resources page |
-| Footprints | MX: ai03 MX_V2; XIAO: Seeed OPL_Kicad_Library (XIAO-RP2040-DIP); EC11: KiCad Rotary_Encoder; OLED: gorbachev SSD1306-0.91 4-pin (or a 4-pin header); diode: D_DO-35_SOD27_P7.62mm_Horizontal | Resources page, FAQ ("care package") |
-| Repo | `CAD/` (one full assembly .step/.stp/.3mf incl. PCB), `PCB/` (.kicad_pro/.kicad_sch/.kicad_pcb), `Firmware/`, `production/` (gerbers.zip, one STEP or STL per case part, firmware.uf2) | Submission page |
-| README | screenshots of the whole hackpad, schematic, PCB, case fit; a BOM | Submission page |
+| Check | Passes when |
+|---|---|
+| `G0.studio_run`, `G0.studio_constraints` | The Studio harness and unit tests exit 0, on a copy of `studio/`. |
+| `G0.design_json` | Schema holds; pins and nets are unique; every XIAO pin has its Seeed GPIO; one key per (row, col); LED indices are 0..12; keys are at least 19.0 mm apart; PCB is at most 100 × 100 mm and 2 layers; at most 16 switches. |
+| `G2.firmware_pins` | `keyboard.json` and `config.h` match `design.json`: matrix, encoder, WS2812 pin and `vendor` driver, 13 LEDs and their key mapping, layout order, I2C1 on GP6/GP7, OLED 128×32 at 0x3C, Raw HID usage, layer 0 key count. |
+| `G2.netlist` | From the exported netlist: XIAO signal and power nets; a COL, switch, diode, ROW path for every key; OLED pins 1-4 are GND, 3V3, SCL, SDA; 13 SK6812 on the XIAO 5V net in one DIN to DOUT chain from D6; encoder A/B/C wired, push not on a GPIO. |
+| `G2.erc` | `kicad-cli sch erc --severity-error` reports 0 errors. |
+| `G3.outline_layers` | Copper is F.Cu and B.Cu only; Edge.Cuts equals `design.json` ± 0.1 mm and fits 100 × 100; "Frostbite" is on silkscreen; "XIAO HERE" is on B.Silkscreen. |
+| `G3.positions` | Switches, encoder shaft, OLED header, XIAO on B.Cu, glow LEDs and the LED chain order all land within 0.05 mm of `design.json`. |
+| `G3.drc`, `G3.drc_jlcpcb` | DRC with schematic parity gives 0 violations, 0 unconnected items and 0 parity errors, once with the project rules and once with the pinned JLCPCB rules merged in. The stricter bound gates, and PTH annular ring must gate at 0.20 mm or more. |
+| `G3.gerbers_export`, `G3.gerbers_zip` | A fresh export and `production/gerbers.zip` both parse in gerbonara with every layer and a drill file, and the outline equals `design.json` ± 0.1 mm. |
+| `G3.gnd_thermal` | Every GND pour uses thermal relief, no pad or rule forces solid, and at most 45 % of a ring 0.15 mm outside each GND pad is pour. Relief measured 11-30 %, solid 49-100 %. |
+| `G4.check_fit` | `CAD/check_fit.py --no-build` exits 0 on the shipped files. |
+| `G4.stl_mesh` | All five printed parts load, are watertight with consistent winding and positive volume, and together fit 200 × 200 × 100 mm. |
+| `G4.switch_cutouts` | From the Top mesh: a 13.8 mm housing fits at each key down to the PCB, the narrowest opening is 14.0 ± 0.1 mm and centred ± 0.1, and the clips engage 1.5 ± 0.15 mm of plate. |
+| `G4.encoder_clearance` | A 12 × 12 mm body swept from the skirt rim to its seat, and the Ø7 bushing above it, stay at least 0.2 mm from the Top. Any opening shape passes if it clears. |
+| `G4.oled_clearance` | The glass and 38 × 12 mm board, turned ±1° about J1 and shifted ±0.1 mm, reach their seats clear of the Top; the glass is not proud; the 22.384 × 5.584 mm active area is visible wherever it sits on the glass; `OLEDSupport.stl` height equals `module_gap` minus 2 × tape. Window size is free. |
+| `G4.step_parts` | Each part's STEP reopens, its STL volume is within 1 %, and its STEP volume is within 0.1 % of a rebuild from `CAD/frostbite_case.py`. |
+| `G5.bom_kit` | Counts from `design.json` and the PCB fit the kit, and PCB counts equal `design.json`. Extras to buy are listed in the evidence. |
+| `G6.qmk_lint`, `G6.compile_default`, `G6.compile_ledtest` | `qmk lint` and both compiles exit 0, and each fresh UF2 has valid magic numbers, block numbering and RP2040 family, and is under 2 MB. |
+| `G6.production_uf2` | Production UF2 files parse the same way, and `firmware.uf2` is byte-identical to this run's build or newer than every firmware source. |
+| `G6.firmware_harness` | The real `keymap.c` and QMK's OLED driver run on the desktop under ASan and UBSan with no FAIL line, and `proto_test.py` runs the real host encoder and Daemon against that binary with 0 bad. |
+| `G6.oled_strip_panel` | The four F1 lines pass, and the last panel dump shows 0 bytes differing from the frame buffer. |
+| `G7.host_tests` | `pytest` exits 0 on every file in `host/tests`. Tests still in `docs/audit/host-tests` run on a private copy. Strict xfails are listed as open findings. |
+| `G8.package` | The submission files exist, and `README.md` has images for the render, schematic, PCB and case, working image links, and a BOM table. Missing files are FAIL here. |
+| `X.cross_positions` | `design.json` agrees with the PCB, with `CAD/positions.json`, and with the Top mesh: insert holes Ø4.7 ± 0.1 mm on the screw positions, and a USB opening at least the design width, centred on the XIAO ± 0.1 mm. |
+| `X.boss_vs_pads` | Every insert boss is at least 0.5 mm from every bottom-copper pad, judged separately against the pcbnew export and our own parse. |
+| `X.pcb_insertion` | The PCB plus `case.tolerance` per side, swept from skirt rim to seat through `Top.stl`, meets under 0.01 mm³ of material. This shares no code with `check_fit`. |
+| `X.usb_ids` | Host, `keyboard.json` and `design.json` agree on VID and PID. The host's `HidTransport.open`, run against a fake `hid`, opens the pad and nothing else in 5 scenes. Only `device.py` imports `hid`. |
 
-## Gates
+**Limits.** Sizes and the kit come from the Hackpad pages; [`audit/hackpad-rules.md`](audit/hackpad-rules.md)
+records which are live. Kit: 16 MX switches, 16 keycaps, 20 1N4148, 2 EC11, 1 OLED, 16 SK6812 MINI-E,
+6 M3 screws, 6 inserts, 1 XIAO RP2040. Fits: 0.2 mm between printed parts, 0.2 to 0.4 mm to the PCB.
 
-Each row: what is checked → tool / who → pass criterion → on failure, loop to.
-Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** firmware + host, **H** human.
+**Steps no check runs.** G1: every value in `docs/DIMENSIONS.md` needs a source, and calipered values
+go back in when the kit arrives. G9: print the PCB at 1:1, set the parts on the paper, try a USB-C
+cable in a wall offcut, and read the README as a reviewer. G10: bring-up follows
+[`BUILD.md`](BUILD.md) in order and stops at the first failure.
 
-### G0 Design spec (now: the Studio)
-- **Checks:** spec values valid; `FB.check(spec).ok`; geometry: no key overlap, ≥ 1 mm between caps,
-  OLED window and knobs, all inside the content area, ≥ 2.3 mm (wall + tolerance) from the rounded shell
-  outline for under-plate parts; OLED board (38×12) fits under its 30 mm window in some orientation;
-  XIAO has an edge position clear of switches and EC11 bodies; ≥ 4 corners take a Ø8.7 insert boss.
-  Renders contain no NaN/undefined, are well-formed XML with prefixed ids.
-- **Tool / who:** `node verify/run.js` (V). Also `node test/constraints.test.js` (B).
-- **Pass:** exit 0, chosen spec has no warnings in `verify/report.md` → write `build/design.json`.
-- **Fail:** `checker-gap:*` → constraints.js (B). Geometry warnings for the chosen spec → choose another
-  layout/bezel, or the lead edits layouts.js. Render failures → A/C.
+## How evidence works
 
-### G1 Real dimensions
-- **Checks:** every `FB.dims` value cited to a datasheet or drawing (XIAO 17.8×21, OLED board and glass,
-  EC11E body and bushing M7, MX cutout 14.0, MINI-E 3.2×2.8 reverse-mount hole, insert OD/length).
-  When the kit arrives: caliper the OLED board, the insert, a cap and the encoder; write measured values back.
-- **Tool / who:** `DIMENSIONS.md` table with source column (F now, H at kit arrival).
-- **Pass:** no value without a source; measured differs from dims by < 0.2 mm.
-- **Fail:** fix dims.js → rerun G0 (and G3/G4 if already past them).
+Each check writes `verify/evidence/<check>.json`: status, fail reasons, every command with its exit
+code and last 60 lines of output, the SHA-256 of every input file, the measurements, and a UTC
+timestamp. A status comes only from an exit code or a parsed value compared with `design.json`. If
+a check crashes it is a FAIL. A missing tool or input is NOT_RUN, and NOT_RUN is never a pass. A
+claim counts only if an evidence file backs it and its input hashes match the current files.
 
-### G2 Pin map and schematic
-- **Checks** (against `design.json.pins`):
-  - ≤ 11 GPIO, no pin used twice; D4 = SDA, D5 = SCL to the OLED; header pins 1-2-3-4 = GND, VCC, SCL, SDA.
-  - Analog use only on D0–D3 (none planned); LED data on one GPIO, chain DIN→DOUT in `design.json.leds` order. No decoupling caps: the kit has none, and the reference Hackpad boards checked in docs/audit/electrical.md run without them; a known risk, checked at bring-up.
-  - Matrix: one 1N4148 per switch, same direction (COL2ROW); no column or row shorted to another net.
-  - Encoder A/B on two GPIO, C to GND; push wired only if the layout says `dialPress`.
-  - SK6812 on 5 V with 3.3 V data is marginal (VIH ≈ 3.5 V). Prove it at bring-up (G10). The board has no footprint for a
-    spare 1N4148 on the first LED's VDD (≈ 4.3 V), so that fallback means cutting a trace.
-  - Pin map (`design.json` `pins`): rows D0 D1 D2, cols D3 D9 D10, enc A/B D7 D8, LED D6, OLED D4/D5 = 11/11. No spare pin.
-- **Tool / who:** `kicad-cli sch erc --severity-error --exit-code-violations PCB/frostbite.kicad_sch`;
-  `kicad-cli sch export netlist` → `verify/netlist.js` diffs nets against design.json (V).
-- **Pass:** 0 ERC errors; netlist diff empty.
-- **Fail:** schematic → G2 (P). Pin budget over 11 → G0 (change layout).
+`verify/run.sh --self-test` copies the project, requires each check to PASS on a clean copy, injects
+one known fault, and requires FAIL with a reason that names the fault. It has 57 fault cases and 14
+assertions about the harness itself. Ten checks have no injected fault, so their failure path is
+untested: both Studio checks, `G2.erc`, `G3.drc`, both gerber checks, `G4.check_fit`, `G6.qmk_lint`
+and both compiles. The `G2.netlist` cases use a generated netlist.
 
-### G3 PCB
-- **Checks:**
-  - `kicad-cli pcb drc --exit-code-violations --schematic-parity` = 0 errors (silkscreen warnings may stay).
-  - Board file has only F.Cu/B.Cu; Edge.Cuts bounding box ≤ 100 × 100 (parse `.kicad_pcb` or the DRC report).
-  - Every footprint lib id is on the allowlist above; XIAO footprint on **B.Cu**, its USB connector ≥ 1 mm past Edge.Cuts.
-  - `kicad-cli pcb export pos` centres match design.json within 0.05 mm (switches on the 19.05 grid, dial and OLED header where the case expects them).
-  - No PCB mounting holes: the inserts sit in the Top's side walls, outside the PCB's path.
-  - Silkscreen has "Frostbite" and "XIAO HERE" on B.Silkscreen.
-  - Gerbers + drill → `production/gerbers.zip`, opened in a Gerber viewer (or JLC's preview) once.
-- **Tool / who:** kicad-cli + `verify/pcb.js` (V); fixes by P.
-- **Pass:** all of the above.
-- **Fail:** routing/DRC → G3. Position drift → G3 (positions come from design.json). Board grows over 100 → G0.
+## What the checks cannot prove
 
-### G4 Case (CadQuery, generated from design.json)
-- **Checks** (script `verify/case.py`, CadQuery):
-  - Bounding box of the assembly ≤ 200 × 200 × 100.
-  - Plate cutouts 14.0 mm (+0.05 max), plate 1.5 mm at the clips or relief pockets; EC11 bushing hole ≥ 7.4 mm.
-  - PCB pocket = PCB outline + 0.2–0.4 mm per side; standoffs under the PCB clear of THT pins.
-  - Insert holes 4.7 Ø × 4 deep inside bosses ≥ 8.7 Ø; screw pass-through 3.4; bosses in the Top's side walls, outside the PCB insertion envelope.
-  - USB-C cutout centred on the XIAO receptacle from `kicad-cli pcb export step` (x from the pos file, z from the stack)
-    with ≥ 0.5 mm clearance around a 12.5 × 7 mm cable overmold through the full wall (bezels 9–12 mm are deeper
-    than a USB-C plug reaches, so the wall needs a recess there).
-  - Interference: assemble case parts + PCB STEP (with switches, XIAO, OLED, EC11 models) and
-    intersect every pair; total overlap volume < 0.01 mm³. Light-gap spacer ≥ minWall.
-  - Printability: no downward faces steeper than 45° from vertical outside the bed face, no bridges > 10 mm,
-    each part has a flat face for the bed; walls ≥ 2.0 mm. Report any support that is still needed.
-  - All parts are printed (PETG); nothing references acrylic or laser-cut sheet.
-- **Tool / who:** C writes it, V runs it.
-- **Pass:** all checks pass; exported `production/Top.step`, `Bottom.step`, `GlowBand.step`, `OLEDSupport.step`, `Knob.step` and `CAD/frostbite-assembly.step` open again in CadQuery.
-- **Fail:** case geometry → G4. Hole or connector position → G3 or G0 (design.json). Envelope → G0.
+- **Electrical.** That the board powers up or that LED data is reliable. ERC and DRC know only what
+  the symbols and rules declare, and nothing confirms the symbol pins match the real parts. The board
+  has no decoupling capacitors, because the kit has none. That is a known risk.
+- **Fabrication.** JLCPCB's own DFM review can differ from DRC. Thermal relief in the file does not
+  show that a joint solders well.
+- **Case.** Printability, shrink, clip force, tilted PCB entry, boss height against component bodies
+  and THT leads, and the Bottom and GlowBand sides of the USB window.
+- **Stale files.** `G4.step_parts` compares volumes, so a moved feature that keeps the volume passes
+  it. The checks on the Top catch some of those. `G6.production_uf2` falls back on file times.
+- **Everything else.** RP2040 timing, the real LEDs, encoder and USB stack, a real enumeration on
+  macOS, real Claude Code hooks, whether README images are current, and what the kit really ships.
 
-### G5 BOM vs kit
-- **Checks:** KiCad BOM (`kicad-cli sch export bom`) + case hardware list diffed against the kit table;
-  every overage is in `FB.check(spec).extras` and in the README BOM with a price.
-- **Tool / who:** `verify/bom.js` (V).
-- **Pass:** diff only lists items that are in extras.
-- **Fail:** remove the part (G2/G4) or accept it as an extra (update README).
+## Needs real parts
 
-### G6 Firmware (QMK)
-- **Checks:**
-  - `keyboard.json` is generated from design.json: matrix pins, diode direction, encoder pins, `ws2812` driver `vendor` (PIO) on the LED pin, LED count, I²C1 on GP6/GP7, OLED driver SSD1306 128×32.
-  - Layout has exactly one entry per switch; keymap layer 0 has the same count.
-  - `RAW_ENABLE = yes`; the Raw HID protocol is defined only in `design.json` → `protocol` (32-byte reports,
-    byte 0 = command: 0x01 SET_SLOT, 0x02 SET_ALL, 0x03 OLED_LINE, 0x04 SET_GLOW, 0x05 PING, 0x06 SET_SELECTED;
-    device events 0x81 KEY, 0x82 ENCODER). Unknown commands are ignored.
-  - `qmk lint -kb frostbite` and `qmk compile -kb frostbite -km default` produce `frostbite_default.uf2`, copied to `production/firmware.uf2`.
-  - A test build `-km ledtest` that runs the LED chain and OLED without any switches (used at G10).
-- **Tool / who:** F writes; V runs in the `qmkfm/qmk_cli` container (CI).
-- **Pass:** lint clean, both builds compile, uf2 < 2 MB, keyboard.json diff vs design.json empty.
-- **Fail:** firmware → G6. Pin mismatch → G2.
+`verify/REPORT.md` opens with this list. A green report does not cover these items.
 
-### G7 Host script (Claude Code hooks + training watcher)
-- **Checks:**
-  - Claude Code hooks (`PreToolUse`→run, `Notification` permission prompt→needs, `Stop`→done, tool error→error) map to slot statuses; one slot per session id.
-  - Training watcher: tail a log, NaN/Inf loss or a traceback → error, final epoch/"done" marker → done, stale log > N min → needs.
-  - Fixture replay: recorded hook JSON payloads and three training logs (normal, NaN at step 812, crash) piped through the script against a fake HID device; assert the exact report bytes from PROTOCOL.md.
-  - Survives the pad being unplugged and plugged back in; latency from event to report < 200 ms.
-- **Tool / who:** F writes; V runs `node host/test.js` (or `pytest`).
-- **Pass:** all fixtures produce the expected byte stream.
-- **Fail:** host → G7. Protocol change → G6 and G7 together.
-
-### G8 Submission package
-- **Checks:** repo tree matches the Orpheuspad example: `CAD/` one assembly file, `PCB/` three KiCad files,
-  `Firmware/`, `production/` with `gerbers.zip`, per-part STEP/STL, `firmware.uf2`. README has the five
-  required items (hackpad render, schematic, PCB, case fit / exploded, BOM) and every image link resolves.
-  Screenshots come from `kicad-cli sch export svg`, `kicad-cli pcb export svg` and the CadQuery render, so they are current.
-- **Tool / who:** `verify/package.js` (V).
-- **Pass:** no missing file or broken link; all G0–G7 green on the same commit hash.
-- **Fail:** the gate that owns the missing artifact.
-
-### G9 Human review before money is spent
-- Print the PCB at 1:1, set switches, caps, OLED and knob on the paper; plug a USB-C cable into a XIAO held
-  at its spot behind a wall offcut of the right thickness. Read the README as a reviewer. Make the ship post and fill in the form.
-- **Fail:** whichever gate the problem belongs to. The only gate that cannot be automated.
-
-### G10 Physical bring-up (kit, PCB and case arrive)
-Order matters; stop at the first failure.
-1. Bare PCB: continuity VBUS–GND, 3V3–GND open; every matrix row/column isolated from its neighbours.
-2. Solder the XIAO (underside) only. Flash `led-test.uf2` with the BOOT button.
-3. LED1 alone on the highest-voltage USB port, then LED2 to LED9, then LED10, then LED11 to LED13. Each LED steps red,
-   green, blue, white in chain order, one at a time at level 90 of 255, colours correct (GRB order), no flicker.
-4. Diodes (check stripe direction before soldering all), encoder, then the OLED on J1 with the header plastic removed.
-   Upright OLED text proves I²C, since `ledtest` has no I²C scan. Turn the knob: `knob:` counts one per click.
-5. Clip the switches into the plate, lower the PCB onto them, solder 18 joints. `ledtest` shows `key: rR cC`: each key
-   once, no ghosts.
-6. Encoder: clockwise = volume up / next slot; if reversed, swap pins in keyboard.json, do not resolder. The swap fails
-   `PCB/tools/check_netlist.py` and `verify` G2.firmware_pins until they are updated with it.
-7. Raw HID: flash `firmware.uf2`. `HidTransport.find()` sees the pad, and a running daemon shows `HID` on the OLED. The PING
-   reply carries protocol version 1; there is no host `ping` command. `frostbite-ctl set 1 run test`, up to slot 6, changes
-   the slots and lights all 13 LEDs together. No shipped build drives the chain at full white: the default keymap caps
-   output at 40 % of full scale.
-8. Case: the PCB goes in without force, USB-C plug seats fully, inserts take the screws straight, caps clear the plate
-   and each other, glow gap evenly lit.
-- **Fail:** assembly fault → rework and repeat the step. Design fault → note it under "Rev B" in the README and
-  loop to G2/G3/G4; firmware fault → G6.
-
-## The loop
-
-```mermaid
-flowchart TD
-  G0[G0 Spec + Studio harness] --> G1[G1 Real dimensions]
-  G1 --> DJ[(design.json)]
-  DJ --> G2[G2 Pins + ERC]
-  G2 --> G3[G3 PCB DRC + positions]
-  DJ --> G4[G4 Case CadQuery]
-  G3 -->|PCB STEP + pos| G4
-  G2 --> G5[G5 BOM vs kit]
-  G2 --> G6[G6 QMK compile]
-  G6 <-->|protocol| G7[G7 Host fixtures]
-  G3 & G4 & G5 & G6 & G7 --> G8[G8 Package]
-  G8 --> G9[G9 Human review + submit]
-  G9 --> G10[G10 Bring-up]
-  G2 -. pin budget .-> G0
-  G3 -. board > 100 mm .-> G0
-  G4 -. envelope / USB .-> DJ
-  G4 -. hole positions .-> G3
-  G6 -. pin mismatch .-> G2
-  G10 -. design fault .-> G2
-  G10 -. firmware fault .-> G6
-```
-
-**Sequential:** G0 → G1 → design.json → G2 → G3 → G8 → G9 → G10. G4's final interference run needs the G3 PCB STEP.
-**Parallel once design.json exists:** G4 (draft from design.json), G6, G7 and the PCB work run side by side.
-G5 runs whenever the schematic changes. Every gate reruns on every commit in CI; a change upstream
-invalidates everything downstream of it in the diagram.
-
-## How many agents and when
-
-| Phase | Agents | Why that many |
-|---|---|---|
-| Studio (now) | 6: A top render, B catalog/constraints, C side render, D page, E verification, F dims | separate files, no shared state beyond the contract |
-| Spec freeze, G0–G1 | 1 (V) + human picks the spec | a decision, not parallel work |
-| Hardware design, G2–G7 | 4: **P** schematic + PCB (one agent, the two change together), **C** case, **F** firmware + host (share the protocol), **V** runs gates and the cross-checks between them | the three builders never edit the same file; V owns design.json and every `verify/*` script |
-| Package, G8 | 1 (V) | assembling, not designing |
-| Human review, G9 | human | the paper print and the form |
-| Bring-up, G10 | human + 1 agent for firmware/host debugging | hands on hardware are the bottleneck |
-
-Peak is 4 agents. Splitting schematic from layout, or firmware from host, would add handoffs on the
-two interfaces most likely to break (netlist and Raw HID protocol) without saving time.
-
-## Running the current gate
-
-```sh
-node verify/run.js            # ~2 s, writes verify/report.md, exit 1 on any hard failure
-node verify/run.js --random 5000 --seed 7
-```
+| Item | Why it is open | How to settle it | Audit |
+|---|---|---|---|
+| OLED flip | `FROSTBITE_OLED_FLIP` is set from reference boards. | Flash `ledtest` with the OLED fitted and read the text. | `docs/audit/firmware.md` F2 |
+| EC11 resolution | Resolution 4 may need two clicks per step on a 30/15 part. Direction is open too. | Turn the kit encoder in `ledtest`. | `docs/audit/firmware.md` F6, `electrical.md` E9 |
+| Glow brightness | The light reaching the band is a model and an estimate. | Print one corner with one SK6812 and look at it. | `docs/audit/case.md` M2 |
+| LED data level | 3.3 V data is below the datasheet VIH of 3.5 V at 5 V. | Run the whole chain in the LED test from docs/BUILD.md on the real board. | `docs/audit/electrical.md` E3 |
+| OLED flex clearance | The module's flex and tape height at the far end is unknown. | Caliper the kit module against the lip gap. | `docs/audit/case.md` M3 |

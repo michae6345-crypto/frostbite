@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Frostbite Studio verification harness (Agent E). Node >= 16, no npm installs.
+ * Frostbite Studio verification harness. Node >= 16, no npm installs.
  *
  *   node verify/run.js                 # full run, writes verify/report.md
  *   node verify/run.js --random 2000   # more random specs
@@ -8,7 +8,7 @@
  *
  * Exit code: 0 = no hard failures, 1 = hard failures, 2 = harness crashed.
  * Hard = contract broken or a spec FB.check approves is physically unsound.
- * Soft = approximate physical-fit warnings, robustness edge cases, style.
+ * Soft = approximate physical-fit warnings, odd inputs, style.
  */
 'use strict';
 process.on('uncaughtException', e => { console.error('verify harness crashed:', e && e.stack || e); process.exit(2); });
@@ -23,7 +23,7 @@ const N_RANDOM = parseInt(argVal('--random', '500'), 10);
 const SEED = parseInt(argVal('--seed', '20261103'), 10);
 const HARD = 'hard', SOFT = 'soft';
 
-// ---------------------------------------------------------------- module loading (contract order)
+// Module loading (contract order)
 const MODULES = [
   { file: 'dims.js', provides: ['dims'] },
   { file: 'layouts.js', provides: ['layouts', 'layoutById'] },
@@ -34,11 +34,9 @@ const MODULES = [
 ];
 const loads = MODULES.map(m => {
   const p = path.join(ROOT, m.file);
-  const rec = { file: m.file, ok: false, stub: false, error: null, missing: [], bytes: 0 };
+  const rec = { file: m.file, ok: false, error: null, missing: [], bytes: 0 };
   try {
-    const src = fs.readFileSync(p, 'utf8');
-    rec.bytes = src.length;
-    rec.stub = /\bstub\b/i.test(src);
+    rec.bytes = fs.readFileSync(p, 'utf8').length;
     require(p);
     const g = globalThis.FB || {};
     rec.missing = m.provides.filter(k => g[k] === undefined);
@@ -49,9 +47,8 @@ const loads = MODULES.map(m => {
   return rec;
 });
 const FB = globalThis.FB || {};
-const stubOf = fn => { const owner = { renderTop: 'render-top.js', renderSide: 'render-side.js', renderExploded: 'render-side.js', check: 'constraints.js' }[fn]; const r = loads.find(l => l.file === owner); return !!(r && r.stub); };
 
-// ---------------------------------------------------------------- result bookkeeping
+// Result bookkeeping
 const families = new Map();          // family -> {run, hard, soft}
 const buckets = new Map();           // sev|type -> {sev, type, family, count, examples[]}
 function fam(f) { if (!families.has(f)) families.set(f, { run: 0, hard: 0, soft: 0 }); return families.get(f); }
@@ -71,10 +68,10 @@ const fin = v => typeof v === 'number' && Number.isFinite(v);
 const clone = o => JSON.parse(JSON.stringify(o));
 const r2 = v => (fin(v) ? Math.round(v * 100) / 100 : String(v));
 
-// ---------------------------------------------------------------- contract constants
+// Contract constants
 const CONTRACT_OPTIONS = {
   layout: ['stratum9', 'mirror9', 'pocket6', 'stagger9', 'twin9', 'wide9', 'console4'],
-  shell: ['iced', 'milk', 'glacier', 'smoke', 'lilac', 'mint'],
+  shell: ['black', 'iced', 'milk', 'glacier', 'smoke', 'lilac', 'mint'],
   texture: ['satin', 'layer-lines', 'speckle'],
   plate: ['floating', 'flush', 'deep-dish', 'tray'],
   glowColor: ['ice', 'white', 'cyan', 'lavender', 'mint', 'warm'],
@@ -89,7 +86,7 @@ const STATUSES = ['idle', 'run', 'done', 'needs', 'error'];
 const LIMITS = { pins: 11, pcb: 100, shellW: 200, shellH: 200, shellZ: 100, switches: 16, encoders: 2, leds: 16, oled: 1 };
 const opts = () => (FB.catalog && FB.catalog.options) || CONTRACT_OPTIONS;
 const defaults = () => (FB.catalog && FB.catalog.defaultSpec) || {
-  layout: 'stratum9', shell: 'iced', texture: 'satin', plate: 'floating', glowColor: 'ice', glowPlace: 'gap', corner: 12, bezel: 9,
+  layout: 'stratum9', shell: 'black', texture: 'satin', plate: 'floating', glowColor: 'ice', glowPlace: 'gap', corner: 12, bezel: 9,
   knob: 'knurled-alu', oledColor: 'white', capProfile: 'DSA', agentCap: 'frosted', commandCap: 'white', legends: 'blank', screws: 'hidden',
   wordmark: 'front', wordmarkText: 'frostbite', tilt: 4, statuses: ['run', 'done', 'run', 'needs', 'idle', 'error'] };
 function specLabel(s) {
@@ -101,7 +98,7 @@ function specLabel(s) {
   return parts.length ? parts.join(' ') : '(default spec)';
 }
 
-// ---------------------------------------------------------------- 1. module + catalog contract
+// Module + catalog contract
 for (const l of loads) {
   expect('modules', l.ok, HARD, 'module-load', `${l.file}: ${l.error || 'missing FB.' + l.missing.join(', FB.')}`);
 }
@@ -138,7 +135,7 @@ function validateSpec(spec, family) {
   return good;
 }
 
-// ---------------------------------------------------------------- 2. build the test set
+// Build the test set
 function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const tests = []; // {spec, source, strict}
 const base = clone(defaults());
@@ -162,16 +159,16 @@ if (FB.catalog && typeof FB.catalog.randomSpec === 'function') {
   const lk = safe('spec validity', 'randomSpec-threw', () => FB.catalog.randomSpec({ layout: 'wide9', bezel: 6 }, mulberry32(5)));
   if (lk.ok) expect('spec validity', lk.v.layout === 'wide9' && lk.v.bezel === 6, HARD, 'randomSpec-ignores-lock', 'randomSpec({layout:"wide9",bezel:6}) did not keep locked axes');
 }
-// Robustness edge cases: failures are soft (contract does not spell these out, but the page will hit them).
-const robust = [
+// Edge cases the contract does not spell out but the page will hit, so failures are soft.
+const edgeCases = [
   { ...base, statuses: [] }, { ...base, statuses: ['error'] }, { ...base, statuses: Array(12).fill('needs') },
   { ...base, wordmarkText: 'Frost & <Bite> "v2"' }, { ...base, wordmarkText: '' }, { ...base, wordmarkText: 'x'.repeat(48) },
   { ...base, layout: 'console4', plate: 'deep-dish', bezel: 12, corner: 16, tilt: 8, capProfile: 'XDA' },
   { ...base, layout: 'wide9', plate: 'tray', bezel: 6, corner: 16, tilt: 0, glowPlace: 'none' }
-].map(s => ({ spec: clone(s), source: 'robustness', strict: false }));
-tests.push(...robust);
+].map(s => ({ spec: clone(s), source: 'edge cases', strict: false }));
+tests.push(...edgeCases);
 
-// ---------------------------------------------------------------- 3. geometry (layout x bezel x corner)
+// Geometry (layout x bezel x corner)
 const D = FB.dims || {};
 const num = (v, d) => (fin(v) ? v : d);
 const G = {
@@ -319,7 +316,7 @@ function geoCombo(L, b, rad) {
   return c;
 }
 
-// ---------------------------------------------------------------- 4. SVG checks (tiny XML parser)
+// SVG checks (tiny XML parser)
 const ENT = /&(?!(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);)/;
 function parseXml(s) {
   const problems = [], stack = [], elements = [];
@@ -451,7 +448,7 @@ if (FB.catalog && FB.catalog.palette) {
   (function walk(o) { for (const v of Object.values(o)) { if (typeof v === 'string' && v[0] === '#') paletteSet.add(v.toLowerCase()); else if (v && typeof v === 'object') walk(v); } })(FB.catalog.palette);
 }
 
-// ---------------------------------------------------------------- 5. run every spec
+// Run every spec
 const checkCodes = { errors: new Map(), warnings: new Map() };
 const svgStats = {};
 let okCount = 0, rejCount = 0, expectedGeoRejections = 0;
@@ -480,9 +477,8 @@ function checkShape(res, spec) {
   return p.length === 0;
 }
 tests.forEach((t, idx) => {
-  const spec = t.spec, sevFor = sev => (t.strict ? sev : SOFT), famFor = f => (t.strict ? f : 'robustness');
+  const spec = t.spec, sevFor = sev => (t.strict ? sev : SOFT), famFor = f => (t.strict ? f : 'edge cases');
   const L = FB.layoutById ? FB.layoutById(spec.layout) : null;
-  // FB.check
   let res = null;
   if (typeof FB.check === 'function') {
     const r = safe(famFor('FB.check shape'), 'check-threw', () => FB.check(clone(spec)), spec, sevFor(HARD));
@@ -537,19 +533,18 @@ tests.forEach((t, idx) => {
   for (const [name, fn] of calls) {
     const fnName = name.split('+')[0];
     if (typeof FB[fnName] !== 'function') continue;
-    const F = t.strict ? fnName : 'robustness';
-    const tag = stubOf(fnName) ? ' [stub]' : '';
-    const r = safe(F, fnName + '-threw' + tag, fn, spec, sevFor(HARD));
+    const F = t.strict ? fnName : 'edge cases';
+    const r = safe(F, fnName + '-threw', fn, spec, sevFor(HARD));
     if (!r.ok) continue;
     const st = svgStats[name] = svgStats[name] || { n: 0, sum: 0, max: 0, min: Infinity };
     const len = typeof r.v === 'string' ? r.v.length : 0;
     st.n++; st.sum += len; st.max = Math.max(st.max, len); st.min = Math.min(st.min, len);
     const probs = checkSvg(r.v, prefix);
     fam(F).run++;
-    probs.forEach(p => record(F, p.soft ? SOFT : sevFor(HARD), `${fnName}:${p.type}${tag}`, p.msg, spec));
+    probs.forEach(p => record(F, p.soft ? SOFT : sevFor(HARD), `${fnName}:${p.type}`, p.msg, spec));
     if (name === 'renderTop' && t.strict && idx % 7 === 0) {
       const again = safe(F, fnName + '-threw', fn, spec);
-      if (again.ok) expect(F, again.v === r.v, SOFT, 'renderTop:nondeterministic' + tag, 'same spec + opts rendered differently', spec);
+      if (again.ok) expect(F, again.v === r.v, SOFT, 'renderTop:nondeterministic', 'same spec + opts rendered differently', spec);
     }
   }
 });
@@ -565,34 +560,33 @@ if (FB.layouts) for (const L of FB.layouts) {
     fam('geometry (shell)').run++;
     // Hard only matters when FB.check approves it (reported above as checker-gap). Here: soft inventory.
     gc.hard.forEach(i => record('geometry (shell)', SOFT, i.type, `${L.id}: ${i.msg}`));
-    gc.soft.forEach(i => record('geometry (shell)', SOFT, i.type, i.msg + ((comboOkSpecs.get(`${L.id}|${b}|${c}`) || 0) ? ' — FB.check approves it' : '')));
+    gc.soft.forEach(i => record('geometry (shell)', SOFT, i.type, i.msg + ((comboOkSpecs.get(`${L.id}|${b}|${c}`) || 0) ? ' (FB.check approves it)' : '')));
   }
 }
 const ih = D.heatSetInsert && D.heatSetInsert.holeDiameter;
 expect('catalog contract', !fin(ih) || Math.abs(ih - 4.7) < 0.15, SOFT, 'dims-insert-hole', `dims.heatSetInsert.holeDiameter=${ih}; Hackpad resources say 4.7 mm hole, 4 mm deep for the kit inserts`);
 
-// ---------------------------------------------------------------- 6. report
+// Report
 let hardTotal = 0, softTotal = 0;
 for (const b of buckets.values()) (b.sev === HARD ? (hardTotal += b.count) : (softTotal += b.count));
 const L_ = [];
 const w = s => L_.push(s);
-const stubs = loads.filter(l => l.stub).map(l => l.file);
 w('# Frostbite Studio verification report');
 w('');
 w(`Generated ${new Date().toISOString()} by \`node verify/run.js\` (seed ${SEED}, ${N_RANDOM} random specs, Node ${process.version}).`);
 w('');
-w(`**Result: ${hardTotal ? 'FAIL' : 'PASS'}** — ${hardTotal} hard failures, ${softTotal} warnings.` + (stubs.length ? ` Modules still marked as stubs: ${stubs.map(s => '`' + s + '`').join(', ')}; failures tagged **[stub]** come from placeholder code and are expected until those agents land.` : ''));
+w(`**Result: ${hardTotal ? 'FAIL' : 'PASS'}**: ${hardTotal} hard failures, ${softTotal} warnings.`);
 w('');
 w('## Modules');
 w('');
-w('| file | loaded | stub | bytes | note |');
-w('|---|---|---|---|---|');
-loads.forEach(l => w(`| ${l.file} | ${l.ok ? 'yes' : '**no**'} | ${l.stub ? 'stub' : '-'} | ${l.bytes} | ${l.error ? 'error: ' + l.error.replace(/\|/g, '\\|') : l.missing.length ? 'missing FB.' + l.missing.join(', FB.') : ''} |`));
+w('| file | loaded | bytes | note |');
+w('|---|---|---|---|');
+loads.forEach(l => w(`| ${l.file} | ${l.ok ? 'yes' : '**no**'} | ${l.bytes} | ${l.error ? 'error: ' + l.error.replace(/\|/g, '\\|') : l.missing.length ? 'missing FB.' + l.missing.join(', FB.') : ''} |`));
 w('');
 const src = tests.reduce((m, t) => (m[t.source.split(':')[0]] = (m[t.source.split(':')[0]] || 0) + 1, m), {});
 w('## Test set');
 w('');
-w(`${tests.length} specs: ${Object.entries(src).map(([k, v]) => `${v} ${k}`).join(', ')}. Exhaustive = layout × plate × glowPlace × bezel × corner with other axes at defaultSpec. Robustness specs (empty statuses, \`&<>\` in wordmark, extremes) only produce warnings.`);
+w(`${tests.length} specs: ${Object.entries(src).map(([k, v]) => `${v} ${k}`).join(', ')}. Exhaustive = layout × plate × glowPlace × bezel × corner with other axes at defaultSpec. Edge-case specs (empty statuses, \`&<>\` in wordmark, extremes) only produce warnings.`);
 w('');
 w('## Summary');
 w('');
@@ -610,9 +604,9 @@ w(`- Warning codes: ${tally(checkCodes.warnings)}`);
 w('');
 w('## SVG output');
 w('');
-w('| render | stub | renders | min bytes | avg bytes | max bytes |');
-w('|---|---|---|---|---|---|');
-for (const [k, s] of Object.entries(svgStats)) w(`| ${k} | ${stubOf(k.split('+')[0]) ? 'stub' : '-'} | ${s.n} | ${s.min} | ${Math.round(s.sum / Math.max(1, s.n))} | ${s.max} |`);
+w('| render | renders | min bytes | avg bytes | max bytes |');
+w('|---|---|---|---|---|');
+for (const [k, s] of Object.entries(svgStats)) w(`| ${k} | ${s.n} | ${s.min} | ${Math.round(s.sum / Math.max(1, s.n))} | ${s.max} |`);
 if (offPalette.size) {
   w('');
   w(`Colours not in \`FB.catalog.palette\` (info only; contract says renderers read palette colours): ${[...offPalette.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([c, n]) => `\`${c}\` ×${n}`).join(', ')}`);
@@ -640,8 +634,8 @@ const section = (sev, title) => {
   w('');
   if (!list.length) { w('None.'); w(''); return; }
   for (const b of list) {
-    w(`### \`${b.type}\` ×${b.count} — ${b.family}`);
-    b.examples.forEach(e => w(`- ${e.msg.replace(/\n/g, ' ')}${e.spec ? ` — spec: \`${e.spec}\`` : ''}`));
+    w(`### \`${b.type}\` ×${b.count}, ${b.family}`);
+    b.examples.forEach(e => w(`- ${e.msg.replace(/\n/g, ' ')}${e.spec ? `, spec: \`${e.spec}\`` : ''}`));
     w('');
   }
 };
@@ -651,7 +645,6 @@ w('## How to read this');
 w('');
 w('- `checker-gap:*` = FB.check said ok but the geometry check found a physical problem: constraints.js should reject or warn.');
 w('- `geometry (shell)` warnings list every layout × bezel × corner combination with a problem, whether or not FB.check approves it.');
-w('- `[stub]` = the renderer file still says it is a stub; re-run after Agents A/C land.');
 fs.writeFileSync(OUT, L_.join('\n') + '\n');
 
 console.log(`frostbite verify: ${tests.length} specs, ${hardTotal} hard, ${softTotal} soft -> ${path.relative(process.cwd(), OUT)}`);

@@ -1,5 +1,4 @@
-"""Diff the KiCad netlist (kicad-cli sch export netlist --format kicadsexpr) against design.json
-and the compiled firmware's keyboard.json.  Exit 1 on any mismatch.
+"""Diff a kicadsexpr netlist against design.json and keyboard.json. Exit 1 on any mismatch.
 
 usage: python3 PCB/tools/check_netlist.py [path/to/frostbite.net]
 """
@@ -27,7 +26,7 @@ for net in find(find1(nl, "nets"), "net"):
 
 comps = {str(find1(c, "ref")[1]): str(find1(c, "footprint")[1]) for c in find(find1(nl, "components"), "comp")}
 
-# ---------------------------------------------------------------- expected, from design.json only
+# Expected nets, from design.json only
 exp: dict[str, set] = {}
 
 
@@ -57,7 +56,7 @@ for i in range(n):
         add(f"LED_D{i + 1}", ref, "2")
 
 errors = []
-# Unnamed single-pin nets ("unconnected-(...)") are the no-connect pins; ignore them.
+# Unnamed "unconnected-(...)" nets are the no-connect pins.
 act = {k: v for k, v in actual.items() if not k.startswith("unconnected-")}
 for name in sorted(set(exp) | set(act)):
     if exp.get(name) != act.get(name):
@@ -66,13 +65,12 @@ nc = sorted(p for k, v in actual.items() if k.startswith("unconnected-") for p i
 if nc != sorted([("ENC1", "S1"), ("ENC1", "S2"), (f"LED{n}", "2")]):
     errors.append(f"unexpected unconnected pins {nc}")
 
-# ---------------------------------------------------------------- refs and footprints
 want_refs = {"U1", "J1", "ENC1"} | {f"SW{k}" for k in range(1, 10)} | {f"D{k}" for k in range(1, 10)} \
     | {f"LED{k}" for k in range(1, n + 1)}
 if set(comps) != want_refs:
     errors.append(f"refs differ: missing {want_refs - set(comps)}, extra {set(comps) - want_refs}")
 
-# ---------------------------------------------------------------- firmware (keyboard.json) agreement
+# Firmware pins
 gp = {p["gpio"]: p["net"] for p in design["pins"]}
 mp = kb["matrix_pins"]
 if [gp[g] for g in mp["cols"]] != ["COL0", "COL1", "COL2"]:

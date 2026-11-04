@@ -8,7 +8,7 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
+    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
     "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906"
   },
   "details": {
@@ -34,6 +34,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-04T01:04:16+00:00",
-  "duration_s": 0.09
+  "timestamp": "2026-11-04T04:19:37+00:00",
+  "duration_s": 0.06
 }

@@ -1,5 +1,5 @@
-"""Run the host's real device code against a fake `hid` module. Usage: probe_usb.py <host dir> <vid> <pid> <page> <usage>.
-Standalone on purpose: it imports frostbite_host only, and never touches a real device."""
+"""Run the host's device code against a fake `hid` module; no real device is touched.
+Usage: probe_usb.py <host dir> <vid> <pid> <page> <usage>"""
 import json
 import sys
 import types

@@ -43,7 +43,7 @@ def font(size, bold=False):
     return ImageFont.load_default()
 
 
-# ---------- status-cycle.gif ----------
+# status-cycle.gif
 frames = [raster(f, 1400) for f in media["frames"]]
 boxes = [bbox(f) for f in frames]
 box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
@@ -71,7 +71,7 @@ pal.putpalette(greys + hues)
 q = [g.quantize(palette=pal, dither=Image.Dither.NONE) for g in gif]
 q[0].save(dest / "status-cycle.gif", save_all=True, append_images=q[1:], duration=1000, loop=0, optimize=True)
 
-# ---------- presets-grid.png ----------
+# presets-grid.png
 COLS, GW = 4, 1400
 pad, gap, label_h = 28, 16, 40
 cell_w = (GW - 2 * pad - (COLS - 1) * gap) // COLS

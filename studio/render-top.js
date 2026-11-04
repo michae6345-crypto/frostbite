@@ -1,7 +1,7 @@
 (function (root) {
   const FB = root.FB = root.FB || {};
-  // Agent A: realistic, to-scale bird's-eye renderer. Units are mm; origin is the top-left of the
-  // layout content area (the shell bezel extends outside it). Light comes from the top-left.
+  // Bird's-eye renderer, to scale. Units are mm, with the origin at the top-left of the layout
+  // content area (the bezel extends outside it). Light comes from the top-left.
 
   let counter = 0;
   const STATUS_TEXT = { idle: "IDLE", run: "RUNNING", done: "DONE", needs: "WAITING", error: "ERROR" };
@@ -9,7 +9,6 @@
   const SANS = "'Space Grotesk','Inter','Helvetica Neue',Helvetica,Arial,sans-serif";
   const NB = " "; // non-breaking space (keeps OLED columns aligned)
 
-  // ---------- helpers ----------
   const num = v => { v = +v; if (!isFinite(v)) v = 0; v = Math.round(v * 100) / 100; return v === 0 ? 0 : v; };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -28,21 +27,16 @@
   const BLACK = "#000000", WHITE = "#ffffff";
 
   function normalize(specIn) {
-    const cat = FB.catalog || {};
-    const def = cat.defaultSpec || {};
-    const opt = cat.options || {};
+    const def = FB.catalog.defaultSpec, opt = FB.catalog.options;
     const s = Object.assign({}, def, specIn || {});
     for (const k of Object.keys(opt)) {
       const list = opt[k];
-      if (!Array.isArray(list) || !list.length) continue;
-      if (!list.some(v => v === s[k] || (typeof v === "number" && +s[k] === v))) s[k] = def[k] !== undefined ? def[k] : list[0];
+      if (!list.some(v => v === s[k] || (typeof v === "number" && +s[k] === v))) s[k] = def[k];
       if (typeof list[0] === "number") s[k] = +s[k];
     }
-    const stat = (cat.palette && cat.palette.status) || {};
-    let st = Array.isArray(s.statuses) ? s.statuses.filter(x => stat[x]) : [];
-    if (!st.length) st = (def.statuses || ["idle"]).filter(x => stat[x]);
-    if (!st.length) st = ["idle"];
-    s.statuses = st;
+    const stat = FB.catalog.palette.status;
+    const st = Array.isArray(s.statuses) ? s.statuses.filter(x => stat[x]) : [];
+    s.statuses = st.length ? st : def.statuses.slice();
     s.wordmarkText = String(s.wordmarkText == null ? "frostbite" : s.wordmarkText).slice(0, 24);
     return s;
   }
@@ -54,21 +48,21 @@
 
   FB.renderTop = function (specIn, opts) {
     opts = opts || {};
-    const cat = FB.catalog || {};
-    const pal = cat.palette;
-    const D = FB.dims || {};
+    const pal = FB.catalog.palette;
+    const D = FB.dims;
     const s = normalize(specIn);
     const L = FB.layoutById(s.layout);
-    const P = D.pitch || 19.05;
+    const P = D.pitch;
     let p = String(opts.idPrefix || ("fbt" + (++counter)));
     if (!/^[A-Za-z_][\w-]*$/.test(p)) p = "fbt" + p.replace(/[^\w-]/g, "");
     const id = n => p + "-" + n;
     const url = n => `url(#${id(n)})`;
     const tick = Math.floor(+opts.t || 0);
 
-    const sh = pal.shell[s.shell] || pal.shell.iced;
-    const glow = pal.glow[s.glowColor] || pal.glow.ice;
+    const sh = pal.shell[s.shell];
+    const glow = pal.glow[s.glowColor];
     const darkShell = lum(sh.top) < 0.45;
+    const opaqueDark = darkShell && sh.opacity >= 1; // no light passes through, so no glow on the surface
     const W = L.W, H = L.H, b = s.bezel;
     const x0 = -b, y0 = -b, SW = W + 2 * b, SH = H + 2 * b;
     const R = clamp(s.corner, 0.5, Math.min(SW, SH) / 2);
@@ -92,7 +86,6 @@
     const lin = (name, x1, y1, x2, y2, st, user) => defs.push(`<linearGradient id="${id(name)}" x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}"${user ? ' gradientUnits="userSpaceOnUse"' : ""}>${stops(st)}</linearGradient>`);
     const rad = (name, cx, cy, r, st, extra) => defs.push(`<radialGradient id="${id(name)}" cx="${cx}" cy="${cy}" r="${r}"${extra ? " " + extra : ""}>${stops(st)}</radialGradient>`);
 
-    // ---------- shared gradients ----------
     lin("shg", 0, 0, 0.35, 1, [[0, mix(sh.top, WHITE, darkShell ? 0.12 : 0.4)], [0.55, sh.top], [1, sh.base]]);
     lin("bsg", 0, 0, 0.35, 1, [[0, mix(sh.base, WHITE, darkShell ? 0.08 : 0.3)], [0.6, sh.base], [1, sh.edge]]);
     lin("rim", x0, y0, x0 + SW, y0 + SH, [[0, WHITE, darkShell ? 0.35 : 0.85], [0.42, WHITE, 0], [0.58, BLACK, 0], [1, BLACK, darkShell ? 0.45 : 0.2]], true);
@@ -103,7 +96,7 @@
     rad("dish", 0.62, 0.66, 0.78, [[0, WHITE, 0.55], [0.5, WHITE, 0.08], [0.85, BLACK, 0.05], [1, BLACK, 0.2]], 'fx="0.68" fy="0.72"');
     defs.push(`<clipPath id="${id("sc")}">${shellRect(0)}</clipPath>`);
 
-    // ---------- desk: base halo + drop shadow ----------
+    // drop shadow on the desk and base halo
     out.push(`<g opacity="0.3" fill="${shadowCol}" filter="${blur("fs", 2.2)}">${rr(x0 + 1, y0 + 2.2, SW - 0.6, SH - 0.4, R)}</g>`);
     out.push(`<g opacity="0.5" fill="${shadowCol}" filter="${blur("fc", 0.7)}">${rr(x0 + 0.4, y0 + 0.9, SW - 0.6, SH - 0.6, R)}</g>`);
     if (s.glowPlace === "base") {
@@ -114,9 +107,8 @@
       out.push(`<g opacity="0.9" fill="none" stroke="${glow}" stroke-width="2.4" filter="${blur("gb", 1)}">${shellRect(-0.4)}</g>`);
     }
 
-    // ---------- shell ----------
     const floating = s.plate === "floating";
-    const g = clamp(b * 0.24, 1.4, 2.2); // floating-plate inset (visible base ring)
+    const g = clamp(b * 0.24, 1.4, 2.2); // floating-plate inset, the visible base ring
     out.push(`<g opacity="${sh.opacity}">`);
     out.push(shellRect(0, `fill="${floating ? url("bsg") : url("shg")}"`));
     if (floating) {
@@ -134,7 +126,7 @@
     const tex = [];
     if (s.texture === "satin") {
       defs.push(`<filter id="${id("nz")}" filterUnits="userSpaceOnUse" x="${num(x0)}" y="${num(y0)}" width="${num(SW)}" height="${num(SH)}"><feTurbulence type="fractalNoise" baseFrequency="1.7" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.9 0 0 0 -0.4"/></filter>`);
-      tex.push(`<rect x="${num(x0)}" y="${num(y0)}" width="${num(SW)}" height="${num(SH)}" filter="${url("nz")}" opacity="${darkShell ? 0.35 : 0.8}"/>`);
+      tex.push(`<rect x="${num(x0)}" y="${num(y0)}" width="${num(SW)}" height="${num(SH)}" filter="${url("nz")}" opacity="${opaqueDark ? 0.1 : darkShell ? 0.35 : 0.8}"/>`);
     } else if (s.texture === "layer-lines") {
       defs.push(`<pattern id="${id("ll")}" patternUnits="userSpaceOnUse" width="8" height="0.42"><rect width="8" height="0.12" fill="${WHITE}" opacity="${darkShell ? 0.12 : 0.45}"/><rect y="0.21" width="8" height="0.09" fill="${BLACK}" opacity="${darkShell ? 0.25 : 0.07}"/></pattern>`);
       tex.push(`<rect x="${num(x0)}" y="${num(y0)}" width="${num(SW)}" height="${num(SH)}" fill="${url("ll")}"/>`);
@@ -148,7 +140,7 @@
     }
     tex.push(`<rect x="${num(x0)}" y="${num(y0)}" width="${num(SW)}" height="${num(SH)}" fill="${url("sheen")}"/>`);
     // light diffusing inside the translucent shell
-    if (s.glowPlace === "gap" || s.glowPlace === "band") tex.push(`<g fill="none" stroke="${glow}" stroke-width="4" opacity="${darkShell ? 0.3 : 0.15}" filter="${blur("gB", 2.8)}">${shellRect(1.5)}</g>`);
+    if ((s.glowPlace === "gap" || s.glowPlace === "band") && sh.opacity < 1) tex.push(`<g fill="none" stroke="${glow}" stroke-width="4" opacity="${darkShell ? 0.3 : 0.15}" filter="${blur("gB", 2.8)}">${shellRect(1.5)}</g>`);
     out.push(`<g clip-path="${url("sc")}">${tex.join("")}</g>`);
 
     // soft rounded edges
@@ -156,7 +148,7 @@
     out.push(`<g fill="none">${shellRect(rimW / 2, `stroke="${url("rim")}" stroke-width="${num(rimW)}"`)}${shellRect(0.12, `stroke="${sh.edge}" stroke-width="0.25" opacity="0.9"`)}</g>`);
     if (floating) {
       out.push(`<g fill="none">${shellRect(g + 0.55, `stroke="${url("rim")}" stroke-width="1.1"`)}${shellRect(g, `stroke="${mix(sh.edge, BLACK, 0.15)}" stroke-width="0.2" opacity="0.8"`)}</g>`);
-      if (s.glowPlace === "gap") out.push(`<g fill="none" stroke="${glow}" opacity="0.45">${shellRect(g + 0.35, `stroke-width="0.5"`)}</g>`);
+      if (s.glowPlace === "gap" && !opaqueDark) out.push(`<g fill="none" stroke="${glow}" opacity="0.45">${shellRect(g + 0.35, `stroke-width="0.5"`)}</g>`);
     } else {
       const seam = clamp(b * 0.13, 0.8, 1.4);
       if (s.glowPlace === "gap") {
@@ -169,8 +161,8 @@
       out.push(`<g fill="none">${shellRect(0.3, `stroke="${mix(glow, WHITE, 0.35)}" stroke-width="0.6"`)}${shellRect(0.9, `stroke="${glow}" stroke-width="0.8" opacity="0.35"`)}</g>`);
     }
 
-    // ---------- key area: well / tray ----------
-    const keys = L.keys || [];
+    // key well (deep-dish) or tray
+    const keys = L.keys;
     let kx1 = Infinity, ky1 = Infinity, kx2 = -Infinity, ky2 = -Infinity;
     keys.forEach(k => { kx1 = Math.min(kx1, k.x); ky1 = Math.min(ky1, k.y); kx2 = Math.max(kx2, k.x + P); ky2 = Math.max(ky2, k.y + P); });
     if (!keys.length) { kx1 = ky1 = kx2 = ky2 = 0; }
@@ -188,9 +180,8 @@
       out.push(`<g fill="none">${rr(ox + 0.4, oy + 0.4, ow - 0.8, oh - 0.8, 3, `stroke="${url("rim")}" stroke-width="0.8"`)}${rr(ox + po - pi + 0.3, oy + po - pi + 0.3, ow - 2 * (po - pi) - 0.6, oh - 2 * (po - pi) - 0.6, 1.8, `stroke="${url("rimin")}" stroke-width="0.6"`)}${rr(ox, oy, ow, oh, 3.4, `stroke="${sh.edge}" stroke-width="0.2"`)}</g>`);
     }
 
-    // ---------- screws ----------
     if (s.screws === "top") {
-      const hr = (D.m3Head || 5.5) / 2;
+      const hr = D.m3Head / 2;
       const k = hr + 1.6;
       let d = Math.max(b / 2, R - (R - k) / Math.SQRT2);
       d = Math.min(d, b - 0.4);
@@ -203,7 +194,6 @@
       });
     }
 
-    // ---------- wordmark ----------
     const wm = s.wordmarkText.trim();
     if (wm && s.wordmark !== "none") {
       const engraveCol = darkShell ? mix(sh.top, WHITE, 0.55) : mix(sh.edge, BLACK, 0.45);
@@ -214,8 +204,8 @@
         const obst = [];
         keys.forEach(k => obst.push([k.x, k.y, k.x + P, k.y + P]));
         if (L.oled) obst.push([L.oled.x, L.oled.y, L.oled.x + L.oled.w, L.oled.y + L.oled.h]);
-        const kr = ((D.ec11 && D.ec11.knobDiameter) || 18) / 2 + 0.6;
-        (L.dials || []).forEach(dl => obst.push([dl.x - kr, dl.y - kr, dl.x + kr, dl.y + kr]));
+        const kr = D.ec11.knobDiameter / 2 + 0.6;
+        L.dials.forEach(dl => obst.push([dl.x - kr, dl.y - kr, dl.x + kr, dl.y + kr]));
         const pref = L.oled ? [L.oled.x + L.oled.w / 2, L.oled.y + L.oled.h + 2.5] : [W / 2, 11];
         for (const fs of [2.6, 2.1, 1.7]) {
           const tw = textW(fs, wm.length), th = fs * 1.15;
@@ -243,19 +233,16 @@
       out.push(`<text ${attrs} y="${num(yb + 0.14)}" fill="${hiCol}" opacity="${darkShell ? 0.5 : 0.75}">${esc(wm)}</text><text ${attrs} y="${num(yb)}" fill="${engraveCol}" opacity="0.85">${esc(wm)}</text>`);
     }
 
-    // ---------- statuses ----------
     const agents = keys.filter(k => k.role === "agent");
     const nSt = s.statuses.length;
     const statusOf = i => s.statuses[(((i + tick) % nSt) + nSt) % nSt];
 
-    // ---------- OLED ----------
     if (L.oled) {
       const o = L.oled, oc = pal.oled[s.oledColor] || pal.oled.white;
       const glass = mix(pal.shell.smoke.edge, BLACK, 0.82);
       out.push(rr(o.x - 0.5, o.y - 0.5, o.w + 1, o.h + 1, 1.3, `fill="${mix(sh.edge, BLACK, darkShell ? 0.5 : 0.25)}" opacity="0.55"`));
       out.push(rr(o.x, o.y, o.w, o.h, 0.9, `fill="${glass}"`));
-      const act = D.oledActive || { w: 22.4, h: 5.6 };
-      const aw = Math.min(act.w, o.w - 2), ah = Math.min(act.h, o.h - 1.6);
+      const aw = Math.min(D.oledActive.w, o.w - 2), ah = Math.min(D.oledActive.h, o.h - 1.6);
       const ax = o.x + (o.w - aw) / 2, ay = o.y + (o.h - ah) / 2;
       const nA = Math.max(1, agents.length);
       const slot = (((tick % nA) + nA) % nA);
@@ -270,33 +257,32 @@
       out.push(`<g fill="${oc}" stroke="${oc}" stroke-width="0.35" opacity="0.28">${line(l1, ay + ah * 0.42)}${line(l2, ay + ah * 0.93)}</g>`);
       out.push(`<g fill="${mix(oc, WHITE, 0.25)}">${line(l1, ay + ah * 0.42)}${line(l2, ay + ah * 0.93)}</g>`);
       out.push(`<rect x="${num(ax)}" y="${num(ay - 0.3)}" width="${num(aw)}" height="${num(ah + 0.6)}" fill="${url("px")}" opacity="0.4"/>`);
-      // glass reflection + cutout edge
+      // glass reflection and cutout edge
       out.push(`<path d="M${num(o.x + o.w * 0.55)} ${num(o.y)}h${num(o.w * 0.18)}l${num(-o.h * 0.9)} ${num(o.h)}h${num(-o.w * 0.18)}Z" fill="${WHITE}" opacity="0.06"/>`);
       out.push(rr(o.x + 0.2, o.y + 0.2, o.w - 0.4, o.h - 0.4, 0.8, `fill="none" stroke="${url("rimin")}" stroke-width="0.4"`));
     }
 
-    // ---------- shadows of caps and knobs (one blurred group) ----------
-    const cb = D.capBottom || 18.2;
+    // shadows of caps and knobs, in one blurred group
+    const cb = D.capBottom;
     const XDA = s.capProfile === "XDA";
-    const ct = XDA ? (D.capTopXDA || 15.9) : (D.capTopDSA || 12.7);
-    const kr = ((D.ec11 && D.ec11.knobDiameter) || 18) / 2;
+    const ct = XDA ? D.capTopXDA : D.capTopDSA;
+    const kr = D.ec11.knobDiameter / 2;
     let shadows = "";
     keys.forEach(k => { shadows += rr(k.x + (P - cb) / 2 + 0.5, k.y + (P - cb) / 2 + 1.1, cb, cb, 2.2); });
-    (L.dials || []).forEach(dl => { shadows += `<circle cx="${num(dl.x + (s.knob === "puck" ? 0.4 : 0.9))}" cy="${num(dl.y + (s.knob === "puck" ? 0.7 : 1.8))}" r="${num(kr + 0.2)}"/>`; });
+    L.dials.forEach(dl => { shadows += `<circle cx="${num(dl.x + (s.knob === "puck" ? 0.4 : 0.9))}" cy="${num(dl.y + (s.knob === "puck" ? 0.7 : 1.8))}" r="${num(kr + 0.2)}"/>`; });
     // switch sockets visible between caps
     let sockets = "";
     keys.forEach(k => { sockets += rr(k.x + 0.15, k.y + 0.15, P - 0.3, P - 0.3, 1.4); });
     out.push(`<g fill="${mix(sh.base, BLACK, darkShell ? 0.4 : 0.22)}" opacity="0.35">${sockets}</g>`);
     out.push(`<g fill="${shadowCol}" opacity="${darkShell ? 0.6 : 0.4}" filter="${blur("ks", 0.9)}">${shadows}</g>`);
 
-    // ---------- agent glow halos ----------
+    // status glow around the agent caps
     const capType = s.agentCap;
     const haloOp = { frosted: 0.6, clear: 0.75, milky: 0.5 }[capType] || 0.6;
     let halos = "";
     agents.forEach((k, i) => { halos += rr(k.x - 0.6, k.y - 0.6, P + 1.2, P + 1.2, 4, `fill="${pal.status[statusOf(i)]}"`); });
     if (halos) out.push(`<g opacity="${haloOp}" filter="${blur("kh", 1.7)}">${halos}</g>`);
 
-    // ---------- caps ----------
     const capBaseCol = pal.agentCapBase[capType] || pal.agentCapBase.frosted;
     const tint = { frosted: 0.55, clear: 0.68, milky: 0.4 }[capType] || 0.55;
     const skirtOp = { frosted: 0.93, clear: 0.8, milky: 1 }[capType] || 0.93;
@@ -317,8 +303,7 @@
     const dishOp = XDA ? 0.5 : 0.95;
     const topR = XDA ? 2.4 : 3.1;
     const cmdNames = ["approve", "talk", "stop"];
-    let cmdIdx = 0;
-    const cmdKeys = keys.filter(k => k.role === "command").slice().sort((a, b2) => a.x - b2.x || a.y - b2.y);
+    const cmdKeys = keys.filter(k => k.role === "command").sort((a, b2) => a.x - b2.x || a.y - b2.y);
 
     keys.forEach(k => {
       const cx = k.x + P / 2, cy = k.y + P / 2;
@@ -344,7 +329,7 @@
         g1 += rr(tx + 0.2, ty + 0.2, ct - 0.4, ct - 0.4, topR - 0.2, `fill="none" stroke="${url("spec")}" stroke-width="0.35" opacity="${cmdDark ? 0.4 : 0.9}"`);
         g1 += rr(bx, by, cb, cb, 2.2, `fill="none" stroke="${mix(cmdCol, BLACK, 0.2)}" stroke-width="0.2" opacity="0.6"`);
         if (s.legends === "icons") {
-          const name = cmdNames[cmdKeys.indexOf(k) % 3] || cmdNames[cmdIdx++ % 3];
+          const name = cmdNames[cmdKeys.indexOf(k) % 3];
           const icy = ty + ct / 2;
           const st1 = `fill="none" stroke="${iconCol}" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"`;
           if (name === "approve") g1 += `<path d="M${num(cx - 2.6)} ${num(icy + 0.1)}l1.8 1.9l3.6 -4" ${st1}/>`;
@@ -355,16 +340,15 @@
       out.push(`<g>${g1}</g>`);
     });
 
-    // ---------- knobs ----------
-    const kp = pal.knob[s.knob] || pal.knob["knurled-alu"];
+    const kp = pal.knob[s.knob];
     const ang = (-50 + tick * 24) * Math.PI / 180;
     const alu = s.knob === "knurled-alu" || s.knob === "ringlit";
-    if ((L.dials || []).length) {
+    if (L.dials.length) {
       lin("kside", 0, 0, 1, 1, [[0, mix(kp.ring, WHITE, 0.55)], [0.5, kp.ring], [1, mix(kp.ring, BLACK, 0.35)]]);
       if (alu) defs.push(`<radialGradient id="${id("spun")}" cx="0.5" cy="0.5" r="0.045" spreadMethod="repeat">${stops([[0, kp.face], [0.35, mix(kp.face, WHITE, 0.45)], [0.6, kp.face], [1, mix(kp.face, kp.ring, 0.55)]])}</radialGradient>`);
       else rad("kface", 0.4, 0.36, 0.75, [[0, mix(kp.face, WHITE, 0.7)], [0.7, kp.face], [1, mix(kp.face, kp.ring, 0.6)]]);
     }
-    (L.dials || []).forEach(dl => {
+    L.dials.forEach(dl => {
       const cx = dl.x, cy = dl.y;
       let k1 = "";
       if (s.knob === "ringlit") {
@@ -411,7 +395,6 @@
       out.push(`<g>${k1}</g>`);
     });
 
-    // ---------- dimension lines ----------
     if (opts.dims) {
       const dc = mix(pal.shell.smoke.top, pal.shell.iced.base, 0.35);
       const fmt = v => (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, "");

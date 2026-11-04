@@ -1,18 +1,9 @@
-"""Build PCB/frostbite.kicad_pcb from design.json + the exported schematic netlist, then route it.
+"""Build PCB/frostbite.kicad_pcb from design.json and the schematic netlist, then route it.
 
-Run with KiCad's bundled Python (it has the pcbnew module):
+Run with KiCad's bundled Python, which has pcbnew. Positions are in README.md under Placement.
   PY=~/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
-  $PY PCB/tools/gen_pcb.py place    # new board: outline, footprints, nets, silkscreen -> build/frostbite.dsn
+  $PY PCB/tools/gen_pcb.py place    # outline, footprints, nets, silkscreen -> build/frostbite.dsn
   $PY PCB/tools/gen_pcb.py route    # Freerouting on build/frostbite.dsn, import SES, GND zones, fill, save
-
-Placement rules (all positions in design.json PCB coordinates, mm, origin top-left, y down):
-  SWn   switch centre = keys[n-1].(x, y)
-  Dn    vertical in the 5 mm gap right of its switch, centre (x + 9.525, y), anode (pad 2) up
-  LEDn  per-key: reverse-mount MINI-E under the switch's LED window, (x, y + 5.08)
-        glow : leds.glow[].(x, y), on the bottom side, lens facing down
-  U1    XIAO on the bottom side, rect centre (mcu.rect), USB-C edge flush with y = 0
-  ENC1  shaft centre = encoder.(x, y)
-  J1    pin 1 at (oled.header.pin_row_x, centre_y - 1.5 * pitch), pins downward
 """
 from __future__ import annotations
 
@@ -40,11 +31,8 @@ FREEROUTING = Path.home() / ".local/share/freerouting/freerouting-2.5.0.jar"
 W, H = D["pcb"]["w"], D["pcb"]["h"]
 CORNER_R = 1.0
 LED_KEY_DY = 5.08          # MX LED window: switch centre + (0, +5.08)
-# design.json glow LEDs at y 26 / 80 put their courtyards on top of SW3's pad 2 and the row-2
-# per-key LEDs.  Moved the minimum needed (kept symmetric); reported to the lead.
-GLOW_Y = {26.0: 25.4, 80.0: 80.6}
 ROUTE_CLEARANCE_UM = 300
-MIN_SIGNAL_TRACK = 0.2     # brief: >= 0.2 mm signal tracks
+MIN_SIGNAL_TRACK = 0.2
 ENC_ROT = 90               # A/C/B row toward the keys (y = 20.5), clear of the OLED header J1
 
 
@@ -56,7 +44,6 @@ def pt(x, y):
     return pcbnew.VECTOR2I(mm(x), mm(y))
 
 
-# ---------------------------------------------------------------- placement table
 def targets():
     """ref -> dict(x, y, rot, bottom). Coordinates are where the footprint origin goes."""
     t = {}
@@ -67,7 +54,7 @@ def targets():
         t[f"D{k}"] = dict(x=x + 9.525, y=y + 3.81, rot=90, bottom=False)
         t[f"LED{key['led'] + 1}"] = dict(x=x, y=y + LED_KEY_DY, rot=0, bottom=False)
     for g in D["leds"]["glow"]:
-        t[f"LED{g['led'] + 1}"] = dict(x=g["x"], y=GLOW_Y.get(g["y"], g["y"]), rot=0, bottom=True)
+        t[f"LED{g['led'] + 1}"] = dict(x=g["x"], y=g["y"], rot=0, bottom=True)
     r = D["mcu"]["rect"]
     t["U1"] = dict(x=r["x"] + r["w"] / 2, y=r["y"] + r["h"] / 2, rot=0, bottom=True)
     e = D["encoder"]
@@ -101,7 +88,6 @@ def load_fp(fpid):
     return fp
 
 
-# ---------------------------------------------------------------- graphics helpers
 def seg(board, layer, a, b, width=0.15):
     s = pcbnew.PCB_SHAPE(board)
     s.SetShape(pcbnew.SHAPE_T_SEGMENT)
@@ -179,16 +165,13 @@ def lens_mark(board, layer, cx, cy):
     board.Add(d)
 
 
-# ---------------------------------------------------------------- place
 def place():
     comps, nets = read_netlist()
     tg = targets()
     assert set(comps) == set(tg), (set(comps) ^ set(tg))
     board = pcbnew.NewBoard(str(BOARD))
     board.SetCopperLayerCount(2)
-    ds = board.GetDesignSettings()
-    ds.SetBoardThickness(mm(1.6))
-
+    board.GetDesignSettings().SetBoardThickness(mm(1.6))
     outline(board)
 
     netitems = {}
@@ -197,7 +180,6 @@ def place():
         board.Add(ni)
         netitems[name] = ni
 
-    sheetfile = "frostbite.kicad_sch"
     for ref in sorted(comps, key=lambda r: (r.rstrip("0123456789"), int("0" + "".join(c for c in r if c.isdigit())))):
         c, p = comps[ref], tg[ref]
         fp = load_fp(c["footprint"])
@@ -205,7 +187,7 @@ def place():
         fp.SetValue(c["value"])
         fp.SetPath(pcbnew.KIID_PATH("/" + c["uuid"]))
         fp.SetSheetname("/")
-        fp.SetSheetfile(sheetfile)
+        fp.SetSheetfile("frostbite.kicad_sch")
         board.Add(fp)
         fp.SetPosition(pt(p["x"], p["y"]))
         fp.SetOrientationDegrees(p["rot"])
@@ -243,7 +225,6 @@ def place():
                     q.SetSize(pcbnew.F_Cu, pcbnew.VECTOR2I(mm(2.0), mm(2.0)))
         fp.Value().SetVisible(False)
 
-    # ---- silkscreen
     F, B = pcbnew.F_SilkS, pcbnew.B_SilkS
     text(board, F, "FROSTBITE", 39.0, 3.2, size=1.6, thick=0.28)
     snowflake(board, F, 55.6, 3.4, 2.4)
@@ -264,10 +245,10 @@ def place():
         text(board, F, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15)
         text(board, B, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15, mirror=True)
 
-    # Glow LEDs are fitted the opposite way up to the key LEDs (see README).  They have identical
-    # pads and cut-outs, so the marks are the only thing telling them apart.
+    # Glow LEDs are fitted the opposite way up to the key LEDs (see README). Pads and cut-outs are
+    # identical, so these marks are the only thing telling them apart.
     for g in D["leds"]["glow"]:
-        gx, gy, inboard = g["x"], GLOW_Y.get(g["y"], g["y"]), (1 if g["x"] < W / 2 else -1)
+        gx, gy, inboard = g["x"], g["y"], (1 if g["x"] < W / 2 else -1)
         lens_mark(board, B, gx + 5.0 * inboard, gy + 0.4)
         text(board, B, "LENS OUT", gx + 9.9 * inboard, gy + 0.4, size=1.0, thick=0.15, mirror=True)
     text(board, B, "LED1-9: LENS INTO HOLE", W / 2, 63.2, size=1.0, thick=0.15, mirror=True)
@@ -344,17 +325,16 @@ def keepout(board, name, x0, y0, x1, y1, no_pour=False):
 
 
 def add_keepouts(board):
-    """The XIAO's back sits on the PCB, with bare VIN and GND pads, test pads and USB shell tabs.
-    Solder mask would be the only insulation over anything on B.Cu there, so keep signals off B.Cu
-    under the whole board-to-board contact area, and clear the pour under VIN and GND as well."""
+    """The XIAO's back sits on the PCB with bare VIN and GND pads, test pads and USB shell tabs.
+    Solder mask would be the only insulation over B.Cu there, so keep signals off it under the whole
+    contact area and clear the pour under VIN and GND."""
     r = D["mcu"]["rect"]
     cx = r["x"] + r["w"] / 2
     keepout(board, "xiao_back", cx - 5.6, 0.4, cx + 5.6, r["y"] + r["h"])
-    # VIN 21.70-22.69, GND 19.11-20.08, y 18.07-20.05 (audit, measured +-0.3 from Seeed's render)
+    # VIN 21.70-22.69, GND 19.11-20.08, y 18.07-20.05 (measured +-0.3 from Seeed's render)
     keepout(board, "xiao_vin_gnd", 18.5, 17.5, 23.3, 20.65, no_pour=True)
 
 
-# ---------------------------------------------------------------- route
 def route():
     dsn, ses = BUILD / "frostbite.dsn", BUILD / "frostbite.ses"
     if ses.exists():
@@ -374,9 +354,9 @@ def route():
             t.SetWidth(mm(MIN_SIGNAL_TRACK))
             widened += 1
     print("widened", widened, "neck-down segments to", MIN_SIGNAL_TRACK, "mm")
-    # SWCLK (19.75, 1.8), SWDIO (22.25, 1.8), RST (22.25, 4.4), same source as xiao_vin_gnd: GND
-    # under RST would hold the XIAO in reset if the mask wore through.  Added after routing because
-    # it only affects the pour and already sits inside xiao_back, so the DSN and routes are unchanged.
+    # SWCLK (19.75, 1.8), SWDIO (22.25, 1.8), RST (22.25, 4.4): GND under RST would hold the XIAO in
+    # reset if the mask wore through. Added after routing because it only affects the pour and sits
+    # inside xiao_back, so the DSN and routes are unchanged.
     keepout(board, "xiao_swd_rst", 18.7, 0.7, 23.3, 5.5, no_pour=True)
     add_zones(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())

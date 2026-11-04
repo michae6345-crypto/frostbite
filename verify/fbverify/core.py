@@ -24,8 +24,7 @@ def sha256(path: Path) -> str:
 
 
 def tail(text: str, n: int = TAIL_LINES) -> list[str]:
-    lines = text.splitlines()
-    return lines[-n:]
+    return text.splitlines()[-n:]
 
 
 @dataclass
@@ -36,7 +35,6 @@ class Ctx:
     kicad_cli: Path | None
     env: dict
     run_qmk: bool = True
-    run_slow: bool = True
     allow_regen: bool = True
     qmk_home: Path = Path.home() / "qmk_firmware"
     cache: dict = field(default_factory=dict)
@@ -46,7 +44,7 @@ class Ctx:
 
 
 class Check:
-    """One check = one evidence file. Status only changes through fail()/not_run()/finish()."""
+    """One check = one evidence file. Status only changes through fail() and not_run()."""
 
     def __init__(self, ctx: Ctx, cid: str, gate: str, title: str):
         self.ctx, self.id, self.gate, self.title = ctx, cid, gate, title
@@ -58,7 +56,6 @@ class Check:
         self.details: dict = {}
         self.started = time.time()
 
-    # -- inputs -----------------------------------------------------------
     def read(self, path: Path, mode: str = "t"):
         """Read a file and record its SHA-256. Returns str (mode 't') or bytes."""
         self.hash(path)
@@ -73,7 +70,6 @@ class Check:
                 key = str(path)
             self.inputs[key] = sha256(path)
 
-    # -- commands ---------------------------------------------------------
     def run(self, argv: list[str], cwd: Path | None = None, timeout: int = 600, env: dict | None = None):
         cwd = cwd or self.ctx.root
         t0 = time.time()
@@ -98,7 +94,6 @@ class Check:
         self.commands.append(rec)
         return code, out, err
 
-    # -- status -----------------------------------------------------------
     def fail(self, msg: str):
         self.failures.append(msg)
 

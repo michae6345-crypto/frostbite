@@ -15,7 +15,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 30.11,
+      "duration_s": 19.81,
       "stdout_tail": [
         "Assembly bbox <= 200x200x100                                        PASS    79.15 x 98.86 x 49.49 mm (incl. keycaps, knob)",
         "Each part fits a 200x200 bed                                        PASS    largest footprint 97.61 mm",
@@ -47,9 +47,9 @@
         "Room left for the unknown ribbon and joints                         PASS    ribbon 0.8 above / 0.8 past the board end fits with 0.20 spare; joints 0.8 tall with 0.20 spare; recess 1.1 past the far end",
         "OLEDSupport clear of J1, XIAO pads, joints, vias (>= 0.5)           PASS    closest 0.53 mm in plan: U1.7 (101 pads and vias)",
         "OLEDSupport fills the gap under the module                          PASS    printed height 1.4, tape 0.2 above and below, pins 1.28, Top 0.90 mm",
-        "Glass press stays between the supports (H2)                         PASS    feet at x 3.5-9.5 and 32.2-37.4, glass x 6.0-36.0: a press past x 37.4 is over the pins, no lever on one pin row",
+        "Glass press stays between the supports                              PASS    feet at x 3.5-9.5 and 32.2-37.4, glass x 6.0-36.0: a press past x 37.4 is over the pins, no lever on one pin row",
         "GlowBand: 2.0 tall light gap, pads under each glow LED              PASS    band 2.0 mm; LED-to-pad air 0.82-0.82 mm",
-        "GlowBand risers clear the Top pocket (M1)                           PASS    pads and riser 0.30 mm to the pocket wall, USB tongue 0.20 mm to the notch",
+        "GlowBand risers clear the Top pocket                                PASS    pads and riser 0.30 mm to the pocket wall, USB tongue 0.20 mm to the notch",
         "Bottom-side pads clear >= 0.5 (140 pads, THT tails 2.0)             PASS    Top to joints/tails 1.50; GlowBand to joints/tails 0.60; Bottom to joints/tails 9.52 mm",
         "Insert boss footprints (OD 8.7) >= 0.5 from every pad               PASS    closest 3.29 mm: D6.1 vs boss (65.8, 62.1)",
         "THT lead tails (2.0) clear the Bottom floor and bosses              PASS    9.52 mm",
@@ -82,11 +82,11 @@
     }
   ],
   "inputs_sha256": {
-    "CAD/check_fit.py": "062ac2319ab4720a31b6e89e8647edf6b2a7e3fe0a6ae4616ea6542fe92a401e",
-    "CAD/frostbite_case.py": "741cdf85ed67e027fa487a2e0571df19264aa2962d8bc28663852d4058bf1006",
-    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c"
+    "CAD/check_fit.py": "43a109697072669d772ee82a3178e4d1161a9120b1a2b892786235d76ad2dd6e",
+    "CAD/frostbite_case.py": "a1a3e81d29a2a45618f10fa050289175cdb3effcc80ff419ad9827eeb31b760e",
+    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324"
   },
   "details": {},
-  "timestamp": "2026-11-04T01:04:46+00:00",
-  "duration_s": 30.2
+  "timestamp": "2026-11-04T04:19:57+00:00",
+  "duration_s": 19.92
 }

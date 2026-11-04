@@ -1,14 +1,12 @@
 // Copyright 2026 Frostbite contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Frostbite 9 bring-up firmware. Lights each of the 13 SK6812s in chain order,
-// one at a time, red -> green -> blue -> white, and shows "LED TEST n/13" on
-// the OLED. Use it before the switches are soldered: if LED n lights but n+1
-// never does, the fault is at LED n's DOUT or LED n+1's DIN/power.
+// Frostbite 9 bring-up firmware. Lights the 13 SK6812s one at a time in chain
+// order, red, green, blue, white, and shows "LED TEST n/13" on the OLED. If LED n
+// lights but n+1 never does, look at LED n's DOUT and LED n+1's DIN and power.
 //
-// Bonus for later bring-up stages: the OLED also shows the last matrix key
-// pressed and the encoder count. Keys still send the same fallback keycodes
-// as the default keymap.
+// The OLED also shows the last key pressed and an encoder count. Keys send the
+// same fallback keycodes as the default keymap.
 
 #include QMK_KEYBOARD_H
 #include <string.h>
@@ -74,7 +72,6 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
     return false; /* no volume in the test build */
 }
 
-/* append an unsigned number (no padding) to a string */
 static void strcat_num(char *dst, uint16_t n) {
     char    tmp[6];
     uint8_t i = 0;
@@ -102,7 +99,6 @@ bool oled_task_user(void) {
     uint8_t colour = step % 4;
     char    line[22];
 
-    /* "LED TEST n/13" */
     strcpy(line, "LED TEST ");
     strcat_num(line, led + 1);
     strcat(line, "/13");

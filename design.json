@@ -266,7 +266,7 @@
       "bezel": 9,
       "tilt_deg": 4
     },
-    "style": "iced PETG, floating top plate over a ~2 mm ice-blue light gap (clear PETG band), screws hidden underneath",
+    "style": "matte black PETG Top and Bottom, floating top plate over a ~2 mm ice-blue light gap (clear PETG band), screws hidden underneath",
     "inserts": "4 x M3 heat-set (OD 5, L 4, hole 4.7) in the Top part; M3x16 screws from underneath through Bottom and GlowBand",
     "usb_cutout": {
       "w": 13.5,

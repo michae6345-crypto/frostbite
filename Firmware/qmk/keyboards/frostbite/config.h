@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-/* Double-tap the XIAO RESET button to enter the RP2040 UF2 bootloader. */
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET_TIMEOUT 500U
 
@@ -12,16 +11,16 @@
 #define I2C1_SCL_PIN GP7
 #define OLED_DISPLAY_128X32
 #define OLED_DISPLAY_ADDRESS 0x3C
-/* Burn-in timeout is handled in the keymap (wakes on HID too), so the
- * driver's own input-only timeout is disabled. */
+/* The keymap runs the burn-in timer because a status change or USB resume must
+ * wake the display, so the driver's input-only timeout is off. */
 #define OLED_TIMEOUT 0
 #define OLED_BRIGHTNESS 160
 
-/* Raw HID (QMK defaults are 0xFF60 / 0x61, stated here to match design.json). */
+/* The QMK defaults, stated so they can be checked against design.json. */
 #define RAW_USAGE_PAGE 0xFF60
 #define RAW_USAGE_ID 0x61
 
-/* Hold-detection threshold for the Raw HID KEY event (tap vs hold). */
+/* Tap vs hold for the Raw HID KEY event. */
 #define FROSTBITE_HOLD_MS 400
 
 /* OLED rotated 180 degrees: the header sits at the right end of the module, and

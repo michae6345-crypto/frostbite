@@ -17,16 +17,18 @@ import logging
 import os
 import queue
 import select
+import signal
 import socket
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from . import ipc
 from .actions import USE_TERMINAL, Actions
-from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS, OLED_COLS,
+from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS, OLED_COLS, TAP,
                      DeviceLink, DryRunTransport, EncoderEvent, FakeDevice, HidTransport,
                      KeyEvent, OledLine, PingReply, SetAll, SetGlow, SetSelected, Status, Unknown)
 from .hook import MAX_WAIT
@@ -44,12 +46,11 @@ SELECT_SETTLE = 0.5   # after SET_SELECTED, ignore PING replies that crossed it
 KEEP_OPEN = object()  # handle_ipc: the reply comes later, from a press
 
 
+@dataclass
 class Request:
     """A PermissionRequest hook waiting on the pad. `reply` reaches that hook and no other."""
-
-    def __init__(self, reply: "queue.Queue", deadline: float):
-        self.reply = reply
-        self.deadline = deadline
+    reply: queue.Queue
+    deadline: float
 
 
 class Daemon:
@@ -59,7 +60,7 @@ class Daemon:
         self.actions = actions
         self.send = send
         self.clock = clock
-        self.q: "queue.Queue[tuple]" = queue.Queue()
+        self.q: queue.Queue[tuple] = queue.Queue()
         self._sent: dict[str, object] = {}
         self.watchers: dict[str, TrainWatcher] = {}
         self.watcher_opts = watcher_opts or {}
@@ -72,18 +73,16 @@ class Daemon:
         self._shown_id: str | None = None  # the request last pushed to the OLED
         self._shown_at = 0.0
 
-    # ------------------------------------------------------------------ inputs (any thread)
     def on_device(self, ev: object) -> None:
         self.q.put(("dev", ev, time.monotonic()))
 
-    def submit(self, msg: dict, reply: "queue.Queue | None" = None) -> None:
+    def submit(self, msg: dict, reply: queue.Queue | None = None) -> None:
         self.q.put(("ipc", msg, reply))
 
     def keepalive(self) -> SetAll | None:
         """Sent with every PING (from the I/O thread), so the pad recovers from a PING gap."""
         return SetAll(self._statuses) if self._statuses is not None else None
 
-    # ------------------------------------------------------------------ output
     def push(self) -> None:
         """Send whatever differs from what the pad last got."""
         now = self.clock()
@@ -110,7 +109,6 @@ class Daemon:
             self.send(SetGlow(*glow))
             self._sent["glow"] = glow
 
-    # ------------------------------------------------------------------ handlers (main thread)
     def handle(self, item: tuple) -> None:
         kind = item[0]
         try:
@@ -120,17 +118,15 @@ class Daemon:
                 reply = self.handle_ipc(item[1], item[2])
                 if item[2] is not None and reply is not KEEP_OPEN:
                     item[2].put(reply)
-        except Exception:  # noqa: BLE001  one bad event must not kill the daemon
+        except Exception:  # one bad event must not kill the daemon
             log.exception("error handling %r", item[:2])
             if kind == "ipc" and item[2] is not None:
                 item[2].put({"ok": False, "error": "internal error"})
         self._reap()
         self.push()
 
-    def handle_ipc(self, msg: dict, reply: "queue.Queue | None" = None) -> object:
+    def handle_ipc(self, msg: dict, reply: queue.Queue | None = None) -> object:
         now = self.clock()
-        if not isinstance(msg, dict):
-            return {"ok": False, "error": "not an object"}
         op = msg.get("op")
         if op == "request_gone":     # the hook ended: Claude Code cancelled it, or it timed out
             self._release(str(msg.get("id")))
@@ -165,8 +161,7 @@ class Daemon:
             return {"ok": False, "error": "all slots busy"}
         return {"ok": True}
 
-    # ------------------------------------------------------------------ pad decisions
-    def _open_request(self, msg: dict, reply: "queue.Queue", now: float) -> None:
+    def _open_request(self, msg: dict, reply: queue.Queue, now: float) -> None:
         rid = msg.get("id")
         no_answer = {"id": rid, "decision": None}
         if not isinstance(rid, str) or not rid or rid in self.requests:
@@ -322,10 +317,9 @@ class Daemon:
         self._reap()
         self.push()
 
-    # ------------------------------------------------------------------ watchers
     def add_watcher(self, path: str, name: str | None = None, **opts) -> TrainWatcher:
         o = {**self.watcher_opts, **opts}
-        w = TrainWatcher(path, name, lambda m: self.submit(m), **o)
+        w = TrainWatcher(path, name, self.submit, **o)
         old = self.watchers.pop(w.key, None)
         if old:
             old.stop()
@@ -337,7 +331,6 @@ class Daemon:
         w.start()
         return w
 
-    # ------------------------------------------------------------------ main loop
     def run(self) -> None:
         last_tick = 0.0
         self.push()
@@ -368,10 +361,10 @@ class SocketServer:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        if self.path.parent == ipc.state_dir():
-            ipc.ensure_state_dir(self.path.parent)
-        else:  # a directory the user picked keeps its own permissions
-            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        parent = self.path.parent
+        parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if parent == ipc.state_dir():  # a directory the user picked keeps its own permissions
+            os.chmod(parent, 0o700)
         if self.path.exists():
             try:
                 ipc.send({"op": "ping"}, timeout=0.3, path=self.path)
@@ -426,7 +419,7 @@ class SocketServer:
                 self._hold_request(conn, msg)
                 return
             want_reply = msg.get("op") in ("status", "watch", "unwatch") or msg.get("reply")
-            reply_q: "queue.Queue | None" = queue.Queue() if want_reply else None
+            reply_q = queue.Queue() if want_reply else None
             self.daemon.submit(msg, reply_q)
             if reply_q is not None:
                 try:
@@ -438,18 +431,13 @@ class SocketServer:
     def _hold_request(self, conn: socket.socket, msg: dict) -> None:
         """Keep a waiting hook's connection, so its answer goes down this socket alone and a
         hook that ended is noticed at once."""
-        reply: "queue.Queue" = queue.Queue()
+        reply = queue.Queue()
         self.daemon.submit(msg, reply)
         while True:
             try:
                 answer = reply.get(timeout=0.1)
             except queue.Empty:
-                try:
-                    readable = select.select([conn], [], [], 0)[0]
-                    if readable and conn.recv(1) == b"":
-                        self.daemon.submit({"op": "request_gone", "id": msg.get("id")})
-                        return
-                except OSError:
+                if self._hung_up(conn):
                     self.daemon.submit({"op": "request_gone", "id": msg.get("id")})
                     return
                 continue
@@ -459,6 +447,13 @@ class SocketServer:
                 log.info("hook for request %s had already gone", msg.get("id"))
             return
 
+    @staticmethod
+    def _hung_up(conn: socket.socket) -> bool:
+        try:
+            return bool(select.select([conn], [], [], 0)[0]) and conn.recv(1) == b""
+        except OSError:
+            return True
+
     def stop(self) -> None:
         if self.sock:
             self.sock.close()
@@ -467,8 +462,6 @@ class SocketServer:
         except OSError:
             pass
 
-
-# --------------------------------------------------------------------------- fake console
 
 FAKE_HELP = ("fake pad commands: tap N|approve|talk|stop, hold N|approve|stop, cw, ccw, "
              "show, unplug, replug, help")
@@ -486,7 +479,7 @@ def fake_console(fake: FakeDevice, stop: threading.Event) -> None:
         try:
             if cmd in ("tap", "hold"):
                 key = int(arg) - 1 if arg.isdigit() else KEY_NAMES.index(arg)
-                fake.press(key, HOLD if cmd == "hold" else 1)
+                fake.press(key, HOLD if cmd == "hold" else TAP)
             elif cmd in ("cw", "ccw"):
                 fake.turn(1 if cmd == "cw" else -1)
             elif cmd == "show":
@@ -505,8 +498,6 @@ def fake_console(fake: FakeDevice, stop: threading.Event) -> None:
         except (ValueError, IndexError):
             print(FAKE_HELP, flush=True)
 
-
-# --------------------------------------------------------------------------- entry point
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="frostbite-daemon", description=__doc__)
@@ -543,29 +534,24 @@ def main(argv: list[str] | None = None) -> int:
         opener = fake.opener()
     elif args.dry_run:
         dry = DryRunTransport(out=lambda s: print(s, flush=True))
-        opener = lambda: dry  # noqa: E731
+        opener = lambda: dry
     else:
         opener = HidTransport.open
 
-    holder: dict[str, DeviceLink] = {}
-    daemon = Daemon(board, actions, send=lambda m: holder["link"].send(m),
+    daemon = Daemon(board, actions, send=lambda m: link.send(m),
                     watcher_opts={"stale_minutes": args.stale_minutes,
                                   "stale_status": args.stale_status,
                                   "done_pattern": args.done_pattern})
     link = DeviceLink(opener, daemon.on_device, keepalive=daemon.keepalive)
-    holder["link"] = link
     daemon.connected = link.connected.is_set
 
     server = SocketServer(args.socket or ipc.socket_path(), daemon)
     server.start()
-    names = list(args.name)
     for i, path in enumerate(args.watch_train):
-        daemon.add_watcher(path, names[i] if i < len(names) else None)
+        daemon.add_watcher(path, args.name[i] if i < len(args.name) else None)
     link.start()
     if fake is not None and sys.stdin.isatty():
         threading.Thread(target=fake_console, args=(fake, daemon.stop_event), daemon=True).start()
-
-    import signal
 
     def _stop(*_):
         daemon.stop_event.set()
@@ -583,5 +569,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     sys.exit(main())

@@ -1,10 +1,9 @@
 """Local Unix-socket IPC between frostbite-hook / frostbite-ctl and frostbite-daemon.
 
-Wire format: one JSON object per connection, newline-terminated. Messages are dicts
-with an "op" key (see state.Board.apply). The daemon answers ops that want a reply
-(e.g. "status") with one JSON line.
+One newline-terminated JSON object per connection, a dict with an "op" key (see
+state.Board.apply). Ops that want a reply get one JSON line back.
 
-Kept stdlib-only and import-light: frostbite-hook runs on every Claude Code hook.
+Stdlib only and import-light: frostbite-hook runs on every Claude Code hook.
 """
 
 from __future__ import annotations
@@ -32,52 +31,45 @@ def socket_path() -> Path:
     return Path(env) if env else state_dir() / "frostbite.sock"
 
 
-def ensure_state_dir(path: Path | None = None) -> Path:
-    d = path or state_dir()
-    d.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(d, 0o700)
-    return d
+def _encode(msg: dict) -> bytes:
+    data = (json.dumps(msg, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+    if len(data) > MAX_MSG:
+        raise ValueError("message too large")
+    return data
+
+
+def _read_reply(s: socket.socket) -> dict | None:
+    buf = b""
+    while not buf.endswith(b"\n") and len(buf) < MAX_MSG:
+        chunk = s.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+    return json.loads(buf) if buf.strip() else None
 
 
 def send(msg: dict, timeout: float = 0.25, want_reply: bool = False,
          path: Path | None = None) -> dict | None:
     """Send one message. Raises OSError if the daemon is not reachable."""
-    p = str(path or socket_path())
-    data = (json.dumps(msg, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
-    if len(data) > MAX_MSG:
-        raise ValueError("message too large")
+    data = _encode(msg)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
-        s.connect(p)
+        s.connect(str(path or socket_path()))
         s.sendall(data)
         if not want_reply:
             return None
         s.shutdown(socket.SHUT_WR)
-        buf = b""
-        while not buf.endswith(b"\n") and len(buf) < MAX_MSG:
-            chunk = s.recv(4096)
-            if not chunk:
-                break
-            buf += chunk
-        return json.loads(buf) if buf.strip() else None
+        return _read_reply(s)
 
 
 def ask(msg: dict, wait: float, connect_timeout: float = 0.2, path: Path | None = None) -> dict | None:
     """Send one message and hold the connection until the daemon answers or `wait` runs out.
     The open connection is what tells the daemon this request is still alive, so this side
     never half-closes it. Raises OSError if the daemon is not reachable or does not answer."""
-    data = (json.dumps(msg, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
-    if len(data) > MAX_MSG:
-        raise ValueError("message too large")
+    data = _encode(msg)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(connect_timeout)
         s.connect(str(path or socket_path()))
         s.sendall(data)
         s.settimeout(wait)
-        buf = b""
-        while not buf.endswith(b"\n") and len(buf) < MAX_MSG:
-            chunk = s.recv(4096)
-            if not chunk:
-                break
-            buf += chunk
-    return json.loads(buf) if buf.strip() else None
+        return _read_reply(s)

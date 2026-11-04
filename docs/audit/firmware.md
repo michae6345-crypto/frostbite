@@ -2,7 +2,7 @@
 
 QMK tree `f5db962110` (2026-10-29). Nothing here ran on hardware. Evidence comes from QMK source, the built ELF, reference boards, fetched datasheets, and a host harness.
 
-**Harness.** `#include`s the real `keymaps/default/keymap.c`, links the real `drivers/oled/oled_driver.c` and lib8tion C paths, and adds a fake clock plus an SSD1306 GDDRAM model behind stubbed I2C. Built with clang ASan and UBSan. Files are in `/private/tmp/claude-501/-Users-tripi-Documents-frostbite/c28e1ea7-1ef6-4d14-b065-e25be6b901fb/scratchpad/audit/`: `harness.c`, `panel.c`, `h_ledtest.c`, `proto_test.py`, outputs `harness.out`, `harness_fix.out`, `ledtest.out`, `proto.out`. Results: 0 harness failures, 23/23 protocol checks.
+**Harness.** `#include`s the real `keymaps/default/keymap.c`, links the real `drivers/oled/oled_driver.c` and lib8tion C paths, and adds a fake clock plus an SSD1306 GDDRAM model behind stubbed I2C. Built with clang ASan and UBSan. Files are in `(temporary folder, since deleted)/audit/`: `harness.c`, `panel.c`, `h_ledtest.c`, `proto_test.py`, outputs `harness.out`, `harness_fix.out`, `ledtest.out`, `proto.out`. Results: 0 harness failures, 23/23 protocol checks.
 
 ## Summary
 

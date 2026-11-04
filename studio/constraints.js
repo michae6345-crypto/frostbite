@@ -1,6 +1,6 @@
 (function (root) {
   const FB = root.FB = root.FB || {};
-  // Agent B owns this file. FB.check(spec) -> { ok, errors, warnings, extras, stats } per CONTRACT.md.
+  // FB.check(spec) -> { ok, errors, warnings, extras, stats }, see CONTRACT.md.
   // Errors   = breaks a Hackpad rule or cannot physically work.
   // Warnings = builds fine but is risky, looks off, or needs parts outside the kit.
   // Extras   = things to buy with your own money.
@@ -10,72 +10,37 @@
   const GLOW_LEDS = 4;      // LEDs that light the gap / band / base
   const RING_LEDS = 4;      // LEDs under each ring-lit knob (they share the LED data chain: no extra pin)
 
-  // Fallbacks in case dims.js changes shape; FB.dims always wins when present.
-  const DIM_DEFAULTS = {
-    pitch: 19.05, plateThickness: 1.5, pcbThickness: 1.6, switchHeightAbovePlate: 6.6, switchHeightBelowPlate: 5.0,
-    capHeightDSA: 7.6, capHeightXDA: 9.1, ec11: { body: 12.5, shaftAbovePcb: 20.0, knobDiameter: 18.0 },
-    xiao: { w: 17.8, h: 21.0, t: 3.5 }, heatSetInsert: { od: 4.0, length: 4.0, holeDiameter: 4.0 },
-    m3Head: 5.5, printTolerance: 0.3, minWall: 2.0
-  };
-  function dim(path) {
-    const parts = path.split(".");
-    let v = FB.dims, d = DIM_DEFAULTS;
-    for (const p of parts) { v = v == null ? undefined : v[p]; d = d == null ? undefined : d[p]; }
-    return typeof v === "number" && isFinite(v) ? v : d;
-  }
-
+  const D = FB.dims;
   const NOT_PRINTED = /acrylic|perspex|plexi|laser|\bcnc\b|machined|milled|lasercut|laser-cut/i;
   const FREE_TEXT = { wordmarkText: true, statuses: true };
 
   const r1 = (x) => Math.round(x * 10) / 10;
   const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
 
-  function catalogOptions() { return (FB.catalog && FB.catalog.options) || {}; }
-  function nameOf(axis, value) {
-    const c = FB.catalog;
-    return c && typeof c.valueLabel === "function" ? c.valueLabel(axis, value) : String(value);
-  }
-
   function normalize(specIn) {
-    const base = (FB.catalog && FB.catalog.defaultSpec) || {};
-    const s = { ...base };
+    const s = { ...FB.catalog.defaultSpec };
     const src = specIn || {};
     for (const k of Object.keys(src)) if (src[k] !== undefined && src[k] !== null) s[k] = src[k];
-    const opts = catalogOptions();
+    const opts = FB.catalog.options;
     for (const k of Object.keys(opts)) {
       if (typeof opts[k][0] === "number" && typeof s[k] === "string" && s[k].trim() !== "" && !isNaN(Number(s[k]))) s[k] = Number(s[k]);
     }
     return s;
   }
 
-  function getLayout(id) {
-    const list = Array.isArray(FB.layouts) ? FB.layouts : [];
-    const exact = list.find(l => l.id === id);
-    if (exact) return { L: exact, known: true };
-    const fb = typeof FB.layoutById === "function" ? FB.layoutById(id) : list[0];
-    return { L: fb || null, known: false };
-  }
-
-  // ---- Height model ---------------------------------------------------------------------------
-  // Estimate of the assembled height (desk to highest point), all from FB.dims:
-  //   pcbTop   = floor (minWall) + XIAO thickness (mounted on the PCB underside) + 1 mm air + PCB thickness
-  //              -> ~8 mm; with the plate (MX: plate top sits switchHeightBelowPlate above the PCB top) the
-  //              bottom shell comes to ~13–14 mm, the "base shell ~14 mm" of the brief.
-  //   lift     = 3 mm when the plate floats: the PCB + plate sandwich rides on standoffs above the shell rim
-  //              to open the glowing light gap. 0 otherwise.
+  // Estimated height, desk to highest point:
+  //   pcbTop   = floor + XIAO (on the PCB underside) + 1 mm air + PCB
+  //   lift     = 3 mm when the plate floats on standoffs above the shell rim, else 0
   //   plateTop = pcbTop + lift + switchHeightBelowPlate
-  //   capTop   = plateTop + switchHeightAbovePlate + cap height (DSA / XDA). Ignores stem overlap, so it
-  //              slightly over-estimates; good for a size limit.
-  //   rimTop   = shell rim: deep-dish walls rise 8 mm above the plate, tray lip 2 mm, flush = plateTop,
-  //              floating = the bottom-shell rim (pcbTop + 5 mm, below the floating plate).
-  //   dialTop  = pcbTop + lift + EC11 shaft height above PCB + 1 mm knob crown (dials sit in the back strip).
-  //   rise     = shell depth × tan(tilt): the case is a wedge, front edge stays at front height.
-  //   height   = max(capTop, rimTop, dialTop) + rise   (worst case is the back edge, where the dials are).
+  //   capTop   = plateTop + switchHeightAbovePlate + cap height. Ignores stem overlap, so it reads a little high.
+  //   rimTop   = plateTop + 8 for deep-dish, + 2 for tray, plateTop for flush, pcbTop + 5 for floating
+  //   dialTop  = pcbTop + lift + EC11 shaft + 1 mm knob crown
+  //   height   = max(capTop, rimTop, dialTop) + depth × tan(tilt). The dials sit at the back, the high end.
   function heightModel(s, L, depth) {
-    const minWall = dim("minWall"), xiaoT = dim("xiao.t"), pcbT = dim("pcbThickness");
-    const below = dim("switchHeightBelowPlate"), above = dim("switchHeightAbovePlate");
-    const capH = s.capProfile === "XDA" ? dim("capHeightXDA") : dim("capHeightDSA");
-    const shaft = dim("ec11.shaftAbovePcb");
+    const minWall = D.minWall, xiaoT = D.xiao.t, pcbT = D.pcbThickness;
+    const below = D.switchHeightBelowPlate, above = D.switchHeightAbovePlate;
+    const capH = s.capProfile === "XDA" ? D.capHeightXDA : D.capHeightDSA;
+    const shaft = D.ec11.shaftAbovePcb;
     const pcbTop = minWall + xiaoT + 1 + pcbT;
     const lift = s.plate === "floating" ? 3 : 0;
     const plateTop = pcbTop + lift + below;
@@ -101,8 +66,7 @@
     const warn = (code, msg) => warnings.push({ code, msg });
     const buy = (item, qty, why) => { if (qty > 0) extras.push({ item, qty, why }); };
 
-    // ---- Values -------------------------------------------------------------------------------
-    const opts = catalogOptions();
+    const opts = FB.catalog.options;
     for (const axis of Object.keys(opts)) {
       if (!opts[axis].includes(s[axis])) {
         err("bad-value", `"${s[axis]}" is not a valid ${axis}. Choose one of: ${opts[axis].join(", ")}.`);
@@ -116,20 +80,14 @@
       }
     }
 
-    const { L, known } = getLayout(s.layout);
-    if (!L) {
-      err("bad-value", "No layouts are loaded.");
-      return { ok: false, errors, warnings, extras, stats: emptyStats() };
-    }
-    if (!known && opts.layout && opts.layout.includes(s.layout)) err("bad-value", `Layout "${s.layout}" is missing from layouts.js.`);
-
-    const keys = L.keys || [];
+    const L = FB.layoutById(s.layout);
+    const keys = L.keys;
     const agentKeys = keys.filter(k => k.role === "agent").length;
     const cmdKeys = keys.length - agentKeys;
-    const dials = (L.dials || []).length;
+    const dials = L.dials.length;
     const oleds = Array.isArray(L.oleds) ? L.oleds.length : (L.oled ? 1 : 0);
-    const P = L.pins || {};
-    const pins = (P.matrix || 0) + (P.dial || 0) + (P.oled || 0) + (P.led || 0);
+    const P = L.pins;
+    const pins = P.matrix + P.dial + P.oled + P.led;
     const bezel = Number(s.bezel) || 0, corner = Number(s.corner) || 0, tilt = Number(s.tilt) || 0;
     const pcb = { w: r1(L.W + 2 * LIMIT.pcbMargin), h: r1(L.H + 2 * LIMIT.pcbMargin) };
     const shellW = r1(L.W + 2 * bezel), shellD = r1(L.H + 2 * bezel);
@@ -139,9 +97,9 @@
     const leds = keys.length + (glowOn ? GLOW_LEDS : 0) + (ringlit ? RING_LEDS * dials : 0);
     const profile = s.capProfile === "XDA" ? "XDA" : "DSA";
 
-    // ---- Hackpad hard limits -------------------------------------------------------------------
+    // Hackpad limits
     if (pins > KIT.pins) {
-      err("pins", `Needs ${pins} GPIO (matrix ${P.matrix || 0}, dials ${P.dial || 0}, OLED ${P.oled || 0}, LEDs ${P.led || 0}) but the XIAO RP2040 has ${KIT.pins} (D0–D10).`);
+      err("pins", `Needs ${pins} GPIO (matrix ${P.matrix}, dials ${P.dial}, OLED ${P.oled}, LEDs ${P.led}) but the XIAO RP2040 has ${KIT.pins} (D0–D10).`);
     }
     if (pcb.w > LIMIT.pcb || pcb.h > LIMIT.pcb) {
       err("pcb-size", `PCB would be ${pcb.w} × ${pcb.h} mm (content plus ${LIMIT.pcbMargin} mm margin each side); Hackpad PCBs must fit in ${LIMIT.pcb} × ${LIMIT.pcb} mm.`);
@@ -155,8 +113,7 @@
     if (oleds > KIT.oled) {
       err("oled-count", `${oleds} OLEDs: the 0.91" modules share one fixed I²C address (0x3C) on D4/D5, so a second one cannot be told apart. Use one OLED.`);
     }
-    // Switches and encoders over the kit count are buyable, so they are warnings + extras, not errors.
-    // (Their real limit is the 11 GPIO, which the pins rule already catches.)
+    // Extra switches and encoders can be bought. Their real limit is the 11 GPIO, checked above.
     if (keys.length > KIT.switches) {
       warn("switches-extra", `${keys.length} switches; the kit has ${KIT.switches}. Buy ${keys.length - KIT.switches} more Gateron Yellow KS-3 (and caps).`);
       buy("Gateron Yellow KS-3 switches", keys.length - KIT.switches, `Kit includes ${KIT.switches}.`);
@@ -167,15 +124,15 @@
       buy("EC11E rotary encoders with push", dials - KIT.encoders, `Kit includes ${KIT.encoders}.`);
     }
 
-    // ---- Physical rules ------------------------------------------------------------------------
+    // Physical rules
     if (s.glowPlace === "gap" && s.plate !== "floating") {
-      err("glow-gap-plate", `Gap glow needs the floating plate: a ${nameOf("plate", s.plate).toLowerCase()} plate leaves no gap for light to escape. Use band or base glow instead.`);
+      err("glow-gap-plate", `Gap glow needs the floating plate: a ${FB.catalog.valueLabel("plate", s.plate).toLowerCase()} plate leaves no gap for light to escape. Use band or base glow instead.`);
     }
     // Exposed top screws go through the plate into a heat-set insert in the shell wall. The wall must hold
     // the insert hole plus a printed wall on each side, and fit the M3 head with ~1 mm around it.
-    const insertNeed = Math.max(dim("heatSetInsert.holeDiameter") + 2 * dim("minWall"), dim("m3Head") + 2);
+    const insertNeed = Math.max(D.heatSetInsert.holeDiameter + 2 * D.minWall, D.m3Head + 2);
     if (s.screws === "top" && bezel < insertNeed) {
-      err("screws-top-bezel", `Exposed top screws need a bezel of at least ${r1(insertNeed)} mm (Ø${dim("heatSetInsert.holeDiameter")} mm insert hole + ${dim("minWall")} mm walls); this bezel is ${bezel} mm. Use 9 mm or more, or hide the screws.`);
+      err("screws-top-bezel", `Exposed top screws need a bezel of at least ${r1(insertNeed)} mm (Ø${D.heatSetInsert.holeDiameter} mm insert hole + ${D.minWall} mm walls); this bezel is ${bezel} mm. Use 9 mm or more, or hide the screws.`);
     }
     if (s.plate === "deep-dish" && bezel < 9) {
       err("deep-dish-bezel", `Deep-dish walls rise 8 mm above the plate and need a bezel of at least 9 mm to be printable and stiff; this bezel is ${bezel} mm.`);
@@ -184,9 +141,9 @@
       err("corner-clip", `A ${corner} mm corner radius with a ${bezel} mm bezel cuts into the corner keys and OLED. Keep the radius ≤ bezel + 4 mm (${bezel + 4} mm), or widen the bezel.`);
     }
 
-    // ---- Warnings ------------------------------------------------------------------------------
+    // Warnings
     if (s.shell === "smoke" && glowOn) {
-      warn("smoke-glow", `Smoke PETG absorbs most light, so the ${nameOf("glowPlace", s.glowPlace).toLowerCase()} glow will look dim. Run those LEDs brighter or pick a lighter shell.`);
+      warn("smoke-glow", `Smoke PETG absorbs most light, so the ${FB.catalog.valueLabel("glowPlace", s.glowPlace).toLowerCase()} glow will look dim. Run those LEDs brighter or pick a lighter shell.`);
     }
     if (s.agentCap === "clear") {
       warn("clear-caps", "Clear agent caps show the switch housing, stem and the bare LED hotspot instead of an even glow.");
@@ -209,12 +166,12 @@
     if (tilt >= 8 && bezel <= 6) {
       warn("thin-tilt", "An 8° wedge with a 6 mm bezel makes the back wall look like a thin blade. Use a 9 mm bezel or 4° tilt.");
     }
-    const bossOd = dim("heatSetInsert.holeDiameter") + 2 * dim("minWall");
+    const bossOd = D.heatSetInsert.holeDiameter + 2 * D.minWall;
     if (bezel < bossOd) {
       warn("insert-boss", `A ${bezel} mm bezel can't hold a Ø${r1(bossOd)} mm heat-set insert boss in every corner. Put the inserts through mounting holes in the PCB, or use a 9 mm bezel.`);
     }
-    if (s.screws === "side" && bezel < dim("heatSetInsert.length") + dim("minWall") + dim("printTolerance")) {
-      warn("side-screws-thin", `Side screws in a ${bezel} mm wall leave little room around the ${dim("heatSetInsert.length")} mm-long inserts. It prints, but the wall may bulge.`);
+    if (s.screws === "side" && bezel < D.heatSetInsert.length + D.minWall + D.printTolerance) {
+      warn("side-screws-thin", `Side screws in a ${bezel} mm wall leave little room around the ${D.heatSetInsert.length} mm-long inserts. It prints, but the wall may bulge.`);
     }
     if (cmdKeys < 3) {
       if (L.dialPress) {
@@ -235,7 +192,7 @@
       }
     }
 
-    // ---- Extras (outside the kit) --------------------------------------------------------------
+    // Extras
     const finish = { frosted: "Frosted", clear: "Clear", milky: "Milky" }[s.agentCap] || "Translucent";
     const iconsOnAgents = s.legends === "icons" && cmdKeys === 0;
     if (agentKeys > 0 && !iconsOnAgents) {
@@ -247,7 +204,7 @@
         cmdKeys > 0 ? "Icons on Approve / Talk / Stop." : "Icons on the agent slots (no command row).");
     } else if (cmdKeys > 0) {
       if (s.commandCap === "graphite") buy(`Graphite ${profile} keycaps (blank)`, cmdKeys, "Kit caps are white only.");
-      else if (s.commandCap !== "white") buy(`${nameOf("commandCap", s.commandCap)} ${profile} keycaps (blank)`, cmdKeys, "Kit caps are plain white.");
+      else if (s.commandCap !== "white") buy(`${FB.catalog.valueLabel("commandCap", s.commandCap)} ${profile} keycaps (blank)`, cmdKeys, "Kit caps are plain white.");
       else if (profile === "XDA") buy("White blank XDA keycaps", cmdKeys, "Kit caps are DSA.");
     }
     if (dials > 0) {
@@ -276,12 +233,6 @@
     return { ok: errors.length === 0, errors, warnings, extras, stats };
   };
 
-  function emptyStats() {
-    return { pins: 0, pinsMax: KIT.pins, switches: 0, encoders: 0, leds: 0, ledsKit: KIT.leds, oled: 0,
-             pcb: { w: 0, h: 0 }, shell: { w: 0, h: 0, height: 0 }, agentKeys: 0, commandKeys: 0, stack: null };
-  }
-
-  // Rule catalogue for the UI / verification: code -> { level, summary }.
   FB.check.rules = {
     "bad-value":        { level: "error", summary: "Value is not one of the catalog options." },
     "not-printed":      { level: "error", summary: "Acrylic, laser-cut or CNC parts are not allowed; case must be 3D printed." },
@@ -304,7 +255,7 @@
     "icon-caps":        { level: "warning", summary: "Icon legends need relegendable or printed caps." },
     "thin-tilt":        { level: "warning", summary: "8° tilt with a 6 mm bezel looks thin." },
     "side-screws-thin": { level: "warning", summary: "Side screws in a thin wall." },
-    "insert-boss": { level: "warning", summary: "Bezel too thin for corner heat-set insert bosses." },
+    "insert-boss":      { level: "warning", summary: "Bezel too thin for corner heat-set insert bosses." },
     "few-commands":     { level: "warning", summary: "Layout has fewer than 3 command keys." },
     "wordmark-empty":   { level: "warning", summary: "Wordmark enabled with no text." },
     "wordmark-long":    { level: "warning", summary: "Wordmark text too long to fit legibly." }

@@ -19,7 +19,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.36,
+      "duration_s": 0.27,
       "stdout_tail": [
         "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Cu.gtl'.",
         "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Cu.gbl'.",
@@ -60,7 +60,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.28,
+      "duration_s": 0.21,
       "stdout_tail": [
         "Created file '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite.drl'",
         "Done."
@@ -69,7 +69,7 @@
     }
   ],
   "inputs_sha256": {
-    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
+    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
     "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd"
   },
   "details": {
@@ -94,6 +94,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-04T01:04:16+00:00",
-  "duration_s": 0.77
+  "timestamp": "2026-11-04T04:19:37+00:00",
+  "duration_s": 0.57
 }

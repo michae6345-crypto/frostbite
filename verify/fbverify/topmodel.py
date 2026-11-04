@@ -1,16 +1,19 @@
-"""Functional model of a printed part: registered into PCB coordinates from its own geometry.
+"""A printed part as cross-sections, placed in PCB coordinates from its own geometry.
 
-No section height and no opening shape is assumed. Heights come from the mesh's own vertices
-(every level where the cross-section can change) plus the heights at which real parts start or stop.
-Questions are then asked as "is this real part's outline clear of material at this height?".
+No section height or opening shape is assumed. Section heights are the mesh's own vertex levels
+plus the heights where real parts start or stop. Checks then ask whether a real part's outline
+is clear of material at a height.
 
-Frame: h = depth below the plate top face (h=0), towards the skirt rim. (x, y) = PCB coordinates.
+h = depth below the plate top face (h=0), towards the skirt rim. (x, y) = PCB coordinates.
 """
 from __future__ import annotations
 
 import math
 
 import numpy as np
+import shapely.geometry as g
+import shapely.ops as o
+from shapely import affinity
 
 EPS = 0.01
 
@@ -18,10 +21,8 @@ EPS = 0.01
 def _material(mesh, point, n, u, v):
     """Even-odd cross-section in (u, v) plane coordinates, as one shapely geometry.
 
-    Crossing points are keyed by mesh edge, so loops close exactly instead of relying on rounding
-    (rounded coordinates once dropped whole loops and removed material without any error)."""
-    import shapely.geometry as g
-
+    Crossing points are keyed by mesh edge so loops close exactly. Rounding coordinates instead
+    can drop a whole loop, and the material with it, without any error."""
     V = mesh.vertices
     d = (V - point) @ n
     F = mesh.faces
@@ -68,7 +69,7 @@ def _material(mesh, point, n, u, v):
 
 
 def _axis_and_up(mesh):
-    """Plate axis = normal of the largest planar face. Both signs are returned, best-first by rim test later."""
+    """Plate axis: normal of the largest planar face. register() tries both signs."""
     n = None
     try:
         if len(mesh.facets_area):
@@ -126,7 +127,6 @@ class PartModel:
             secs = [self._pcb(self._section(h)) for h in mids]
             a = [m.area for m in secs]
             vol += (a[0] + 4 * a[1] + a[2]) / 6 * (h1 - h0 - 2 * EPS) + (a[0] + a[2]) * EPS
-            import shapely.ops as o
             self.slabs.append({"h0": h0, "h1": h1, "mat": o.unary_union(secs), "area": a[1]})
         self.section_volume = vol
         self.mesh_volume = float(mesh.volume)
@@ -136,7 +136,6 @@ class PartModel:
 
     def _pcb(self, geom2d):
         """(a, b) plane coordinates -> PCB (x, y). PCB y runs towards the user: b up in plan is -y."""
-        from shapely import affinity
         ca, cb = self.c
         px, py = self.pcb_c
         s = self.s
@@ -146,14 +145,9 @@ class PartModel:
     def slabs_between(self, h_lo, h_hi):
         return [s for s in self.slabs if s["h1"] > h_lo + 1e-9 and s["h0"] < h_hi - 1e-9]
 
-    def is_free(self, x, y, h):
-        import shapely.geometry as g
-        p = g.Point(x, y)
-        return not any(s["mat"].contains(p) for s in self.slabs_between(h, h + 0.001))
-
     def min_gap(self, shape, h_lo, h_hi):
-        """Smallest distance from a real part's outline to material, over a height range.
-        Negative means overlap (depth of the overlap is not computed: -overlap_area is returned)."""
+        """Smallest distance from a real part's outline to material over a height range.
+        On overlap this is minus the overlap area, not a depth."""
         worst = (math.inf, None)
         for s in self.slabs_between(h_lo, h_hi):
             mat = s["mat"]
@@ -167,7 +161,6 @@ class PartModel:
 
     def spans(self, x, y, axis, h_lo, h_hi):
         """Free span through (x, y) along an axis, per slab: [(a, b, h0, h1)], or None if (x, y) is in material."""
-        import shapely.geometry as g
         out = []
         p = g.Point(x, y)
         for s in self.slabs_between(h_lo, h_hi):
@@ -186,7 +179,6 @@ class PartModel:
 
     def opening_at(self, x, y, h):
         """The closed free region around (x, y) at depth h, as measured, whatever its shape."""
-        import shapely.geometry as g
         p = g.Point(x, y)
         for s in self.slabs_between(h, h + 0.001):
             m = s["mat"]
@@ -199,7 +191,7 @@ class PartModel:
 
 
 def register(mesh, d, extra_h=()):
-    """Find plate axis, top side, in-plane rotation from the part itself; return (model, info) or raises."""
+    """Find plate axis, top side and in-plane rotation from the part itself. Returns (model, info)."""
     shell = d["case"]["shell"]
     W, H = d["pcb"]["w"], d["pcb"]["h"]
     px = shell.get("x", (W - shell["w"]) / 2) + shell["w"] / 2
@@ -232,7 +224,6 @@ def register(mesh, d, extra_h=()):
             m = PartModel.__new__(PartModel)
             m.c, m.s, m.pcb_c = (float(cu), float(cv)), s, (px, py)
             mat = m._pcb(sec)
-            import shapely.geometry as g
             score = sum(1 for p in pts if not mat.contains(g.Point(p)))
             if best is None or score > best[0]:
                 best = (score, n, u, v, top, float(cu), float(cv), s, wu, wv)

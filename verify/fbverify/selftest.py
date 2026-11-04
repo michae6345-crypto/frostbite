@@ -1,24 +1,23 @@
-"""--self-test: prove every check can FAIL.
-
-For each case: build a clean copy (real project files where they exist, synthetic fixtures
-generated from design.json where they do not), assert the check PASSes on it, inject one known
-fault, assert the check FAILs and that a fail reason names the fault."""
+"""--self-test. Each case builds a clean copy of the project, with fixtures generated from
+design.json where a real file cannot serve, and requires PASS. It then injects one fault and
+requires FAIL with a reason that names the fault."""
 from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import re
 import shutil
 import struct
 import tempfile
+import time
+import traceback
 from pathlib import Path
 
 from . import checks as C
-from . import geom
+from . import geom, sexpr
 from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli, sha256
 from .main import NEEDS_REAL_PARTS, exit_code, write_report
-
-# ---------------------------------------------------------------- synthetic fixtures
 
 OX, OY = 100.0, 50.0  # KiCad sheet offset for the synthetic board
 
@@ -204,7 +203,9 @@ def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(3
     return trimesh.util.concatenate(meshes)
 
 
-# ---------------------------------------------------------------- harness
+class SkipCase(Exception):
+    pass
+
 
 class Case:
     def __init__(self, name, cid, fn, clean, fault, expect_reason, kicad=False):
@@ -237,6 +238,22 @@ def _edit_json(p: Path, fn):
     p.write_text(json.dumps(j, indent=2))
 
 
+def _drop_stls(prod: Path):
+    for q in prod.glob("*"):
+        if q.suffix.lower() == ".stl":
+            q.unlink()
+
+
+def _positions(d: dict, oled_window: dict) -> dict:
+    """A CAD/positions.json that agrees with design.json."""
+    r = d["mcu"]["rect"]
+    return {"keys": [{"ref": k["ref"], "x": k["x"], "y": k["y"]} for k in d["keys"]],
+            "encoder": {"x": d["encoder"]["x"], "y": d["encoder"]["y"]},
+            "usb_cutout": {"x": r["x"] + r["w"] / 2, "w": d["case"]["usb_cutout"]["w"], "h": d["case"]["usb_cutout"]["h"]},
+            "oled_window": oled_window,
+            "screws": [dict(p) for p in d["case"]["screws"]["positions"]]}
+
+
 def run_selftest(verify: Path, real: Path) -> int:
     d = json.loads((real / "design.json").read_text())
     tmp = Path(tempfile.mkdtemp(prefix="fbverify-selftest-"))
@@ -244,7 +261,7 @@ def run_selftest(verify: Path, real: Path) -> int:
     kb_rel = Path(C.KB_DIR) / "keyboard.json"
     have_fw = (real / kb_rel).is_file()
 
-    # -------- fixture builders (each returns nothing; mutate the copy at `root`)
+    # Fixture builders edit the project copy at `root`.
     def fw_clean(root):
         if not have_fw:
             raise SkipCase("Firmware keyboard.json not in project yet")
@@ -263,8 +280,7 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def pcb_clean(root):
         pd = root / "PCB"
-        if pd.exists():
-            shutil.rmtree(pd)
+        shutil.rmtree(pd, ignore_errors=True)
         pd.mkdir()
         (pd / "frostbite.kicad_pro").write_text("{}")
         (pd / "frostbite.kicad_sch").write_text("(kicad_sch)")
@@ -301,8 +317,6 @@ def run_selftest(verify: Path, real: Path) -> int:
             if other.name != "firmware.uf2":
                 other.unlink()
         if (root / C.KB_DIR).is_dir():
-            import os
-            import time
             t = time.time()
             os.utime(p, (t, t))  # copy is newer than the copied sources
 
@@ -320,9 +334,7 @@ def run_selftest(verify: Path, real: Path) -> int:
     def stl_clean(root):
         prod = root / "production"
         prod.mkdir(exist_ok=True)
-        for q in prod.glob("*"):
-            if q.suffix.lower() == ".stl":
-                q.unlink()
+        _drop_stls(prod)
         for n in C.PARTS:
             synth_solid(d).export(prod / f"{n}.stl")
 
@@ -338,27 +350,17 @@ def run_selftest(verify: Path, real: Path) -> int:
     def top_write(root, **kw):
         prod = root / "production"
         prod.mkdir(exist_ok=True)
-        for q in prod.glob("*"):
-            if q.suffix.lower() == ".stl":
-                q.unlink()
+        _drop_stls(prod)
         dd = kw.pop("dd", d)
         synth_top(dd, **kw).export(prod / "Top.stl")
         sup = dd["case"]["oled_support"]
         synth_box(sup["module_gap"] - 2 * sup["tape"]).export(prod / "OLEDSupport.stl")
-        r = d["mcu"]["rect"]
         o = d["oled"]["window"]
         c = kw.get("window", (31.0, 12.98))
         cut = {"x": o["x"] + o["w"] / 2 + kw.get("window_dx", 0.0) - c[0] / 2, "y": o["y"] + o["h"] / 2 - c[1] / 2, "w": c[0], "h": c[1]}
-        pos = {"keys": [{"ref": k["ref"], "x": k["x"], "y": k["y"]} for k in d["keys"]],
-               "encoder": {"x": d["encoder"]["x"], "y": d["encoder"]["y"]},
-               "usb_cutout": {"x": r["x"] + r["w"] / 2, "w": d["case"]["usb_cutout"]["w"], "h": d["case"]["usb_cutout"]["h"]},
-               "oled_window": {**o, "cut": cut},
-               "screws": [dict(p) for p in d["case"]["screws"]["positions"]]}
         (root / "CAD").mkdir(exist_ok=True)
-        (root / "CAD/positions.json").write_text(json.dumps(pos))
-        pd = root / "PCB"
-        if pd.exists():
-            shutil.rmtree(pd)
+        (root / "CAD/positions.json").write_text(json.dumps(_positions(d, {**o, "cut": cut})))
+        shutil.rmtree(root / "PCB", ignore_errors=True)
 
     def t(**kw):
         return lambda root: top_write(root, **kw)
@@ -419,9 +421,7 @@ def run_selftest(verify: Path, real: Path) -> int:
     def old_b1(root):
         """The real audited Top (B1) with the design of that day: shell 75.15, bosses at -3.0 / 64.15."""
         prod = root / "production"
-        for q in prod.glob("*"):
-            if q.suffix.lower() == ".stl":
-                q.unlink()
+        _drop_stls(prod)
         shutil.copy2(verify / "fixtures/old_b1_Top.stl", prod / "Top.stl")
 
         def edit(j):
@@ -447,9 +447,6 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def design_pid(root):
         _edit_json(root / "design.json", lambda j: j["firmware"]["usb"].__setitem__("pid", "0x4643"))
-
-    def gnd_clean(root):
-        pcb_clean(root)
 
     def gnd_override(root):
         p = root / "PCB/frostbite.kicad_pcb"
@@ -488,19 +485,11 @@ def run_selftest(verify: Path, real: Path) -> int:
         (root / "host/tests/test_selftest_fault.py").write_text("def test_fault():\n    assert False\n")
 
     def cadpos_clean(root):
-        pd = root / "PCB"
-        if pd.exists():
-            shutil.rmtree(pd)
+        shutil.rmtree(root / "PCB", ignore_errors=True)
         for s in (root / "production").glob("*.stl") if (root / "production").is_dir() else []:
             s.unlink()
-        r = d["mcu"]["rect"]
-        pos = {"keys": [{"ref": k["ref"], "x": k["x"], "y": k["y"]} for k in d["keys"]],
-               "encoder": {"x": d["encoder"]["x"], "y": d["encoder"]["y"]},
-               "usb_cutout": {"x": r["x"] + r["w"] / 2, "w": d["case"]["usb_cutout"]["w"], "h": d["case"]["usb_cutout"]["h"]},
-               "oled_window": dict(d["oled"]["window"]),
-               "screws": [dict(p) for p in d["case"].get("screws", {}).get("positions", [])]}
         (root / "CAD").mkdir(exist_ok=True)
-        (root / "CAD/positions.json").write_text(json.dumps(pos))
+        (root / "CAD/positions.json").write_text(json.dumps(_positions(d, dict(d["oled"]["window"]))))
 
     def cadpos_move(root):
         _edit_json(root / "CAD/positions.json", lambda j: j["keys"][6].__setitem__("y", j["keys"][6]["y"] + 0.4))
@@ -510,7 +499,6 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def boss_clean(root):
         pcb_clean(root)
-        from . import sexpr
         pads = C.parser_bottom_pads(sexpr.load_pcb((root / "PCB/frostbite.kicad_pcb").read_text()))
         (root / "PCB/build").mkdir(exist_ok=True)
         (root / "PCB/build/bottom_pads.json").write_text(json.dumps({"source": "frostbite.kicad_pcb", "pads": pads}))
@@ -578,7 +566,6 @@ def run_selftest(verify: Path, real: Path) -> int:
         def fn(ctx):
             chk = Check(ctx, "G2.netlist", "G2", "self-test netlist logic")
             text = synth_netlist(d, None if kind == "clean" else kind)
-            from . import sexpr
             C.check_netlist(chk, d, sexpr.load_netlist(text))
             return chk
         return fn
@@ -636,9 +623,9 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("usb: design.json PID differs", "X.usb_ids", C.x_usb_ids, noop, design_pid, "VENDOR_ID/PRODUCT_ID"),
         Case("drc: pad annular 0.19 fails", "G3.drc_jlcpcb", C.g3_drc_jlcpcb, real_gnd_clean, annular_019, "annular_width", True),
         Case("drc: project rules loosened to 0.15, pinned file still gates and 0.20 floor fails", "G3.drc_jlcpcb", C.g3_drc_jlcpcb, real_gnd_clean, project_loosens, "PTH annular ring gates at 0.18", True),
-        Case("gnd: one pad set to full", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_override, "zone_connect 2"),
-        Case("gnd: zone set to solid", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_zone_solid, "must be thermal"),
-        Case("gnd: pour floods the pads", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_flooded_fill, "no working thermal relief"),
+        Case("gnd: one pad set to full", "G3.gnd_thermal", C.g3_gnd_thermal, pcb_clean, gnd_override, "zone_connect 2"),
+        Case("gnd: zone set to solid", "G3.gnd_thermal", C.g3_gnd_thermal, pcb_clean, gnd_zone_solid, "must be thermal"),
+        Case("gnd: pour floods the pads", "G3.gnd_thermal", C.g3_gnd_thermal, pcb_clean, gnd_flooded_fill, "no working thermal relief"),
         Case("gnd: real U1 pad 13 set to full", "G3.gnd_thermal", C.g3_gnd_thermal, real_gnd_clean, real_gnd_override, "U1 pad 13"),
         Case("firmware: F1 blanking line back in keymap.c", "G6.oled_strip_panel", C.g6_oled_strip_panel, noop, f1_back, "PASS F1 HID: slot strip"),
         Case("firmware: harness fails with F1 back", "G6.firmware_harness", C.g6_firmware_harness, noop, f1_back, "FAIL F1 HID"),
@@ -656,21 +643,15 @@ def run_selftest(verify: Path, real: Path) -> int:
             cs.clean(root)
             if cs.kicad and find_kicad_cli() is None:
                 raise SkipCase("kicad-cli not installed")
-            clean = cs.fn(_ctx(root, base / "clean", cs.kicad))
-            row["clean_status"] = clean.status
-            row["clean_reasons"] = clean.failures[:3] or ([clean.not_run_reason] if clean.not_run_reason else [])
-            if cs.fault is None:
-                # netlist-style cases build their own fault inside fn; reuse fn with fault kind
-                faulty = None
+            if cs.fault is None:  # netlist cases: fn carries the fault
+                clean = netlist_check("clean")(_ctx(root, base / "clean"))
+                faulty = cs.fn(_ctx(root, base / "fault"))
             else:
+                clean = cs.fn(_ctx(root, base / "clean", cs.kicad))
                 cs.fault(root)
                 faulty = cs.fn(_ctx(root, base / "fault", cs.kicad))
-            if faulty is None:
-                kind = {"OLED1 pin 3": "oled_swap", "LED chain": "chain_break", "XIAO D9": "xiao_pin"}[cs.expect]
-                clean = netlist_check("clean")(_ctx(root, base / "clean"))
-                row["clean_status"] = clean.status
-                row["clean_reasons"] = clean.failures[:3]
-                faulty = netlist_check(kind)(_ctx(root, base / "fault"))
+            row["clean_status"] = clean.status
+            row["clean_reasons"] = clean.failures[:3] or ([clean.not_run_reason] if clean.not_run_reason else [])
             row["fault_status"] = faulty.status
             row["fault_reasons"] = faulty.failures[:5]
             hit = any(cs.expect in f for f in faulty.failures)
@@ -681,7 +662,6 @@ def run_selftest(verify: Path, real: Path) -> int:
         except SkipCase as e:
             row.update(ok=None, skipped=str(e))
         except Exception as e:
-            import traceback
             row.update(ok=False, why=f"self-test crashed: {type(e).__name__}: {e}",
                        traceback=traceback.format_exc().splitlines()[-8:])
         results.append(row)
@@ -689,7 +669,7 @@ def run_selftest(verify: Path, real: Path) -> int:
         print(f"{mark} {cs.cid:20} {cs.name:48} clean={row.get('clean_status')} fault={row.get('fault_status')} "
               f"{(row.get('fault_reasons') or [row.get('skipped') or row.get('why') or ''])[0]}")
 
-    # harness-level assertions: NOT_RUN must not pass for missing tools/inputs, FAIL drives the exit code
+    # Harness assertions: missing inputs give NOT_RUN, and only FAIL sets the exit code.
     meta = []
     empty = tmp / "empty"
     empty.mkdir()
@@ -717,14 +697,10 @@ def run_selftest(verify: Path, real: Path) -> int:
     bad = [r for r in results if r["ok"] is False] + [m for m in meta if not m["ok"]]
     summary = {"timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
                "status": "PASS" if not bad else "FAIL", "cases": results, "meta": meta,
-               "skipped": [r["case"] for r in results if r["ok"] is None], "tmp": str(tmp)}
+               "skipped": [r["case"] for r in results if r["ok"] is None]}
     (verify / "selftest.json").write_text(json.dumps(summary, indent=2) + "\n")
     n_ok = sum(1 for r in results if r["ok"])
     print(f"self-test {summary['status']}: {n_ok}/{len(results)} fault cases caught, "
           f"{len(summary['skipped'])} skipped, {sum(m['ok'] for m in meta)}/{len(meta)} harness assertions; wrote verify/selftest.json")
     shutil.rmtree(tmp, ignore_errors=True)
     return 0 if not bad else 1
-
-
-class SkipCase(Exception):
-    pass

@@ -23,7 +23,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 2.89,
+      "duration_s": 2.01,
       "stdout_tail": [
         "Found 0 violations",
         "Found 0 unconnected items",
@@ -60,6 +60,6 @@
       "schematic_parity": 0
     }
   },
-  "timestamp": "2026-11-04T01:04:12+00:00",
-  "duration_s": 2.92
+  "timestamp": "2026-11-04T04:19:35+00:00",
+  "duration_s": 2.03
 }

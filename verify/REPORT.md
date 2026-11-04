@@ -1,8 +1,8 @@
 # Frostbite verification report
 
-Generated 2026-11-04T01:05:21+00:00 by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` (commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.
+Generated 2026-11-04T04:20:27+00:00 by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` (commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.
 
-**PASS 32 · FAIL 0 · NOT_RUN 0** — exit code 0
+**PASS 32 · FAIL 0 · NOT_RUN 0**, exit code 0
 
 kicad-cli: `~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli`
 
@@ -13,7 +13,7 @@ Green below means the files agree. It does not prove these, and no check here ca
 - **OLED flip** (docs/audit/firmware.md F2): FROSTBITE_OLED_FLIP is set from reference boards. Flash ledtest with the OLED fitted and read the text.
 - **EC11 resolution** (docs/audit/firmware.md F6, electrical.md E9): Resolution 4 may need two clicks per step on a 30/15 part. Turn the kit encoder in ledtest; direction is open too.
 - **Glow brightness** (docs/audit/case.md M2): The light reaching the band is a model and an estimate. Print one corner with one SK6812 and look at it.
-- **LED data level** (docs/audit/electrical.md E3): 3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the whole chain at full white on the real board.
+- **LED data level** (docs/audit/electrical.md E3): 3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the LED test in docs/BUILD.md on the real board.
 - **OLED flex clearance** (docs/audit/case.md M3): The module's flex and tape height at the far end is unknown. Caliper the kit module against the lip gap.
 
 ## Checks
@@ -55,4 +55,4 @@ Green below means the files agree. It does not prove these, and no check here ca
 
 ## Fix loop
 
-Owner of the failing gate fixes the cause, then rerun `verify/run.sh`. Max 3 rounds per failure, then a human decides (see verify/README.md).
+Fix the cause, then rerun `verify/run.sh`. After 3 rounds on the same failure, a human decides (see verify/README.md).

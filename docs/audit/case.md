@@ -266,4 +266,4 @@ See M2 and N9.
 
 ## Scripts
 
-All in `/private/tmp/claude-501/-Users-tripi-Documents-frostbite/c28e1ea7-1ef6-4d14-b065-e25be6b901fb/scratchpad/case_audit/`: `frames.py` (frame loader), `m1.py` (PCB sweep), `m6.py` (stack rays), `m7_print.py` (overhangs), `m8.py` (knob vs Alps), `m9_tilt.py` (tilt search), `m10_thin.py` (thin walls), `m13.py` (MX and knobs), `m15.py` and `m17.py` (XIAO, overmold), `m16.py` (stability, iron), `m18_glow.py` (glow), `m19.py` (notch copper).
+All in `(temporary folder, since deleted)/case_audit/`: `frames.py` (frame loader), `m1.py` (PCB sweep), `m6.py` (stack rays), `m7_print.py` (overhangs), `m8.py` (knob vs Alps), `m9_tilt.py` (tilt search), `m10_thin.py` (thin walls), `m13.py` (MX and knobs), `m15.py` and `m17.py` (XIAO, overmold), `m16.py` (stability, iron), `m18_glow.py` (glow), `m19.py` (notch copper).

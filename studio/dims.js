@@ -1,7 +1,6 @@
 (function (root) {
   const FB = root.FB = root.FB || {};
-  // Real part dimensions, mm. Verified by Agent F against datasheets; sources and confidence in ../docs/DIMENSIONS.md.
-  // Original keys/nesting are frozen. Keys below the "added" line are extra detail; every leaf is a positive number.
+  // Real part dimensions, mm. Sources and confidence are in ../docs/DIMENSIONS.md.
   FB.dims = {
     pitch: 19.05,            // MX key spacing (0.75")
     switchCutout: 14.0,      // MX plate cutout (Cherry 0.551" ±0.002; Gateron housing 14.00 ±0.03)
@@ -12,8 +11,8 @@
     capBottom: 18.2,         // DSA/XDA cap footprint (SP DSA 0.718" = 18.24)
     capTopDSA: 12.7,         // SP DSA top 0.5"
     capTopXDA: 15.9,         // XDA top ~16 (vendor-dependent)
-    capHeightDSA: 7.6,       // generic DSA; SP spec 7.39 — kept the taller value (conservative)
-    capHeightXDA: 9.5,       // sources say 9.1–9.56; conservative
+    capHeightDSA: 7.6,       // generic DSA; SP spec 7.39, the taller value is the safe one
+    capHeightXDA: 9.5,       // sources say 9.1–9.56, near the top of that range
     oledModule: { w: 38.0, h: 12.0, t: 3.6 },   // 0.91" I2C module board (38x12) incl. header end; t = board+glass+back parts, no header
     oledActive: { w: 22.4, h: 5.6 },            // 22.384 x 5.584 lit area
     ec11: { body: 12.0, shaftAbovePcb: 24.5, knobDiameter: 18.0 },  // body 11.7 x 12.0; L=20 shaft = 4.5 body + 20 -> tip 24.5 above PCB
@@ -24,8 +23,7 @@
     printTolerance: 0.3,     // per side, printed part <-> PCB / parts (Hackpad: 0.2–0.4)
     minWall: 2.0,            // structural FDM wall (>= 4-5 perimeters @0.4)
 
-    // ---- added detail (Agent F) ----
-    switchHousingTop: 15.6,          // top-housing outline at plate (Cherry 15.6; Gateron KS-3 15.4) — conservative
+    switchHousingTop: 15.6,          // top-housing outline at plate (Cherry 15.6; Gateron KS-3 15.4), the larger value
     switchHousingBottom: 14.0,       // bottom housing through the cutout
     switchClipSpan: 14.9,            // across clip tips (Gateron 14.9 ±0.3)
     switchStemAboveHousing: 3.6,     // Cherry

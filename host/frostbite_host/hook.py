@@ -116,7 +116,7 @@ def controlling_tty() -> str:
             if out[1] not in ("??", "?", "-"):
                 return out[1] if out[1].startswith("/dev/") else "/dev/" + out[1]
             pid = int(out[0])
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     return ""
 
@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
 
         signal.signal(signal.SIGALRM, lambda *_: os._exit(0))
         signal.alarm(2)
-    except Exception:  # noqa: BLE001
+    except Exception:
         signal = None
     try:
         raw = read_stdin()
@@ -259,10 +259,10 @@ def main(argv: list[str] | None = None) -> int:
                     sys.stdout.flush()
             else:
                 ipc.send(message, timeout=0.2)
-    except BaseException:  # noqa: BLE001  never fail the hook: no output means no decision
+    except BaseException:  # never fail the hook: no output means no decision
         pass
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     sys.exit(main())

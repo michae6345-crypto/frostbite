@@ -1,7 +1,12 @@
-"""Findings from docs/audit/host.md as normal tests. Test names carry the finding ids.
-No real command runs: the runner is fake, nothing presses keys."""
-import json, os, queue, subprocess, sys, types
+"""Regressions for docs/audit/host.md. The runner is fake, so no command runs."""
+import os
+import queue
+import subprocess
+import sys
+import types
+
 import pytest
+
 from frostbite_host.actions import Actions
 from frostbite_host.ctl import HOOK_EVENTS, hooks_snippet
 from frostbite_host.daemon import Daemon
@@ -59,43 +64,40 @@ ASK = dict(tool_name="Bash", tool_input={"command": "rm -rf build"})
 
 
 def running_session(b, sid="A", tty=TTY, bundle="com.apple.Terminal"):
-    """A running session. The tab the runner reports as focused decides whether Stop may act."""
     feed(b, ev("UserPromptSubmit", sid, bundle=bundle, prompt="go"))
     b.slots[b.find(f"claude:{sid}")].terminal["tty"] = tty
 
 
-def live_request(d, clock=None, **kw):
-    """A PermissionRequest hook connected and waiting, past the OLED settling time."""
+def live_request(d, **kw):
     reply = queue.Queue()
     d.handle(("ipc", ev("PermissionRequest", **{**ASK, **kw}), reply))
     d._shown_at -= 10
     return reply
 
 
-# -- passes: these must keep passing -----------------------------------------------------
-def test_pass_pretooluse_never_means_needs():
+def test_pretooluse_never_means_needs():
     assert ev("PreToolUse", **ASK)["status"] == "run"
 
 
-def test_pass_permissionrequest_means_needs():
+def test_permissionrequest_means_needs():
     assert ev("PermissionRequest", **ASK)["status"] == "needs"
 
 
-def test_pass_refuses_nonterminal_front():
+def test_stop_refused_with_a_non_terminal_in_front():
     r, b, d = rig("com.tinyspeck.slackmacgap", tab=TTY)
     running_session(b)
     d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
-def test_pass_refuses_other_known_terminal_app():
+def test_stop_refused_with_another_terminal_in_front():
     r, b, d = rig("com.googlecode.iterm2", tab=TTY)
     running_session(b)
     d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
-def test_pass_no_shell_or_script_built_from_untrusted_text():
+def test_no_script_built_from_untrusted_text():
     evil = '"; do shell script "touch /tmp/pwn"; --'
     r, b, d = rig()
     b.apply({"op": "update", "source": "claude", "key": "k", "name": evil, "cwd": "/tmp/" + evil,
@@ -106,7 +108,7 @@ def test_pass_no_shell_or_script_built_from_untrusted_text():
     assert r.calls == [["open", "-b", "com.apple.Terminal"]]  # bad tty rejected by TTY_RE
 
 
-def test_pass_nonascii_names_never_overflow():
+def test_nonascii_names_never_overflow():
     b = Board()
     feed(b, {"op": "update", "source": "claude", "key": "k", "name": "\U0001F9CA\U0001F9CA frost",
              "status": "needs", "detail": "日本語"})
@@ -114,7 +116,7 @@ def test_pass_nonascii_names_never_overflow():
         assert len(ln) <= OLED_COLS and ln.isascii()
 
 
-def test_pass_non_utf8_and_tqdm(tmp_path):
+def test_non_utf8_log(tmp_path):
     p = tmp_path / "x.log"
     p.write_bytes(b"step 1 loss 0.5 \xff\xfe\x00\nstep 2 loss 0.4\n")
     w = TrainWatcher(str(p), "r", lambda m: None)
@@ -122,7 +124,7 @@ def test_pass_non_utf8_and_tqdm(tmp_path):
     assert (w.state.status, w.state.step) == ("run", 2)
 
 
-def test_pass_split_multibyte_does_not_look_like_truncation(tmp_path):
+def test_split_multibyte_is_not_truncation(tmp_path):
     p = tmp_path / "x.log"
     data = "step 1 loss 0.5 █ x\n".encode()
     p.write_bytes(data[:17])
@@ -134,7 +136,6 @@ def test_pass_split_multibyte_does_not_look_like_truncation(tmp_path):
     assert w.state.lines == 1 and w.state.step == 1
 
 
-# -- device selection --------------------------------------------------------------------
 def test_device_selection_requires_frostbite_vid_pid(monkeypatch):
     fake = types.ModuleType("hid")
     opened = []
@@ -151,7 +152,6 @@ def test_device_selection_requires_frostbite_vid_pid(monkeypatch):
     assert opened == []  # a Keychron/VIA board must never be opened
 
 
-# -- keystrokes --------------------------------------------------------------------------
 def test_stop_checks_the_frontmost_tab_is_the_slots_session():
     r, b, d = rig(tab="/dev/ttys002")            # session B's tab is in front
     running_session(b, "A", "/dev/ttys001")
@@ -163,7 +163,7 @@ def test_stop_checks_the_frontmost_tab_is_the_slots_session():
     assert b.slots[0].status == Status.RUN       # nothing was stopped
 
 
-def test_vscode_gets_no_keystroke_without_knowing_terminal_panel_has_focus():
+def test_vscode_gets_no_keystroke():
     r, b, d = rig("com.microsoft.VSCode", tab=TTY)
     running_session(b, bundle="com.microsoft.VSCode")  # even with a tty there is no focus proof
     d.handle_device(KeyEvent(KEY_STOP, TAP))
@@ -229,9 +229,7 @@ def test_frontmost_rechecked_at_keystroke():
     assert r.keys == []
 
 
-# -- hook lifecycle ----------------------------------------------------------------------
 def test_needs_clears_when_approved_tool_starts():
-    # Docs: the only later events are PostToolUse (tool finished) / PostToolUseFailure.
     r, b, d = rig()
     live_request(d)
     d.handle_device(KeyEvent(KEY_APPROVE, TAP))
@@ -283,7 +281,6 @@ def test_hooks_snippet_quotes_paths_with_spaces():
     assert '"' in cmd or "'" in cmd or "\\ " in cmd
 
 
-# -- slots -------------------------------------------------------------------------------
 def test_dead_sessions_free_eventually():
     b = Board()
     feed(b, {"op": "update", "source": "claude", "key": "claude:x", "name": "x", "status": "needs"}, now=0.0)
@@ -341,7 +338,6 @@ def test_selection_converges_after_crossing_encoder_event():
     assert b.selected == 2
 
 
-# -- training ----------------------------------------------------------------------------
 @pytest.mark.parametrize("line", [
     "loss info: using cross entropy", "Using loss inf-norm", "Using loss: nan-safe mean",
     "saved best-loss-nan.pt", "saved val_loss_inf.pt", "loss_scale: inf",

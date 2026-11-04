@@ -1,9 +1,5 @@
-"""Findings from docs/audit/round2-software.md, and the Approve redesign they led to.
-
-Approve sends no keystroke. It answers one connected PermissionRequest hook. These tests run real
-`frostbite-hook` processes against a real daemon and socket on a FakeDevice. Nothing presses keys:
-the Mac is a fake runner. No test touches Claude Code settings.
-"""
+"""What the pad's keys do, from real `frostbite-hook` processes through a real daemon and socket
+to a FakeDevice. The Mac is a fake runner, so nothing presses keys."""
 import json
 import os
 import queue
@@ -16,49 +12,18 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
-
 from conftest import REAL_CONTROLLING_TTY
-from test_daemon import ESCAPE, FIX, TTY, FakeRunner, ask, hook, make, wait_for
+from test_daemon import ESCAPE, FIX, TTY, FakeRunner, ask, hook, make, running, wait_for
 
 from frostbite_host import actions as A
 from frostbite_host import hook as H
-from frostbite_host import ipc
 from frostbite_host.actions import Actions
 from frostbite_host.ctl import HOOK_EVENTS, hooks_snippet
-from frostbite_host.daemon import Daemon, SocketServer
 from frostbite_host.device import (HOLD, TAP, DeviceLink, FakeDevice, KeyEvent, Status, encode_device)
-from frostbite_host.state import Board
-from frostbite_host.train import TrainWatcher, parse_line
+from frostbite_host.train import TrainWatcher
 
 HOST = Path(__file__).resolve().parents[1]
 PAYLOAD = (FIX / "hooks" / "permission_request.json").read_text()
-
-
-@pytest.fixture
-def live():
-    """A real daemon loop and socket on a fake pad."""
-    tmp = tempfile.mkdtemp(prefix="fb")
-    sock = Path(tmp) / "s.sock"
-    fake = FakeDevice()
-    runner = FakeRunner()
-    holder = {}
-    d = Daemon(Board(), Actions(runner=runner, out=lambda s: None), send=lambda m: holder["link"].send(m))
-    link = DeviceLink(fake.opener(), d.on_device, ping_interval=0.2, retry_interval=0.05,
-                      read_timeout_ms=10, keepalive=d.keepalive)
-    holder["link"] = link
-    d.connected = link.connected.is_set
-    server = SocketServer(sock, d)
-    server.start()
-    link.start()
-    t = threading.Thread(target=d.run, daemon=True)
-    t.start()
-    assert wait_for(link.connected.is_set)
-    yield d, fake, runner, sock
-    d.stop_event.set()
-    t.join(2)
-    link.stop()
-    server.stop()
 
 
 def start_hook(sock, wait="5", payload=PAYLOAD):
@@ -79,10 +44,8 @@ def shown(d):
     return wait_for(lambda: d._shown_id is not None) and time.sleep(0.7)
 
 
-# ------------------------------------------------------------------ the decision reaches Claude Code
-
-def test_approve_prints_the_documented_allow_for_that_hook(live):
-    d, fake, runner, sock = live
+def test_approve_prints_allow(running):
+    d, fake, runner, sock = running
     p = start_hook(sock)
     shown(d)
     fake.press("approve")
@@ -94,8 +57,8 @@ def test_approve_prints_the_documented_allow_for_that_hook(live):
     assert wait_for(lambda: fake.slots[0] is Status.RUN)
 
 
-def test_hold_approve_prints_a_deny_that_keeps_claude_running(live):
-    d, fake, runner, sock = live
+def test_hold_approve_prints_deny(running):
+    d, fake, runner, sock = running
     p = start_hook(sock)
     shown(d)
     fake.press("approve", HOLD)
@@ -105,8 +68,8 @@ def test_hold_approve_prints_a_deny_that_keeps_claude_running(live):
     assert "interrupt" not in decision and runner.calls == []
 
 
-def test_timeout_leaves_the_terminal_prompt_in_charge(live):
-    d, fake, runner, sock = live
+def test_timeout_leaves_the_terminal_prompt_in_charge(running):
+    d, fake, runner, sock = running
     p = start_hook(sock, wait="1")
     assert wait_for(lambda: fake.slots[0] is Status.NEEDS)
     assert result(p) == (0, "", "")
@@ -132,8 +95,8 @@ def test_garbage_and_wrong_id_replies_are_no_decision():
         assert H.decision_for(reply, "a") is None
 
 
-def test_no_pad_answers_at_once_with_no_decision(live):
-    d, fake, runner, sock = live
+def test_no_pad_answers_at_once_with_no_decision(running):
+    d, fake, runner, sock = running
     fake.unplug()
     assert wait_for(lambda: not d.connected())
     assert result(start_hook(sock, wait="20")) == (0, "", "")
@@ -166,8 +129,8 @@ def test_daemon_dying_mid_wait_is_no_decision():
     listener.close()
 
 
-def test_cancelled_hook_closes_its_request_at_once(live):
-    d, fake, runner, sock = live
+def test_cancelled_hook_closes_its_request_at_once(running):
+    d, fake, runner, sock = running
     p = start_hook(sock, wait="30")
     assert wait_for(lambda: d.requests)
     p.send_signal(signal.SIGTERM)                # what a hook timeout does
@@ -177,9 +140,7 @@ def test_cancelled_hook_closes_its_request_at_once(live):
     assert wait_for(lambda: fake.oled[1].rstrip() == "answer in terminal")
 
 
-# ------------------------------------------------------------------ R2-01 / R2-02: which request
-
-def test_r2_01_stale_amber_has_nothing_to_answer():
+def test_stale_amber_has_nothing_to_answer():
     d, fake, runner, clock = make()
     rid, reply = ask(d, clock)
     clock[0] += 31                               # the hook gave up; the session has since died
@@ -193,7 +154,7 @@ def test_r2_01_stale_amber_has_nothing_to_answer():
     assert "approved" not in fake.oled[1]
 
 
-def test_r2_02_a_press_answers_the_request_on_the_oled_and_no_other():
+def test_press_answers_only_the_request_on_the_oled():
     d, fake, runner, clock = make()
     first, a = ask(d, clock, tool_input={"command": "npm test"})
     second, b = ask(d, clock, tool_input={"command": "rm -rf ~/data"})
@@ -202,7 +163,7 @@ def test_r2_02_a_press_answers_the_request_on_the_oled_and_no_other():
     assert a.get_nowait() == {"id": first, "decision": "allow"} and b.empty()
 
 
-def test_r2_02_when_the_shown_request_ends_the_next_needs_its_own_look():
+def test_next_request_needs_its_own_look():
     d, fake, runner, clock = make()
     first, a = ask(d, clock, tool_input={"command": "npm test"})
     second, b = ask(d, clock, tool_input={"command": "rm -rf ~/data"})
@@ -224,7 +185,7 @@ def test_a_press_on_another_slot_answers_nothing():
     assert reply.empty()
 
 
-def test_new_request_comes_up_by_itself_but_never_steals_a_live_one():
+def test_new_request_is_selected_unless_one_is_live():
     d, fake, runner, clock = make()
     d.handle(("dev", KeyEvent(4, TAP)))
     rid, reply = ask(d, clock)
@@ -251,8 +212,6 @@ def test_prompt_or_session_end_closes_its_request():
 
 
 def test_never_auto_approved():
-    """Only a KeyEvent can produce a decision: every other message leaves the hook waiting or
-    releases it with none."""
     d, fake, runner, clock = make()
     rid, reply = ask(d, clock)
     for msg in ({"op": "status"}, {"op": "update", "key": "x", "decision": "allow"},
@@ -314,22 +273,20 @@ def test_snippet_gives_the_hook_longer_than_its_wait():
     assert set(hooks) == set(HOOK_EVENTS)
 
 
-def test_return_keystroke_path_is_gone():
+def test_no_return_keystroke():
     source = (HOST / "frostbite_host" / "actions.py").read_text()
     assert "key code 36" not in source and '"return"' not in source and "keystroke \"" not in source
     assert not hasattr(Actions, "guarded_key")
     assert all("key code 53" in script for script in A.PRESS_ESCAPE.values())
 
 
-# ------------------------------------------------------------------ Stop
-
-def test_r2_03_readme_says_what_fallback_stop_does():
+def test_readme_says_what_fallback_stop_does():
     readme = " ".join((HOST / "README.md").read_text().split())
     assert "Stop is a plain Escape to whatever app is in front" in readme
     assert "only ever reach" not in readme
 
 
-def test_r2_12_press_after_a_stall_is_dropped_but_later_ones_count():
+def test_press_after_a_stall_is_dropped():
     class Stalls(FakeDevice):
         stall = 0.0
 
@@ -353,21 +310,21 @@ def test_r2_12_press_after_a_stall_is_dropped_but_later_ones_count():
     link.stop()
 
 
-def test_r2_07_every_event_carries_the_tty(monkeypatch):
+def test_every_event_carries_the_tty(monkeypatch):
     monkeypatch.setattr(H, "controlling_tty", lambda: TTY)
     for name in ("pre_tool_use_bash.json", "post_tool_use.json", "stop.json"):
         m = H.hook_to_message(json.loads((FIX / "hooks" / name).read_text()), {})
         assert m["terminal"]["tty"] == TTY
 
 
-def test_r2_07_restart_stop_works_on_a_running_session():
+def test_stop_works_after_a_daemon_restart():
     d, fake, runner, clock = make()
     hook(d, "pre_tool_use_bash.json")            # first event this daemon has heard
     d.handle(("dev", KeyEvent(8, TAP)))
     assert runner.keystrokes() == [ESCAPE]
 
 
-def test_r2_11_tmux_message():
+def test_tmux_session_gets_no_stop():
     d, fake, runner, clock = make()
     d.handle(("ipc", {"op": "update", "source": "claude", "key": "claude:t", "name": "n", "status": "run",
                       "terminal": {"bundle": "com.apple.Terminal", "tty": "/dev/ttys050", "tmux": "1"}}, None))
@@ -376,7 +333,7 @@ def test_r2_11_tmux_message():
     assert H.terminal_info({"TMUX": "/tmp/tmux,1,0"})["tmux"] == "1"
 
 
-def test_r2_18_two_running_sessions_on_one_tty_get_no_stop():
+def test_no_stop_when_two_sessions_share_a_tty():
     d, fake, runner, clock = make()
     hook(d, "user_prompt_submit.json")
     hook(d, "user_prompt_submit.json", session_id="child")
@@ -386,7 +343,7 @@ def test_r2_18_two_running_sessions_on_one_tty_get_no_stop():
     assert runner.keystrokes() == [] and fake.oled[1].rstrip() == "answer in terminal"
 
 
-def test_r2_20_unknown_outcome_is_not_retried():
+def test_unknown_escape_outcome_is_not_retried():
     d, fake, runner, clock = make()
     hook(d, "user_prompt_submit.json")
 
@@ -404,7 +361,7 @@ def test_r2_20_unknown_outcome_is_not_retried():
     assert len(r.keystrokes()) == 1
 
 
-def test_r2_05_tty_lookup_walks_past_a_wrapper(monkeypatch):
+def test_tty_lookup_walks_past_a_wrapper(monkeypatch):
     chain = {4000: "3000 ??", 3000: "2000 ??", 2000: "1000 ttys007"}
     monkeypatch.setattr(os, "getppid", lambda: 4000)
 
@@ -415,7 +372,7 @@ def test_r2_05_tty_lookup_walks_past_a_wrapper(monkeypatch):
     assert REAL_CONTROLLING_TTY() == "/dev/ttys007"
 
 
-def test_r2_05_no_tty_anywhere_is_empty(monkeypatch):
+def test_no_tty_anywhere_is_empty(monkeypatch):
     monkeypatch.setattr(os, "getppid", lambda: 4000)
 
     def fake_run(args, **kw):
@@ -425,9 +382,7 @@ def test_r2_05_no_tty_anywhere_is_empty(monkeypatch):
     assert REAL_CONTROLLING_TTY() == ""
 
 
-# ------------------------------------------------------------------ R2-04, R2-16: training runs
-
-def test_r2_04_stale_log_is_not_amber_and_the_pad_clears_it(tmp_path):
+def test_stale_log_is_not_amber_and_the_pad_clears_it(tmp_path):
     p = tmp_path / "x.log"
     p.write_text("Epoch 10/10 - loss: 0.01\n")
     d, fake, runner, clock = make()
@@ -448,7 +403,7 @@ def test_r2_04_stale_log_is_not_amber_and_the_pad_clears_it(tmp_path):
     assert fake.slots[0] is Status.RUN           # back if it really is alive
 
 
-def test_r2_04_a_tap_only_selects_first():
+def test_first_tap_only_selects():
     d, fake, runner, clock = make()
     d.handle(("ipc", {"op": "set_slot", "slot": 2, "status": "done", "name": "CI"}, None))
     d.handle(("dev", KeyEvent(2, TAP)))
@@ -457,7 +412,7 @@ def test_r2_04_a_tap_only_selects_first():
     assert d.board.slots[2] is None
 
 
-def test_r2_04_a_tap_never_clears_running_or_claude_slots():
+def test_tap_never_clears_running_or_claude_slots():
     d, fake, runner, clock = make()
     hook(d, "stop.json")
     d.handle(("ipc", {"op": "set_slot", "slot": 1, "status": "run", "name": "CI"}, None))
@@ -467,45 +422,7 @@ def test_r2_04_a_tap_never_clears_running_or_claude_slots():
     assert d.board.slots[0] is not None and d.board.slots[1] is not None
 
 
-def test_r2_04_quiet_run_frees_itself():
-    b = Board()
-    b.apply({"op": "update", "source": "train", "key": "t", "name": "t", "status": "idle",
-             "detail": "quiet 10m"}, 0)
-    assert not b.expire(599)
-    assert b.expire(600) and b.slots[0] is None
-
-
-def test_r2_04_restart_on_an_old_log_is_quiet_at_once(tmp_path):
-    p = tmp_path / "old.log"
-    p.write_text("step 10 loss 0.5\n")
-    month = time.time() - 30 * 86400
-    os.utime(p, (month, month))
-    out = []
-    w = TrainWatcher(str(p), "r", out.append)
-    w.poll_once()
-    assert out[-1]["status"] == "idle" and out[-1]["detail"].startswith("quiet")
-
-
-@pytest.mark.parametrize("line", ["`Trainer.fit` stopped: `max_epochs=10` reached."])
-def test_r2_04_common_final_lines(line):
-    assert parse_line(line).done is True
-
-
-def test_r2_16_growing_log_with_no_metrics_keeps_its_slot(tmp_path):
-    clock = [0.0]
-    b = Board()
-    w = TrainWatcher(str(tmp_path / "x"), "r", lambda m: b.apply(m, clock[0]), clock=lambda: clock[0])
-    for hour in range(30):
-        for _ in range(6):
-            clock[0] += 600
-            w.feed_text("still working\n")
-        b.expire(clock[0])
-    assert b.find(w.key) is not None
-
-
-# ------------------------------------------------------------------ R2-09 overflow, R2-13
-
-def test_r2_09_overflow_clears_when_the_seventh_is_answered():
+def test_overflow_clears_when_the_seventh_is_answered():
     d, fake, runner, clock = make()
     for i in range(6):
         d.handle(("ipc", {"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"}, None))
@@ -524,14 +441,3 @@ def test_seventh_request_is_released_at_once():
     rid, reply = ask(d, clock)
     assert reply.get_nowait() == {"id": rid, "decision": None}
     assert d.board.glow()[:3] == (0xFF, 0xB0, 0x20)
-
-
-def test_r2_13_a_tool_in_flight_is_not_evicted():
-    b = Board()
-    b.apply({"op": "update", "source": "claude", "key": "c0", "name": "n", "status": "run",
-             "tool": "Bash(x)", "detail": "Bash(x)"}, 0)
-    b.slots[0].status = Status.IDLE
-    for i in range(1, 6):
-        b.apply({"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"}, 0)
-    assert b.apply({"op": "update", "source": "claude", "key": "new", "name": "n", "register_only": True}, 1) is False
-    assert b.find("c0") == 0

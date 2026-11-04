@@ -57,7 +57,7 @@ def dump(e, ind=0) -> str:
     pad = "\t" * (ind + 1)
     parts = []
     head = []
-    for k, x in enumerate(e):
+    for x in e:
         if isinstance(x, list):
             parts.append("\n" + pad + dump(x, ind + 1))
         elif not parts:

@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import fnmatch
-import json
 import shutil
 import sys
 import traceback
@@ -36,12 +35,12 @@ PIPELINE = [
     ("X.pcb_insertion", C.x_pcb_insertion), ("X.usb_ids", C.x_usb_ids),
 ]
 
-# Audit items no tool here can settle. Green below does not cover them, whatever the counts say.
+# Audit items no tool here can settle. A green report does not cover them.
 NEEDS_REAL_PARTS = [
     ("OLED flip", "docs/audit/firmware.md F2", "FROSTBITE_OLED_FLIP is set from reference boards. Flash ledtest with the OLED fitted and read the text."),
     ("EC11 resolution", "docs/audit/firmware.md F6, electrical.md E9", "Resolution 4 may need two clicks per step on a 30/15 part. Turn the kit encoder in ledtest; direction is open too."),
     ("Glow brightness", "docs/audit/case.md M2", "The light reaching the band is a model and an estimate. Print one corner with one SK6812 and look at it."),
-    ("LED data level", "docs/audit/electrical.md E3", "3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the whole chain at full white on the real board."),
+    ("LED data level", "docs/audit/electrical.md E3", "3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the LED test in docs/BUILD.md on the real board."),
     ("OLED flex clearance", "docs/audit/case.md M3", "The module's flex and tape height at the far end is unknown. Caliper the kit module against the lip gap."),
 ]
 
@@ -66,7 +65,7 @@ def write_report(records, path: Path, ctx: Ctx):
     L = ["# Frostbite verification report", "",
          f"Generated {now} by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` "
          f"(commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.", "",
-         f"**PASS {n[PASS]} · FAIL {n[FAIL]} · NOT_RUN {n[NOT_RUN]}** — exit code {exit_code(records)}", "",
+         f"**PASS {n[PASS]} · FAIL {n[FAIL]} · NOT_RUN {n[NOT_RUN]}**, exit code {exit_code(records)}", "",
          f"kicad-cli: `{ctx.kicad_cli or 'not installed'}`", "",
          "## Needs real parts", "",
          "Green below means the files agree. It does not prove these, and no check here can:", ""]
@@ -85,7 +84,7 @@ def write_report(records, path: Path, ctx: Ctx):
     if fails:
         L += ["", "## Failures (verbatim from evidence)", ""]
         for r in fails:
-            L.append(f"### {r['check']} — {r['title']}")
+            L.append(f"### {r['check']}: {r['title']}")
             L += [f"- {f}" for f in r["fail_reasons"]]
             for c in r["commands"]:
                 L.append(f"- command `{' '.join(c['argv'])}` exit {c['exit_code']}")
@@ -93,8 +92,8 @@ def write_report(records, path: Path, ctx: Ctx):
     nr = [r for r in records if r["status"] == NOT_RUN]
     if nr:
         L += ["", "## Not run", ""] + [f"- `{r['check']}`: {r['not_run_reason']}" for r in nr]
-    L += ["", "## Fix loop", "", "Owner of the failing gate fixes the cause, then rerun `verify/run.sh`. "
-          "Max 3 rounds per failure, then a human decides (see verify/README.md).", ""]
+    L += ["", "## Fix loop", "", "Fix the cause, then rerun `verify/run.sh`. "
+          "After 3 rounds on the same failure, a human decides (see verify/README.md).", ""]
     path.write_text("\n".join(L).replace(str(Path.home()), "~"))
 
 
@@ -108,8 +107,7 @@ def main(argv=None):
         from .selftest import run_selftest
         return run_selftest(VERIFY, ROOT)
     work = VERIFY / ".cache" / "work"
-    if work.exists():
-        shutil.rmtree(work)
+    shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     ev = VERIFY / "evidence"
     ev.mkdir(exist_ok=True)
@@ -119,9 +117,7 @@ def main(argv=None):
     for cid, fn in PIPELINE:
         if a.only and not fnmatch.fnmatch(cid, a.only):
             continue
-        stale = ev / f"{cid}.json"
-        if stale.exists():
-            stale.unlink()
+        (ev / f"{cid}.json").unlink(missing_ok=True)
         r = run_one(fn, ctx, cid)
         print(f"{r['status']:8} {r['check']:24} {(r['fail_reasons'] or [r['not_run_reason'] or ''])[0]}", flush=True)
         records.append(r)

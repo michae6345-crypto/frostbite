@@ -1,6 +1,5 @@
-/* Frostbite Studio page controller (Agent D).
-   Codes against CONTRACT.md defensively: every FB.* call is guarded so a missing or
-   half-finished module degrades one panel instead of the whole page. */
+/* Frostbite Studio page controller. FB.* calls are guarded so a module that fails to load
+   degrades one panel instead of the whole page. */
 (function () {
   "use strict";
 
@@ -25,7 +24,7 @@
   var reducedMotion = false;
   try { reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { /* ignore */ }
 
-  /* ---------------------------------------------------------------- helpers */
+  // helpers
   function $(id) { return document.getElementById(id); }
   function esc(v) {
     return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
@@ -82,7 +81,7 @@
     return list[0] || null;
   }
 
-  /* ---------------------------------------------------------------- labels */
+  // labels
   var AXIS_FALLBACK_LABELS = {
     layout: "Layout", shell: "Shell plastic", texture: "Surface", plate: "Top plate", glowColor: "Glow colour",
     glowPlace: "Glow placement", corner: "Corner radius", bezel: "Bezel", knob: "Knob", oledColor: "OLED colour",
@@ -142,7 +141,7 @@
     return null;
   }
 
-  /* ---------------------------------------------------------------- spec model */
+  // spec model
   var DEFAULT = (function () {
     var d = cat.defaultSpec ? clone(cat.defaultSpec) : {};
     AXES.forEach(function (k) { if (OPTIONS[k].indexOf(d[k]) === -1) d[k] = OPTIONS[k][0]; });
@@ -174,7 +173,7 @@
   }
   function designKey(s) { return AXES.map(function (k) { return s[k]; }).join("|") + "|" + (s.wordmarkText || ""); }
 
-  /* ---------------------------------------------------------------- checks + renders */
+  // checks + renders
   var checkCache = new Map();
   function check(spec) {
     var key = designKey(spec);
@@ -213,7 +212,7 @@
     }
   }
 
-  /* ---------------------------------------------------------------- state */
+  // state
   var saved = loadStore();
   var state = {
     spec: normalizeSpec(saved.spec || DEFAULT),
@@ -235,7 +234,7 @@
     if (c && c.spec) state.compare.push({ name: String(c.name || "Pinned design").slice(0, 60), spec: normalizeSpec(c.spec) });
   });
 
-  /* ---------------------------------------------------------------- theme */
+  // theme
   function applyTheme() {
     var root = document.documentElement;
     if (state.theme === "auto") root.removeAttribute("data-theme");
@@ -246,7 +245,7 @@
     if (btn) btn.setAttribute("aria-label", "Colour theme: " + names[state.theme].toLowerCase() + ". Click to change.");
   }
 
-  /* ---------------------------------------------------------------- control groups */
+  // control groups
   var DEFAULT_GROUPS = [
     { title: "Form", axes: ["layout", "tilt", "plate"] },
     { title: "Shell", axes: ["shell", "texture", "corner", "bezel", "screws", "wordmark"] },
@@ -429,7 +428,7 @@
     renderPermFilters();
   }
 
-  /* ---------------------------------------------------------------- spec changes */
+  // spec changes
   var rafPending = false, permTimer = 0, persistTimer = 0;
   function setAxis(axis, v) {
     state.spec[axis] = v;
@@ -466,7 +465,7 @@
     }, 400);
   }
 
-  /* ---------------------------------------------------------------- stage */
+  // stage
   function renderStage() {
     var s = state.spec, L = layoutOf(s.layout);
     var nm = $("stage-name"); if (nm) nm.textContent = (L && L.name) || valueLabel("layout", s.layout);
@@ -512,7 +511,7 @@
     }).join("") + '<li><span class="swatch" style="background:' + esc((PAL.commandCap && PAL.commandCap.white) || "#f7f7f4") + '"></span>Command key (Approve, Talk, Stop)</li>';
   }
 
-  /* ---------------------------------------------------------------- simulate */
+  // simulate
   var simTimer = 0;
   function setSimulate(on) {
     state.simulate = on;
@@ -527,7 +526,7 @@
     }
   }
 
-  /* ---------------------------------------------------------------- checks panel */
+  // checks panel
   function meter(label, val, max, opts) {
     opts = opts || {};
     var v = num(val) ? val : 0, m = num(max) && max > 0 ? max : 1;
@@ -619,7 +618,7 @@
     }
   }
 
-  /* ---------------------------------------------------------------- copy JSON */
+  // copy JSON
   var copyTimer = 0;
   function copySpec() {
     var text = JSON.stringify(state.spec, null, 2);
@@ -647,7 +646,7 @@
     } catch (e) { fallback(); }
   }
 
-  /* ---------------------------------------------------------------- lazy thumbnails */
+  // lazy thumbnails
   var thumbData = new WeakMap();
   var thumbQueue = [], pumping = false;
   var io = ("IntersectionObserver" in window) ? new IntersectionObserver(function (entries) {
@@ -681,7 +680,7 @@
   var thumbSeq = 0;
   function nextThumbId(prefix) { thumbSeq += 1; return prefix + thumbSeq + "-"; }
 
-  /* ---------------------------------------------------------------- cards */
+  // cards
   var PIN_SVG = '<svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M1.5 3h9M1.5 6h9M1.5 9h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
   var cardItems = {}; // listId -> array of {name, spec}
 
@@ -745,7 +744,7 @@
     }
   }
 
-  /* ---------------------------------------------------------------- presets */
+  // presets
   function renderPresets() {
     var grid = $("preset-grid"); if (!grid) return;
     var list = arr(cat.presets).filter(function (p) { return p && (p.spec || typeof p === "object"); });
@@ -759,7 +758,7 @@
     markCurrentCards();
   }
 
-  /* ---------------------------------------------------------------- permutations */
+  // permutations
   var MIX_ORDER = ["layout", "shell", "glowColor", "plate", "knob", "glowPlace", "commandCap", "agentCap", "texture", "corner", "screws", "bezel", "tilt", "capProfile", "oledColor", "wordmark", "legends"];
   var PARTNER = {
     layout: "shell", shell: "glowColor", glowColor: "glowPlace", glowPlace: "glowColor", plate: "glowPlace",
@@ -900,7 +899,7 @@
     }
   }
 
-  /* ---------------------------------------------------------------- compare */
+  // compare
   function isPinned(spec) {
     var k = designKey(spec);
     return state.compare.some(function (c) { return designKey(c.spec) === k; });
@@ -984,7 +983,7 @@
     tray.innerHTML = html;
   }
 
-  /* ---------------------------------------------------------------- shuffle */
+  // shuffle
   function shuffle() {
     var locked = {};
     AXES.forEach(function (k) { if (state.locks[k]) locked[k] = state.spec[k]; });
@@ -1001,7 +1000,7 @@
     setSpec(s, "Shuffled. " + (layoutOf(s.layout) || {}).name + ", " + valueLabel("shell", s.shell) + " shell");
   }
 
-  /* ---------------------------------------------------------------- wire up */
+  // wire up
   function wire() {
     var tt = $("theme-toggle");
     if (tt) tt.addEventListener("click", function () {

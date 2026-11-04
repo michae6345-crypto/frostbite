@@ -1,15 +1,6 @@
-"""Derive project-local library files from the Hack Club care package in lib/.
-
-* lib/frostbite.pretty/SK6812MINI-E_key.kicad_mod: care-package SK6812MINI-E_fixed with pads
-  pulled 0.3 mm clear of the LED cut-out (JLCPCB copper-to-edge rule).
-* lib/frostbite.pretty/EC11E-Switch_Vertical_H20mm_Slot3.4x1.5.kicad_mod: KiCad's slotted EC11E
-  footprint with slots that pass JLCPCB's 2:1 rule.
-* lib/frostbite.pretty/SK6812MINI-E_glow_down.kicad_mod: the same, with its copper/mask/paste/
-  silk/courtyard moved from B.* to F.*.  Placed and flipped to the bottom side in pcbnew, it is a
-  MINI-E soldered on the underside with its lens facing DOWN (away from the PCB) and its back in
-  the same board cut-out: the mirror image of the per-key (lens-up) pin arrangement, as it must be.
-* sym-lib-table / fp-lib-table for the project.
-"""
+"""Write lib/frostbite.pretty (derived LED and EC11E footprints), the lib tables and the project file."""
+import json
+import uuid
 from pathlib import Path
 
 PCB = Path(__file__).resolve().parents[1]
@@ -17,10 +8,10 @@ src = (PCB / "lib/hackpad.pretty/SK6812MINI-E_fixed.kicad_mod").read_text()
 
 
 def derive(name, descr, front_layers):
-    """Copy of the care-package MINI-E footprint with the pads moved 0.175 mm outward and
-    shortened on the inside (centre +-2.775, length 1.25: copper 2.15..3.40 from the centre, the
-    same outer edge as the care package) so copper stays >= 0.3 mm from the routed LED cut-out
-    (the original pads come within 0.1 mm of it).  Courtyard tightened to cut-out/pads + 0.25."""
+    """Care-package MINI-E with the pads moved 0.175 mm outward and shortened on the inside (centre
+    +-2.775, length 1.25, copper 2.15..3.40 from the centre) so copper stays >= 0.3 mm from the routed
+    LED cut-out for JLCPCB's copper-to-edge rule. The originals come within 0.1 mm. Courtyard tightened
+    to cut-out/pads + 0.25."""
     out = src.replace('(footprint "SK6812-rounded"', f'(footprint "{name}"')
     out = out.replace("(at -2.599999 ", "(at -2.775 ").replace("(at 2.600001 ", "(at 2.775 ")
     out = out.replace("(size 0.82 1.6)", "(size 0.82 1.25)")
@@ -40,17 +31,16 @@ derive("SK6812MINI-E_key",
        "Per-key SK6812 MINI-E, reverse mounted on the underside, lens up through the cut-out (from Hack Club SK6812MINI-E_fixed, pads 0.3 mm clear of the cut-out)",
        front_layers=False)
 # Glow LEDs: same part on the underside but lens facing DOWN, back of the body in the cut-out.
-# Defined with F.* layers so that pcbnew's flip to the bottom puts the pads on B.Cu in the
-# mirrored (lens-down) arrangement and the footprint reports side = bottom.
+# Defined on F.* layers so pcbnew's flip puts the pads on B.Cu in the mirrored (lens-down)
+# arrangement and the footprint reports side = bottom.
 derive("SK6812MINI-E_glow_down",
        "SK6812 MINI-E on the underside, lens facing down (from Hack Club SK6812MINI-E_fixed; place flipped on B.Cu)",
        front_layers=True)
 
-# EC11E with switch: KiCad's slotted footprint with the lug slots lengthened from 2.8 x 1.5 to
-# 3.4 x 1.5 mm.  Lug centres stay at +-5.6, so the slot's outer edge stays at 6.35 (Alps: 6.25, barb
-# tip: 6.55) and the barb still catches.  The length meets JLCPCB's "slot length >= 2 x width" rule
-# and takes the slot's rounded ends past the 2.5 mm wide lug's corners (see README).
-# Pads grow to 4.0 x 2.1 to keep a 0.3 mm annular ring all round.
+# KiCad's slotted EC11E with the lug slots lengthened from 2.8 x 1.5 to 3.4 x 1.5 mm. Lug centres stay
+# at +-5.6, so the slot's outer edge stays at 6.35 (Alps: 6.25, barb tip: 6.55) and the barb still
+# catches. The length meets JLCPCB's "slot length >= 2 x width" rule and takes the rounded slot ends
+# past the 2.5 mm lug's corners (see README). Pads grow to 4.0 x 2.1 to keep a 0.3 mm annular ring.
 ENC = Path.home() / ("Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints/Rotary_Encoder.pretty/"
                      "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm.kicad_mod")
 enc = ENC.read_text()
@@ -80,9 +70,6 @@ def table(kind, rows):
 (PCB / "sym-lib-table").write_text(table("sym_lib_table", sym))
 (PCB / "fp-lib-table").write_text(table("fp_lib_table", fp))
 print("libs ok")
-
-# ---------------------------------------------------------------- project file
-import json  # noqa: E402
 
 pro = {
     "meta": {"filename": "frostbite.kicad_pro", "version": 3},
@@ -117,7 +104,7 @@ pro = {
         "netclass_patterns": [{"netclass": "Power", "pattern": p} for p in ("GND", "+5V", "+3V3")],
     },
     "schematic": {"legacy_lib_dir": "", "legacy_lib_list": []},
-    "sheets": [[__import__("uuid").uuid5(__import__("uuid").UUID("6f1c3a52-0b7e-4f1e-9a51-f7057b17e000"), "root").__str__(), "Root"]],
+    "sheets": [[str(uuid.uuid5(uuid.UUID("6f1c3a52-0b7e-4f1e-9a51-f7057b17e000"), "root")), "Root"]],
     "text_variables": {},
 }
 pro_path = PCB / "frostbite.kicad_pro"
@@ -125,8 +112,8 @@ if not pro_path.exists():
     pro_path.write_text(json.dumps(pro, indent=2) + "\n")
     print("wrote frostbite.kicad_pro")
 else:
-    # KiCad rewrites the project file; keep the settings the board depends on.
+    # KiCad rewrites the project file. U1.13 reaches 2 spokes on F.Cu but only 1 on B.Cu, and those
+    # 3 x 0.4 mm spokes carry the 0.48 A worst case, so keep this rule at 1.
     cur = json.loads(pro_path.read_text())
-    # U1.13 reaches 2 spokes on F.Cu but only 1 on B.Cu; 3 x 0.4 mm spokes carry the 0.48 A worst case.
     cur["board"]["design_settings"]["rules"]["min_resolved_spokes"] = 1
     pro_path.write_text(json.dumps(cur, indent=2) + "\n")

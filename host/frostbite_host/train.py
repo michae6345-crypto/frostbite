@@ -2,10 +2,9 @@
 
   run    once lines arrive (detail: "e3 s812 loss 0.4213")
   done   on a final line ("training complete", {"event": "end"}, --done-pattern ...)
-  idle   when the file stops growing for `stale_minutes`: dim white, freed after the same
-         linger as a finished run, cleared by tapping the selected slot, and back to run if
-         lines resume. A killed run also goes quiet, so silence is never shown as success, and
-         nothing is waiting on you, so it is not amber. --stale-status done shows green instead
+  idle   when the file stops growing for `stale_minutes`, and back to run if lines resume. A
+         killed run also goes quiet, so silence is never shown as success, and nothing is
+         waiting on you, so it is not amber. --stale-status done shows green instead
   error  on a nan/inf loss, a Python traceback or an "...Error:" line
 """
 
@@ -229,14 +228,11 @@ class RunState:
     finished: bool = False        # a real final line was seen, not just silence
     lines: int = 0
 
-    def _restart(self) -> None:
-        lines = self.lines
-        self.__dict__.update(RunState(status="run", lines=lines).__dict__)
-
     def feed(self, info: LineInfo, raw: str = "") -> None:
         self.lines += 1
         if info.start and not info.error:
-            self._restart()               # a new run appended to the same log
+            # A new run appended to the same log.
+            self.__dict__.update(RunState(status="run", lines=self.lines).__dict__)
         if self.status == "error":
             # Errors stay until a new run starts; only refine a traceback's message with
             # the exception line that ends it.
@@ -300,7 +296,7 @@ class TrainWatcher:
 
     def __init__(self, path: str, name: str | None, emit: Callable[[dict], None], *,
                  stale_minutes: float = 10.0, stale_status: str = "idle",
-                 done_pattern: str | None = None, poll: float = 1.0, from_start: bool = True,
+                 done_pattern: str | None = None, poll: float = 1.0,
                  clock: Callable[[], float] = time.monotonic):
         self.path = os.path.abspath(os.path.expanduser(path))
         self.name = name or os.path.splitext(os.path.basename(self.path))[0]
@@ -310,7 +306,6 @@ class TrainWatcher:
         self.stale_status = stale_status
         self.done_re = re.compile(done_pattern, re.I) if done_pattern else None
         self.poll = poll
-        self.from_start = from_start
         self.clock = clock
         self.state = RunState()
         self._stop = threading.Event()
@@ -328,7 +323,6 @@ class TrainWatcher:
         self._discard_first = False
         self._fresh = False          # next content belongs to a new run
 
-    # -- feeding (also used directly by tests)
     def feed_text(self, text: str) -> None:
         if self._fresh and text:
             self._fresh = False
@@ -374,17 +368,15 @@ class TrainWatcher:
         self.emit({"op": "update", "source": "train", "key": self.key, "name": self.name,
                    "status": st, "detail": det, "log": self.path})
 
-    # -- file tailing
-    def _open(self, start: int | None = None) -> bool:
+    def _open(self) -> bool:
         try:
             fh = open(self.path, "rb", buffering=0)
             st = os.fstat(fh.fileno())
         except OSError:
             return False
         self._fh, self._ino = fh, st.st_ino
-        if start is None:
-            start = 0 if self.from_start else st.st_size
-        if st.st_size - start > MAX_BACKLOG:
+        start = 0
+        if st.st_size > MAX_BACKLOG:
             start = st.st_size - MAX_BACKLOG
             self._discard_first = True
         self._seek(start)
@@ -437,7 +429,7 @@ class TrainWatcher:
             self._close()
             self._fresh = True
             if st is not None:
-                self._open(0)
+                self._open()
             self.check_stale()
             return
         if st.st_size < self._pos or self._head_changed():
@@ -461,7 +453,7 @@ class TrainWatcher:
         while not self._stop.is_set():
             try:
                 self.poll_once()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("watcher %s: %s", self.name, e)
             self._stop.wait(self.poll)
         self._close()

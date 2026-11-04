@@ -28,7 +28,7 @@ def parse(text: str):
 
 
 class Str(str):
-    """Quoted string (kept distinct from bare atoms)."""
+    """A quoted string, kept distinct from bare atoms."""
 
 
 def head(node):
@@ -44,18 +44,9 @@ def child(node, name):
     return c[0] if c else None
 
 
-def walk(node):
-    if isinstance(node, list):
-        yield node
-        for c in node[1:]:
-            yield from walk(c)
-
-
 def num(x) -> float:
     return float(x)
 
-
-# ---------------------------------------------------------------- PCB model
 
 def _rot(px, py, deg):
     """KiCad: y down, positive angle = counter-clockwise on screen."""

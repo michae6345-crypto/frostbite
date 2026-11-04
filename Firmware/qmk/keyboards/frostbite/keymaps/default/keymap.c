@@ -1,43 +1,23 @@
 // Copyright 2026 Frostbite contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Frostbite 9 default keymap: agent dashboard over Raw HID, with a plain
-// keyboard fallback when no host app is talking to the pad.
+// Frostbite 9 default keymap: agent dashboard over Raw HID, plain keyboard when
+// no host app is talking to the pad. Protocol: design.json, Firmware/README.md.
 //
-// Everything here follows design.json ("protocol" section). Summary:
-//   host -> device  0x01 SET_SLOT  [0x01, slot, status]
-//                   0x02 SET_ALL   [0x02, s0..s5]
-//                   0x03 OLED_LINE [0x03, line 0-1, len, <=21 ASCII]
-//                   0x04 SET_GLOW  [0x04, r, g, b, brightness]
-//                   0x05 PING      [0x05] -> reply [0x05, 1, selected_slot]
-//                   0x06 SET_SELECTED [0x06, slot]
-//   device -> host  0x81 KEY       [0x81, key 0-8, 1=tap 2=hold]
-//                   0x82 ENCODER   [0x82, 1=cw 0xFF=ccw, selected_slot]
+// Host mode lasts while a PING arrived in the last 5 s. Dropping to fallback
+// only changes what is shown: statuses, OLED text and glow are kept, so the pad
+// returns to its last state when PINGs resume, without a USB reconnect.
 //
-// Talk (key 7) always sends F20, held while held, in both modes; in host mode
-// it also sends its KEY event. hidapi's leading 0x00 report ID is consumed by
-// the OS (the raw HID descriptor has no report IDs), so data[0] is the command.
+// hidapi's leading 0x00 report ID is consumed by the OS (the raw HID descriptor
+// has no report IDs), so data[0] is the command.
 //
-// Host mode is active while a PING arrived in the last 5 s. Otherwise the
-// keys send the keycodes in the keymap below (F13-F18, F19, F20, Esc) and the
-// encoder sends volume up/down.
-//
-// Going to fallback only changes what is shown. Host statuses, OLED text and
-// glow are kept, so when PINGs resume the pad is back in place without a USB
-// reconnect, and a SET_ALL with the same values changes nothing.
-//
-// The OLED sleeps after 10 minutes. Only a key, the encoder, a real status
-// change or a USB resume counts as activity: PING, OLED_LINE ("N ago" text),
-// SET_GLOW, SET_SELECTED and a repeated SET_ALL do not.
+// Talk (key 7) always sends F20, held while held, in both modes, so push-to-talk
+// tools work without the host. In host mode it also sends its KEY event.
 
 #include QMK_KEYBOARD_H
 #include "raw_hid.h"
 #include "lib/lib8tion/lib8tion.h"
 #include <string.h>
-
-/* ------------------------------------------------------------------------ */
-/* Constants                                                                 */
-/* ------------------------------------------------------------------------ */
 
 #define NUM_SLOTS 6
 #define NUM_KEYS 9
@@ -69,11 +49,10 @@ enum cmd {
 enum status { ST_IDLE = 0, ST_RUN = 1, ST_DONE = 2, ST_NEEDS = 3, ST_ERROR = 4, ST_COUNT };
 
 /* key index (design.json keys[] order, row * 3 + col) -> LED index */
-static const uint8_t key_led[NUM_KEYS] = {0, 1, 2, 5, 4, 3, 6, 7, 8};
+static const uint8_t key_led[NUM_KEYS] = {0, 1, 2, 5, 4, 3, 6, 7, 8}; /* chain is serpentine */
 #define GLOW_FIRST 9
-#define KEY_TALK 7 /* push-to-talk: F20 is sent in host mode too */
+#define KEY_TALK 7
 
-/* status colours from design.json */
 static const rgb_t status_rgb[ST_COUNT] = {
     [ST_IDLE]  = {.r = 0xee, .g = 0xf2, .b = 0xf5},
     [ST_RUN]   = {.r = 0x3d, .g = 0x8b, .b = 0xff},
@@ -90,7 +69,6 @@ static const rgb_t white_rgb = {.r = 0xee, .g = 0xf2, .b = 0xf5};
 #define GLOW_DEFAULT_B 0xff
 #define GLOW_DEFAULT_BRI 70
 
-/* brightness levels (0-255, applied to the colour) */
 #define LVL_IDLE 22
 #define LVL_IDLE_SEL 60
 #define LVL_STATUS 110
@@ -99,10 +77,6 @@ static const rgb_t white_rgb = {.r = 0xee, .g = 0xf2, .b = 0xf5};
 
 /* rough current budget: sum of all channel values after scaling */
 #define POWER_BUDGET (NUM_LEDS * 3 * 255 * 2 / 5)
-
-/* ------------------------------------------------------------------------ */
-/* State                                                                     */
-/* ------------------------------------------------------------------------ */
 
 static uint8_t  slot_status[NUM_SLOTS];
 static bool     statuses_received;
@@ -122,17 +96,13 @@ static bool     key_host[NUM_KEYS]; /* pressed while in host mode -> handled via
 static bool     key_hold_sent[NUM_KEYS];
 static uint16_t key_press_time[NUM_KEYS];
 
-/* per-LED fade: blend from a snapshot to the live target */
 static rgb_t    led_last[NUM_LEDS];
 static rgb_t    led_from[NUM_LEDS];
 static uint32_t led_fade_start[NUM_LEDS];
 static uint16_t led_fade_ms[NUM_LEDS];
 
-/* ------------------------------------------------------------------------ */
-/* Keymap: fallback keycodes (used only when no host has pinged for 5 s)     */
-/* ------------------------------------------------------------------------ */
-
 // clang-format off
+/* Used only in fallback, when no host has pinged for 5 s. */
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [0] = LAYOUT_ortho_3x3(
         KC_F13, KC_F14, KC_F15,   /* agent 1-3 */
@@ -142,15 +112,12 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
-/* ------------------------------------------------------------------------ */
-/* Helpers                                                                   */
-/* ------------------------------------------------------------------------ */
-
 static bool host_mode(void) {
     return ever_pinged && timer_elapsed32(last_ping) < HOST_TIMEOUT_MS;
 }
 
-/* OLED activity: key, encoder, real status change or USB resume only. */
+/* OLED sleep timer. Only a key, the encoder, a real status change or a USB resume
+ * counts: PING, OLED_LINE, SET_GLOW, SET_SELECTED and a repeated SET_ALL do not. */
 static void wake(void) {
     last_activity = timer_read32();
     oled_asleep   = false;
@@ -189,7 +156,6 @@ static void send_report(uint8_t a, uint8_t b, uint8_t c) {
     raw_hid_send(buf, sizeof(buf));
 }
 
-/* sine wave 0..255 with the given period */
 static uint8_t wave(uint32_t now, uint16_t period) {
     return sin8((uint8_t)(((now % period) * 256UL) / period));
 }
@@ -203,10 +169,6 @@ static rgb_t blend_rgb(rgb_t a, rgb_t b, uint8_t t) {
     rgb_t o = {.r = lerp8by8(a.r, b.r, t), .g = lerp8by8(a.g, b.g, t), .b = lerp8by8(a.b, b.b, t)};
     return o;
 }
-
-/* ------------------------------------------------------------------------ */
-/* Keys                                                                      */
-/* ------------------------------------------------------------------------ */
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     uint8_t row = record->event.key.row;
@@ -222,24 +184,20 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             key_host[idx]       = true;
             key_hold_sent[idx]  = false;
             key_press_time[idx] = timer_read();
-            return idx == KEY_TALK; /* Talk also always holds F20 */
+            return idx == KEY_TALK; /* Talk still holds F20 */
         }
         key_host[idx] = false;
-        return true; /* fallback: send the keymap keycode */
+        return true;
     }
 
     key_down[idx] = false;
     if (key_host[idx]) {
         key_host[idx] = false;
-        if (!key_hold_sent[idx]) send_report(EVT_KEY, idx, 1); /* tap */
-        return idx == KEY_TALK; /* release F20 */
+        if (!key_hold_sent[idx]) send_report(EVT_KEY, idx, 1);
+        return idx == KEY_TALK;
     }
-    return true; /* fallback release (also releases F20 for talk) */
+    return true;
 }
-
-/* ------------------------------------------------------------------------ */
-/* Encoder                                                                   */
-/* ------------------------------------------------------------------------ */
 
 bool encoder_update_user(uint8_t index, bool clockwise) {
     wake();
@@ -251,10 +209,6 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
     }
     return false;
 }
-
-/* ------------------------------------------------------------------------ */
-/* Raw HID                                                                   */
-/* ------------------------------------------------------------------------ */
 
 void raw_hid_receive(uint8_t *data, uint8_t length) {
     if (length < 1) return;
@@ -308,15 +262,11 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
     }
 }
 
-/* ------------------------------------------------------------------------ */
-/* Housekeeping: hold detection and host timeout                             */
-/* ------------------------------------------------------------------------ */
-
 void housekeeping_task_user(void) {
     for (uint8_t i = 0; i < NUM_KEYS; i++) {
         if (key_host[i] && !key_hold_sent[i] && timer_elapsed(key_press_time[i]) >= FROSTBITE_HOLD_MS) {
             key_hold_sent[i] = true;
-            send_report(EVT_KEY, i, 2); /* hold, sent as soon as the threshold is crossed */
+            send_report(EVT_KEY, i, 2);
         }
     }
 
@@ -325,17 +275,12 @@ void housekeeping_task_user(void) {
 
     bool hm = host_mode();
     if (hm != was_host_mode) {
-        /* Status, text and glow are kept; only what is rendered changes. */
         uint16_t ms = hm ? FADE_MS : FALLBACK_FADE_MS;
         for (uint8_t i = 0; i < NUM_SLOTS; i++) start_fade(key_led[i], ms);
         for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) start_fade(i, ms);
     }
     was_host_mode = hm;
 }
-
-/* ------------------------------------------------------------------------ */
-/* LEDs                                                                      */
-/* ------------------------------------------------------------------------ */
 
 static rgb_t agent_target(uint8_t slot, uint32_t now, bool hm) {
     uint8_t st    = hm ? slot_status[slot] : ST_IDLE;
@@ -346,10 +291,10 @@ static rgb_t agent_target(uint8_t slot, uint32_t now, bool hm) {
         case ST_IDLE:
             level = sel ? LVL_IDLE_SEL : LVL_IDLE;
             break;
-        case ST_NEEDS: /* slow amber pulse */
+        case ST_NEEDS:
             level = 30 + scale8(wave(now, 2400), 150);
             break;
-        case ST_ERROR: /* blink red, 1 Hz */
+        case ST_ERROR:
             level = ((now / 500) & 1) ? 12 : 170;
             break;
         default:
@@ -357,7 +302,7 @@ static rgb_t agent_target(uint8_t slot, uint32_t now, bool hm) {
     }
 
     if (sel) {
-        /* selected slot: brighter, with a gentle breathe (x1.15 .. x1.6) */
+        /* x1.15 .. x1.6, breathing */
         uint16_t gain = 294 + scale8(wave(now, 2000), 116);
         uint16_t l    = ((uint16_t)level * gain) >> 8;
         level         = l > 255 ? 255 : l;
@@ -384,7 +329,6 @@ bool rgb_matrix_indicators_user(void) {
     rgb_t   glow = {.r = scale8(hm ? glow_r : GLOW_DEFAULT_R, gb), .g = scale8(hm ? glow_g : GLOW_DEFAULT_G, gb), .b = scale8(hm ? glow_b : GLOW_DEFAULT_B, gb)};
     for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) out[i] = glow;
 
-    /* fades */
     for (uint8_t i = 0; i < NUM_LEDS; i++) {
         if (led_fade_ms[i]) {
             uint32_t e = timer_elapsed32(led_fade_start[i]);
@@ -409,12 +353,7 @@ bool rgb_matrix_indicators_user(void) {
     return false;
 }
 
-/* ------------------------------------------------------------------------ */
-/* OLED                                                                      */
-/* ------------------------------------------------------------------------ */
-
-/* write exactly LINE_CHARS characters at the given row; shorter strings are
- * padded with spaces so leftovers from a longer previous line are blanked */
+/* Pad to LINE_CHARS so a shorter string blanks what a longer one left behind. */
 static void write_row(uint8_t row, const char *s) {
     char buf[LINE_CHARS + 1];
     uint8_t i = 0;
@@ -432,10 +371,10 @@ static uint8_t append(char *dst, uint8_t pos, const char *s) {
 }
 
 static void build_summary(char *dst, bool compact) {
-    static const uint8_t order[4]        = {ST_RUN, ST_NEEDS, ST_DONE, ST_ERROR};
-    static const char *const labels[4]   = {"run", "wait", "done", "err"};
-    uint8_t                  pos         = 0;
-    dst[0]                               = '\0';
+    static const uint8_t     order[4]  = {ST_RUN, ST_NEEDS, ST_DONE, ST_ERROR};
+    static const char *const labels[4] = {"run", "wait", "done", "err"};
+    uint8_t                  pos       = 0;
+    dst[0]                             = '\0';
     for (uint8_t j = 0; j < 4; j++) {
         uint8_t n = 0;
         for (uint8_t i = 0; i < NUM_SLOTS; i++)
@@ -461,7 +400,6 @@ bool oled_task_user(void) {
     bool hm = host_mode();
     char line[32];
 
-    /* line 1 */
     if (!hm) {
         write_row(0, "FROSTBITE   no host");
     } else if (host_line[0][0]) {
@@ -476,7 +414,6 @@ bool oled_task_user(void) {
         write_row(0, line);
     }
 
-    /* line 2 */
     if (!hm) {
         write_row(1, "F13-F20 Esc  knob=vol");
     } else if (host_line[1][0]) {
@@ -489,12 +426,11 @@ bool oled_task_user(void) {
         write_row(1, "turn knob: pick slot");
     }
 
-    /* Row 2: dotted divider. Never write text to this row. Blanking it each
-     * frame re-dirties the block and starves row 3 of QMK's one-block-per-loop
-     * render. Redrawing the dots alone changes no bytes, so nothing is resent. */
+    /* Row 2: dotted divider. Never write text here. Blanking it each frame
+     * re-dirties the block and starves row 3 of QMK's one-block-per-loop render.
+     * Redrawing the dots alone changes no bytes, so nothing is resent. */
     for (uint8_t x = 0; x < 126; x += 3) oled_write_pixel(x, 19, true);
 
-    /* row 3: slot strip "1- 2R 3D 4? 5! 6-  HID", selected slot inverted */
     oled_set_cursor(0, 3);
     for (uint8_t i = 0; i < NUM_SLOTS; i++) {
         uint8_t st      = hm ? slot_status[i] : ST_IDLE;
@@ -507,21 +443,16 @@ bool oled_task_user(void) {
     return false;
 }
 
-/* ------------------------------------------------------------------------ */
-/* Init / power                                                              */
-/* ------------------------------------------------------------------------ */
-
 void keyboard_post_init_user(void) {
-    /* Solid colour at value 0 is just a black canvas: rgb_matrix_indicators_user
-     * paints every LED itself. Not written to EEPROM. */
+    /* Solid colour at value 0 is a black canvas: rgb_matrix_indicators_user paints
+     * every LED itself. */
     rgb_matrix_enable_noeeprom();
     rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
     rgb_matrix_sethsv_noeeprom(0, 0, 0);
     wake();
 }
 
-/* The host woke from sleep. Runs once per USB resume, so the pad shows anything
- * waiting after a long sleep, and the normal 10-minute timer applies from here. */
+/* Runs once per USB resume, so anything waiting shows after the host sleeps. */
 void suspend_wakeup_init_user(void) {
     wake();
 }

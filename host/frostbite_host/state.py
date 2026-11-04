@@ -1,7 +1,5 @@
 """Slot model: six slots, assignment, lingering, selection, OLED text and glow colour.
-
-Pure and clock-injected (every mutating call takes `now`) so it is easy to test.
-"""
+Every mutating call takes `now`, so there is no clock here."""
 
 from __future__ import annotations
 
@@ -33,14 +31,9 @@ STATUS_WORD = {
     Status.ERROR: "ERR",
 }
 
-# design.json protocol.status_colours, used for the glow ring (worst status wins).
-STATUS_RGB = {
-    Status.IDLE: (0xEE, 0xF2, 0xF5),
-    Status.RUN: (0x3D, 0x8B, 0xFF),
-    Status.DONE: (0x2F, 0xBF, 0x5B),
-    Status.NEEDS: (0xFF, 0xB0, 0x20),
-    Status.ERROR: (0xFF, 0x4D, 0x4F),
-}
+# Glow colours. The first two are design.json protocol.status_colours.
+ERROR_RGB = (0xFF, 0x4D, 0x4F)
+NEEDS_RGB = (0xFF, 0xB0, 0x20)
 ICE_BLUE = (0x9F, 0xD8, 0xFF)
 SEVERITY = [Status.ERROR, Status.NEEDS, Status.RUN, Status.DONE, Status.IDLE]
 
@@ -52,19 +45,19 @@ def clean(text: object, limit: int = 200) -> str:
     return " ".join(to_ascii(str(text)).split())[:limit]
 
 
-def fit_lr(left: str, right: str, width: int = OLED_COLS) -> str:
+def fit_lr(left: str, right: str) -> str:
     """Left text truncated so `right` sits flush at the right edge."""
     left, right = clean(left), clean(right)
     if not right:
-        return left[:width]
-    room = width - len(right) - 1
+        return left[:OLED_COLS]
+    room = OLED_COLS - len(right) - 1
     if room <= 0:
-        return right[:width]
+        return right[:OLED_COLS]
     return fit_middle(left, room).ljust(room) + " " + right
 
 
-def fit(text: str, width: int = OLED_COLS) -> str:
-    return clean(text)[:width]
+def fit(text: str) -> str:
+    return clean(text)[:OLED_COLS]
 
 
 def fit_middle(text: str, width: int) -> str:
@@ -132,34 +125,27 @@ class Slot:
 
 
 class Board:
-    def __init__(self, linger_done: float = LINGER_DONE, linger_error: float = LINGER_ERROR):
+    def __init__(self, linger_done: float = LINGER_DONE):
         self.slots: list[Slot | None] = [None] * NUM_SLOTS
         self.selected = 0
         self.linger_done = linger_done
-        self.linger_error = linger_error
-        self.quiet_run = QUIET_RUN
-        self.quiet_turn = QUIET_TURN
-        self.quiet_needs = QUIET_NEEDS
-        self.dead_after = DEAD_AFTER
         self.overflow: dict[str, float] = {}  # sessions waiting on you with no slot to show it
-        self._flash: tuple[str, float, float] | None = None
+        self._flash: tuple[str, float] | None = None
 
-    # ------------------------------------------------------------------ lookup / assignment
     def find(self, key: str) -> int | None:
         for i, s in enumerate(self.slots):
             if s is not None and s.key == key:
                 return i
         return None
 
-    def _claim(self, key: str, now: float) -> int | None:
-        for i, s in enumerate(self.slots):
-            if s is None:
-                return i
+    def _claim(self, key: str) -> int | None:
+        if None in self.slots:
+            return self.slots.index(None)
         # Full: reuse a finished slot, then an idle one. A red slot may not have been seen
         # yet, so it goes last. Running and waiting slots are never pushed out.
-        for wanted in ((Status.DONE,), (Status.IDLE,), (Status.ERROR,)):
+        for wanted in (Status.DONE, Status.IDLE, Status.ERROR):
             cands = [(s.since, i) for i, s in enumerate(self.slots)
-                     if s and s.status in wanted and not s.tool_open]
+                     if s.status == wanted and not s.tool_open]
             if cands:
                 _, i = min(cands)
                 log.info("slots full: evicting slot %d (%s) for %s", i + 1, self.slots[i].key, key)
@@ -170,7 +156,6 @@ class Board:
     def statuses(self) -> list[Status]:
         return [s.status if s else Status.IDLE for s in self.slots]
 
-    # ------------------------------------------------------------------ mutation
     def update(self, key: str, source: str, now: float, *, name: str | None = None,
                status: Status | None = None, detail: str | None = None, cwd: str | None = None,
                log_path: str | None = None, terminal: dict | None = None, tool: str | None = None,
@@ -188,7 +173,7 @@ class Board:
                 self.slots[slot] = None
             i = slot
         if i is None:
-            i = self._claim(key, now)
+            i = self._claim(key)
             if i is None:
                 return None
             self.slots[i] = None
@@ -214,13 +199,13 @@ class Board:
             s.terminal.update({k: v for k, v in terminal.items() if v})
             if "tty" in terminal and not terminal["tty"]:
                 s.terminal.pop("tty", None)  # a failed lookup must not keep proving the old tab
-            self._drop_same_tty(i, s, now)
+            self._drop_same_tty(i, s)
         if tool is not None:
             s.tool = clean(tool)
         s.updated = now
         return i
 
-    def _drop_same_tty(self, index: int, s: Slot, now: float) -> None:
+    def _drop_same_tty(self, index: int, s: Slot) -> None:
         """A finished slot on a tty a new session now uses is dead. A running or waiting one
         might be a nested `claude -p`, so it stays."""
         tty = s.terminal.get("tty")
@@ -232,7 +217,6 @@ class Board:
                 log.info("slot %d freed: %s took over %s", j + 1, s.key, tty)
                 self.slots[j] = None
 
-    # ------------------------------------------------------------------ prompts
     @staticmethod
     def _showing(s: Slot) -> Prompt | None:
         """The prompt a slot shows: the oldest the pad can answer, else the oldest open."""
@@ -321,18 +305,18 @@ class Board:
             if s is None:
                 continue
             s.since, s.updated = min(s.since, now), min(s.updated, now)  # clock stepped back
-            limits = {Status.DONE: self.linger_done, Status.ERROR: self.linger_error}
+            limits = {Status.DONE: self.linger_done, Status.ERROR: LINGER_ERROR}
             if s.source == "train":
                 limits[Status.IDLE] = self.linger_done  # a run that went quiet
             limit = limits.get(s.status)
             quiet = now - s.updated
-            if (limit is not None and now - s.since >= limit) or quiet >= self.dead_after:
+            if (limit is not None and now - s.since >= limit) or quiet >= DEAD_AFTER:
                 log.info("slot %d expired (%s %s)", i + 1, s.key, s.status.name.lower())
                 self.slots[i] = None
                 changed = True
             elif s.source == "claude" and (
-                    (s.status == Status.RUN and quiet >= (self.quiet_run if s.tool_open else self.quiet_turn))
-                    or (s.status == Status.NEEDS and quiet >= self.quiet_needs and not self.has_live_request(i))):
+                    (s.status == Status.RUN and quiet >= (QUIET_RUN if s.tool_open else QUIET_TURN))
+                    or (s.status == Status.NEEDS and quiet >= QUIET_NEEDS and not self.has_live_request(i))):
                 log.info("slot %d went quiet (%s)", i + 1, s.key)
                 s.status = Status.IDLE
                 s.since = now
@@ -344,13 +328,12 @@ class Board:
     def select(self, index: int) -> None:
         self.selected = int(index) % NUM_SLOTS
 
-    def flash(self, text: str, now: float, seconds: float = FLASH_SECONDS) -> None:
-        self._flash = (clean(text), now, seconds)
+    def flash(self, text: str, now: float) -> None:
+        self._flash = (clean(text), now)
 
     def flash_active(self, now: float) -> bool:
-        return self._flash is not None and 0 <= now - self._flash[1] < self._flash[2]
+        return self._flash is not None and 0 <= now - self._flash[1] < FLASH_SECONDS
 
-    # ------------------------------------------------------------------ apply IPC messages
     def apply(self, msg: dict, now: float) -> bool:
         """Apply one IPC message (from frostbite-hook, frostbite-ctl or a watcher).
         Returns True if anything visible may have changed."""
@@ -448,7 +431,6 @@ class Board:
             s.detail = self._showing(s).text
         return True
 
-    # ------------------------------------------------------------------ rendering
     def oled_lines(self, now: float) -> tuple[str, str]:
         i = self.selected
         s = self.slots[i]
@@ -490,9 +472,9 @@ class Board:
         otherwise the ice-blue case glow (dimmer when nothing is running)."""
         sts = {s.status for s in self.slots if s is not None}
         if Status.ERROR in sts:
-            return (*STATUS_RGB[Status.ERROR], 160)
+            return (*ERROR_RGB, 160)
         if Status.NEEDS in sts or self.overflow:
-            return (*STATUS_RGB[Status.NEEDS], 160)
+            return (*NEEDS_RGB, 160)
         if Status.RUN in sts:
             return (*ICE_BLUE, 110)
         return (*ICE_BLUE, 50)

@@ -115,17 +115,15 @@ PRESS_ESCAPE = {
 FRONTMOST_SCRIPT = ('tell application "System Events" to get bundle identifier of '
                     'first application process whose frontmost is true')
 
-Runner = Callable[..., subprocess.CompletedProcess]
-
 
 class Actions:
-    def __init__(self, dry_run: bool = False, runner: Runner = subprocess.run,
+    def __init__(self, dry_run: bool = False,
+                 runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                  out: Callable[[str], None] = print):
         self.dry_run = dry_run
         self.runner = runner
         self.out = out
 
-    # ------------------------------------------------------------------ helpers
     def _run(self, args: list[str], timeout: float = 3.0) -> subprocess.CompletedProcess | None:
         try:
             return self.runner(args, capture_output=True, text=True, timeout=timeout)
@@ -162,7 +160,6 @@ class Actions:
         r = self._run(["osascript", "-e", READ_TTY[bundle]], timeout=2.0)
         return r.stdout.strip() if r and r.returncode == 0 else ""
 
-    # ------------------------------------------------------------------ guarded keystroke
     def guarded_escape(self, slot: Slot | None, why: str) -> tuple[bool | None, str]:
         """Send Escape only to the slot's own session. Returns (sent, oled message); sent is
         None when it is unknown whether the key went out."""
@@ -201,7 +198,6 @@ class Actions:
         log.info("ACTION refused escape (%s): focus moved at the keystroke", why)
         return False, TAP_FIRST
 
-    # ------------------------------------------------------------------ focus / log
     def focus(self, slot: Slot | None) -> str | None:
         """Bring the slot's terminal to the front when we know enough; else do nothing.
         Returns an OLED message or None."""

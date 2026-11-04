@@ -25,7 +25,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.29,
+      "duration_s": 1.15,
       "stdout_tail": [
         "Wrote position data to '~/Documents/frostbite/verify/.cache/work/pos.csv'."
       ],
@@ -33,7 +33,7 @@
     }
   ],
   "inputs_sha256": {
-    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
+    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
     "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd"
   },
   "details": {
@@ -140,6 +140,6 @@
       "\"SW4\",\"MX_agent4\",\"MX-Solderable-1U\",11.525000,-52.575000,0.000000,top"
     ]
   },
-  "timestamp": "2026-11-04T01:04:09+00:00",
-  "duration_s": 0.29
+  "timestamp": "2026-11-04T04:19:33+00:00",
+  "duration_s": 1.15
 }

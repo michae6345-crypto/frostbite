@@ -1,7 +1,6 @@
-"""Write PCB/build/bottom_pads.json: every pad that has copper on B.Cu, in design.json coordinates.
+"""Write PCB/build/bottom_pads.json: every pad with copper on B.Cu, in design.json coordinates.
 
-The case uses it to keep screw-insert bosses and other parts clear of solder joints on the underside.
-Run with KiCad's bundled Python: <KiCad.app>/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
+The case checks use it to keep screw bosses clear of underside solder joints. Run with KiCad's bundled Python.
 """
 import json
 import os

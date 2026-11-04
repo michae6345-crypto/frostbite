@@ -49,8 +49,8 @@
       ]
     },
     "identical_to_fresh_build": true,
-    "newer_than_all_firmware_sources": true
+    "newer_than_all_firmware_sources": false
   },
-  "timestamp": "2026-11-04T01:04:58+00:00",
+  "timestamp": "2026-11-04T04:20:07+00:00",
   "duration_s": 0.0
 }

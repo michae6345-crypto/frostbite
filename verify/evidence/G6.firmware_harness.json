@@ -15,7 +15,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 10.44,
+      "duration_s": 8.27,
       "stdout_tail": [
         "idle HID screen: 0 I2C bytes in 1000 loops",
         "row0 |slot 1  IDLE         |",
@@ -40,7 +40,7 @@
         "PASS sleeps 10 min after resume with PINGs running, stays off",
         "PASS each resume wakes once",
         "PASS still on the same timer",
-        "wrap: elapsed=2^32-1 host_mode=0; elapsed wrapped to 1 host_mode=0 (F11 fix: want 0 0)",
+        "wrap: elapsed=2^32-1 host_mode=0; elapsed wrapped to 1 host_mode=0 (want 0 0)",
         "--- F1 KBD screen (# = bytes the panel holds that are not a glyph)",
         "page0 buffer |FROSTBITE   no host  | panel |FROSTBITE   no host  | bytes differing=0 never-written=0",
         "page1 buffer |F13-F20 Esc  knob=vol| panel |F13-F20 Esc  knob=vol| bytes differing=0 never-written=0",
@@ -60,22 +60,22 @@
         "PASS F1 divider all 42 dots on panel",
         "PASS shorter OLED_LINE blanks the rest on the panel",
         "gap: host_mode=0 stored=[1 3 2 4 0 1] LED0=19,19,20 glow9=33,61,68 strip |1- 2- 3- 4- 5- 6- KBD|",
-        "PASS F3 gap: LEDs and strip show idle/KBD",
+        "PASS gap: LEDs and strip show idle/KBD",
         "PASS gap: glow back at default",
-        "PASS F3 same-value SET_ALL is not OLED activity",
-        "PASS F3 strip restored in place, no reconnect",
+        "PASS same-value SET_ALL is not OLED activity",
+        "PASS strip restored in place, no reconnect",
         "restored LED0 target=32,73,135 px=31,72,134",
         "PASS gap keeps OLED text and glow, so the daemon's _sent stays true",
         "15 min: text/glow/select updates=900, off for 300 s of 900, first off at 600 s",
-        "PASS F4 sleep fires at 10 min under daemon traffic and stays off",
-        "PASS F4 real status change wakes",
+        "PASS sleep fires at 10 min under daemon traffic and stays off",
+        "PASS real status change wakes",
         "PASS asleep again",
-        "PASS F4 encoder wakes",
-        "PASS F4 key wakes",
-        "PASS F11 no false host mode after wrap",
-        "PASS F11 OLED stays dark across wrap",
+        "PASS encoder wakes",
+        "PASS key wakes after daemon traffic",
+        "PASS no false host mode after wrap",
+        "PASS OLED stays dark across wrap",
         "oled init: seg_remap=0xa0 com_scan=0xc0 (flipped is 0xa0 0xc0)",
-        "PASS F2 init sends the flipped command set",
+        "PASS init sends the flipped command set",
         "fails=0"
       ],
       "stderr_tail": []
@@ -92,7 +92,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 1.22,
+      "duration_s": 1.02,
       "stdout_tail": [
         "SetSlot 01 05 04 00 00 00 00 00 00",
         "SetAll 02 00 01 02 03 04 00 00 00",
@@ -139,10 +139,10 @@
     }
   ],
   "inputs_sha256": {
-    "Firmware/tests/README.md": "5d4728fe102d6491559b20fe97c46ea79db1dbaa4e12375984426970fbea302f",
-    "Firmware/tests/harness.c": "29525e59ac2b205403661a263ad0b3c2ea9b06381ae4350a9d757038abe3a49d",
-    "Firmware/tests/panel.c": "f3c5f688f38eae72dbdac3a029dc3f5dfe582c9dd415bb12a52fff181311f3ff",
-    "Firmware/tests/proto_test.py": "a79620e84e56d70f261cdc5cadedb7d9effdcb2c13263747a484070e6a2a07f9",
+    "Firmware/tests/README.md": "3c03d2de75b840d6692d9f406a8b26b6f543dea1608dce78352aea91fb80bbaa",
+    "Firmware/tests/harness.c": "dd6bd0e3c9a2cf65a51b2cdd448847699929f1214b1895f2f16d4f6d6e216313",
+    "Firmware/tests/panel.c": "f31f0892cf6fb356f952b647d9abca0b4deadde7107d6104d806f7177d4e547f",
+    "Firmware/tests/proto_test.py": "28145d6c40ca495b248e7fb2579032d4be4fc301edf8290e1c125be19a30d8a6",
     "Firmware/tests/run.sh": "ab5688b83a8498e26dc61f5aa932adf09c8b046a2b77e5abc7615085c6c39181",
     "Firmware/tests/stub/compiler_support.h": "2b3b12365e8abb506d5dcc5d1dced1524ba58b3c8f000acbca00c6576c3e21c4",
     "Firmware/tests/stub/i2c_master.h": "12f874a31e35fd55085de3e71982b87bdc6e8030ca0f77790e40ef880b972e86",
@@ -157,16 +157,16 @@
     "Firmware/tests/stub/progmem.h": "e5bb3c121eee97930be885d4fa13317ff74e96361a690f064d4ffce0f0f6e7bf",
     "Firmware/tests/stub/quantum.h": "e1d1623f7bb2dcee5e6844331a877c4c49d5af38f8aae71ec9e44f69f85cfe89",
     "Firmware/tests/stub/raw_hid.h": "df14663b782c3787b191db8aef05d56df94d59e864c98fb4cf87a3b90a815063",
-    "Firmware/tests/stub/stub_qmk.h": "35d32b505f349ca9e5941cd34c457d24ba9a83f7aa6667a1815f33693184817d",
+    "Firmware/tests/stub/stub_qmk.h": "ff0761356337e0e78d94f9f5ba96faeb0f4033fcf8711890589027621b186f85",
     "Firmware/tests/stub/timer.h": "d9248dcf8ba58db8188033b229aa6a08a6d1afbafeb114737cfa9d8a36dd6fef",
     "Firmware/tests/stub/wait.h": "937221f4e07ccfa4d296bd14722df0ce31048e2216a5aadf6cb68fa6667dba75",
-    "Firmware/qmk/keyboards/frostbite/config.h": "17d88a78f241a9aa44ea7db9afce78969df925d4a9f8613c43355d5ec1630153",
-    "Firmware/qmk/keyboards/frostbite/frostbite.c": "069048c92b5a4b3b101dad783a527005b07dd4563a21056e4fc43472b4611656",
+    "Firmware/qmk/keyboards/frostbite/config.h": "df982d23fc68072bf674aedf93d89850c405c611ddff5e792883162a6ddb4f0e",
+    "Firmware/qmk/keyboards/frostbite/frostbite.c": "a9b3fc7a9957416c92cb126ecfbc2cfb9528500940b1a0943f4cc7d9904fcaa6",
     "Firmware/qmk/keyboards/frostbite/halconf.h": "c4dc51661d0426b5266e4bd8ae14b29877af6717108041ad119d19821cf556c2",
     "Firmware/qmk/keyboards/frostbite/keyboard.json": "374b3af90756f13e276b292544878355222d3da26e12699d2880f25489a3203b",
-    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "68b4cd7d5879021066f14987002b31aff6312a64b05fbdeef3545e77bc3eb04a",
-    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "7c959162848aaf69a0f030fe9c789b0f742e3ea8be2c2d0ba3b1fbae36ff63e5",
-    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "6e97d1c02b04f6961ed3bffff9647c5fdc63ea34816b32db76e505f86b43b004"
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "aeeb5db67c073798662e2e4c7fac8ff165bfdb628b927b10d80a4435998c6894",
+    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "34a0415f108ffc854d78f117b6fa7566de569fd300f999baa35601a526952245",
+    "Firmware/qmk/keyboards/frostbite/mcuconf.h": "ed196fe4bd634d2669843cbdfd76109b8e14c3b76e67c38db6128798bee33eb3"
   },
   "details": {
     "harness": {
@@ -180,6 +180,6 @@
       "bad": 0
     }
   },
-  "timestamp": "2026-11-04T01:05:10+00:00",
-  "duration_s": 11.67
+  "timestamp": "2026-11-04T04:20:16+00:00",
+  "duration_s": 9.3
 }
