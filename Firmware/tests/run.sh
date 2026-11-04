@@ -16,7 +16,6 @@ clang "${CF[@]}" '-DQMK_KEYBOARD_H="stub_qmk.h"' "-DKEYMAP_FILE=\"$KM\"" -c "$A/
 clang "${CF[@]}" -c "$Q/drivers/oled/oled_driver.c" -o oled.o || exit 2
 clang "${CF[@]}" -c "$A/panel.c" -o panel.o || exit 2
 clang "${CF[@]}" -c "$K/frostbite.c" -o fb.o || exit 2
-L8=
-clang "${CF[@]}" -D__arm__=1 -c "$A/stub/lib/lib8tion/lib8tion.c" -o l8.o 2>/dev/null && L8=l8.o
-clang "${CF[@]}" harness.o oled.o panel.o fb.o $L8 -o harness || exit 2
+clang "${CF[@]}" -D__arm__=1 -c "$A/stub/lib/lib8tion/lib8tion.c" -o l8.o || exit 2
+clang "${CF[@]}" harness.o oled.o panel.o fb.o l8.o -o harness || exit 2
 exec ./harness

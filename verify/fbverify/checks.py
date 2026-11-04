@@ -179,6 +179,8 @@ def g0_studio_constraints(ctx: Ctx) -> Check:
     chk = Check(ctx, "G0.studio_constraints", "G0", "Studio unit tests: node studio/test/constraints.test.js")
     if not ctx.p("studio/test/constraints.test.js").is_file():
         return chk.not_run("studio/test/constraints.test.js missing")
+    if not shutil.which("node", path=ctx.env["PATH"]):
+        return chk.not_run("node not on PATH")
     dst = _studio_copy(ctx, chk)
     code, out, err = chk.run(["node", "test/constraints.test.js"], cwd=dst, timeout=300)
     if code != 0:
@@ -376,7 +378,7 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
         if n is not None and n != len(d["keys"]):
             chk.fail(f"keymaps/{km}: layer 0 LAYOUT has {n} keys != {len(d['keys'])}")
         if n is None:
-            chk.note(f"keymaps/{km}: no LAYOUT(...) call found")
+            chk.fail(f"keymaps/{km}: no LAYOUT(...) call found")
     chk.details = {"expected": {"rows": exp_rows, "cols": exp_cols, "enc": [G("ENC_A"), G("ENC_B")],
                                 "ws2812": G("LED_DIN"), "sda_scl": [G("SDA"), G("SCL")]},
                    "found": {"rows": rows, "cols": cols, "enc": enc, "ws2812": ws, "led_count": led_count}}
@@ -616,13 +618,15 @@ def _condition(block: str):
     return m.group(1) if m else None
 
 
-def strictest_rules(pinned: str, project: str) -> tuple[str, list[dict]]:
-    """One rule set in which the stricter of the two files gates, whatever their order.
+def strictest_rules(pinned: str, project: str) -> tuple[str, list[dict], list[str]]:
+    """One rule set in which the stricter of the two files gates, and what could not be compared.
 
     KiCad lets a later rule override an earlier one, so concatenating the files lets the last
-    one loosen the other. Rules with the same name and condition are merged bound by bound."""
+    one loosen the other. Rules with the same name and condition are merged bound by bound.
+    A project rule or bound with no pinned counterpart has no "stricter" to pick, so it is
+    returned for the caller to fail on."""
     own = {(n, _condition(b)): b for n, b in _rule_blocks(project)}
-    used, blocks, tightened = set(), [], []
+    used, blocks, tightened, unmatched = set(), [], [], []
     for name, block in _rule_blocks(pinned):
         key = (name, _condition(block))
         other = own.get(key)
@@ -644,10 +648,13 @@ def strictest_rules(pinned: str, project: str) -> tuple[str, list[dict]]:
                         tightened.append({"rule": name, "constraint": c, "bound": bound, "pinned": val, "project": t, "gates": gate})
                     vals[bound] = gate
                 return f"(constraint {c} " + " ".join(f"({b} {v:g}mm)" for b, v in vals.items()) + ")"
+            ours = {c: {b for b, _ in BOUND_RE.findall(body)} for c, body in CONSTRAINT_RE.findall(block)}
+            unmatched += [f"{name}: {c} {b}" for c, bounds in theirs.items() for b in bounds
+                          if b != "opt" and b not in ours.get(c, ())]
             block = CONSTRAINT_RE.sub(merge, block)
         blocks.append(block)
-    blocks += [b for k, b in own.items() if k not in used]
-    return "(version 1)\n\n" + "\n\n".join(blocks) + "\n", tightened
+    unmatched += [f"{k[0]}: not in the pinned rules" for k in own if k not in used]
+    return "(version 1)\n\n" + "\n\n".join(blocks) + "\n", tightened, unmatched
 
 
 def rule_value(text: str, rule: str, constraint: str, bound: str):
@@ -685,7 +692,9 @@ def _drc(ctx: Ctx, cid: str, title: str, jlc: bool) -> Check:
             return chk
         target = board.with_suffix(".kicad_dru")
         own = target.read_text() if target.is_file() else ""
-        rules, tightened = strictest_rules(dru.read_text(), own)
+        rules, tightened, unmatched = strictest_rules(dru.read_text(), own)
+        for u in unmatched:
+            chk.fail(f"project DRC rule cannot be compared with the pinned set: {u}")
         chk.details["rules_tightened"] = tightened
         for t in tightened:
             chk.note(f"{t['rule']}: {t['constraint']} {t['bound']} is {t['gates']} (pinned {t['pinned']}, project {t['project']})")
@@ -1099,7 +1108,7 @@ def g4_switch_cutouts(ctx: Ctx) -> Check:
         return chk
     import shapely.geometry as g
     H = MX_PLATE_TO_PCB
-    half = (SWITCH_W - 2 * CUTOUT_TOL) / 2
+    half = (SWITCH_W - CUTOUT_TOL) / 2    # 13.9 mm housing
     rows = []
     for k in d["keys"]:
         x, y = k["x"], k["y"]
@@ -1459,13 +1468,13 @@ def g6_firmware_harness(ctx: Ctx) -> Check:
     binary, proto = out / "harness", ctx.p("Firmware/tests/proto_test.py")
     if binary.is_file() and proto.is_file() and ctx.p("host/pyproject.toml").is_file():
         uv, env = _uv_host(ctx)
-        c2, o2, e2 = chk.run([uv, "run", "--project", ctx.p("host"), "python", proto, binary], timeout=300, env=env)
+        c2, o2, e2 = chk.run([uv, "run", "--frozen", "--project", ctx.p("host"), "python", proto, binary], timeout=300, env=env)
         m = re.search(r"^ok (\d+) bad (\d+)", o2, re.M)
         chk.details["protocol"] = {"exit_code": c2, "ok": int(m.group(1)) if m else None, "bad": int(m.group(2)) if m else None}
         if c2 != 0 or not m or m.group(2) != "0" or m.group(1) == "0":
             chk.fail(f"proto_test.py exited {c2}, summary {m.group(0) if m else 'missing'}")
     else:
-        chk.note("protocol test not run (harness binary, proto_test.py or host project missing)")
+        chk.not_run("protocol test not run (harness binary, proto_test.py or host project missing)")
     return chk
 
 
@@ -1474,6 +1483,7 @@ def g6_oled_strip_panel(ctx: Ctx) -> Check:
     h = _harness(chk)
     if h is None:
         return chk
+    chk.note("reads the harness run recorded under G6.firmware_harness")
     lines = h[1].splitlines()
     for want in F1_LINES:
         if want not in lines:
@@ -1500,7 +1510,7 @@ def g7_host_tests(ctx: Ctx) -> Check:
     for f in find_one(ctx.p("host"), "*.py") + [proj] + find_one(ctx.p("host/tests/fixtures"), "*"):
         chk.hash(f)
     uv, env = _uv_host(ctx)
-    code, so, se = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
+    code, so, se = chk.run([uv, "run", "--frozen", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
                             "-rx", "--tb=short"], cwd=ctx.p("host"), timeout=600, env=env)
     if code == 5:
         return chk.not_run("pytest collected no tests (exit 5)")
@@ -1531,7 +1541,7 @@ def g7_host_tests(ctx: Ctx) -> Check:
             stub.write_text(t)
             chk.note("audit stub copy gained tap_code_delay (keymap uses it since F12); docs/audit is unchanged")
     for f in left:
-        c2, o2, e2 = chk.run([uv, "run", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
+        c2, o2, e2 = chk.run([uv, "run", "--frozen", "--project", str(ctx.p("host")), "pytest", "-q", "-p", "no:cacheprovider",
                               f"--rootdir={dst}", str(dst / f.name)], cwd=ctx.p("host"), timeout=300, env=env)
         chk.details[f"audit_{f.name}"] = (re.findall(r"\d+ (?:passed|failed|error)[^=\n]*", o2) or [None])[-1]
         if c2 != 0:

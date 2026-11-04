@@ -13,6 +13,7 @@
       "argv": [
         "~/.local/bin/uv",
         "run",
+        "--frozen",
         "--project",
         "~/Documents/frostbite/host",
         "pytest",
@@ -24,13 +25,13 @@
       ],
       "cwd": "~/Documents/frostbite/host",
       "exit_code": 0,
-      "duration_s": 9.7,
+      "duration_s": 12.7,
       "stdout_tail": [
-        "........................................................................ [ 30%]",
-        "........................................................................ [ 61%]",
-        "........................................................................ [ 91%]",
-        "....................                                                     [100%]",
-        "236 passed in 9.37s"
+        "........................................................................ [ 29%]",
+        "........................................................................ [ 59%]",
+        "........................................................................ [ 89%]",
+        "..........................                                               [100%]",
+        "242 passed in 11.74s"
       ],
       "stderr_tail": []
     },
@@ -38,6 +39,7 @@
       "argv": [
         "~/.local/bin/uv",
         "run",
+        "--frozen",
         "--project",
         "~/Documents/frostbite/host",
         "pytest",
@@ -49,10 +51,10 @@
       ],
       "cwd": "~/Documents/frostbite/host",
       "exit_code": 0,
-      "duration_s": 1.11,
+      "duration_s": 6.8,
       "stdout_tail": [
         ".....................                                                    [100%]",
-        "21 passed in 0.78s"
+        "21 passed in 1.78s"
       ],
       "stderr_tail": []
     }
@@ -60,16 +62,16 @@
   "inputs_sha256": {
     "host/frostbite_host/__init__.py": "ecba807dff834af27e23799a497badcdec38889a38b5d041526ed2fa8a580e18",
     "host/frostbite_host/actions.py": "fdf794cb809a2501cda4128890380648408a9ab95b5dec8b0352dfdc8c962350",
-    "host/frostbite_host/ctl.py": "b07e81baee8c8483ccf048c225a421aa5f37c3beaa092df177658046a0151f7e",
-    "host/frostbite_host/daemon.py": "14277c094eaaae6b129795781fa66e09730e5456ec6b2daa34d2e8ad4f0f8325",
+    "host/frostbite_host/ctl.py": "750c32ac71f25b0fc7b021198e09bc14ee68d5ddbf2e2cfb1264a911bf269756",
+    "host/frostbite_host/daemon.py": "783044dade3697ef16f8023cfaf93daf9b7d84d8c931d51640aa042f6c15791c",
     "host/frostbite_host/device.py": "c826372a87d6e466d94f79beb76e9276aff31f64a8e1a32b74c863e063b25fd7",
     "host/frostbite_host/hook.py": "e99f4d502880783649908376ce07a9641838822b63bca3c75cdbbcdab41c96f2",
     "host/frostbite_host/ipc.py": "9b91b841c641febbe5833e9a6877e5ad762acff51bd66e384d0a8cfcd9342912",
-    "host/frostbite_host/state.py": "c6b511f251877b852aac7c4cab61354341e360e11784d57de1aedba2122db27b",
-    "host/frostbite_host/train.py": "59fc9caf3275e3911d922fbac87001226e09345dcf661856b4b3fdb105392188",
+    "host/frostbite_host/state.py": "969825a8fa01a45fcb24f7be4647513d697ac2269a238584a0f90064ffe3be25",
+    "host/frostbite_host/train.py": "553412cda51fd34c34c8f3ff2a40fd28b5cf3f00a0c4d5c807c6d8749cc89e8f",
     "host/tests/conftest.py": "a39d76fe5b49f319d074554dfdbd145ac11eb0e86cd17f0bd31f68b99db1a15c",
     "host/tests/test_audit_findings.py": "2af5577593e8a3e5bb143e0cb5a4577f35a544b12a4b833a19f2fc98471f420a",
-    "host/tests/test_daemon.py": "0a5c1bc327c1e0e6c744f70eb9b55925778d8126704cfc8e6f1d4f61e74fd280",
+    "host/tests/test_daemon.py": "e5e6c158d3e8353d45d79e326059112169c4013fd489b8aef09c8b0055397f83",
     "host/tests/test_hook.py": "590170a4973dab1249623ba2c33aba3d05530abe2baf51113ae307ef3a4f98d3",
     "host/tests/test_pad_keys.py": "0a86b326db684ff221d26c7d5d1b23766058d8ed0de1e8fa6c6240248d32118b",
     "host/tests/test_protocol.py": "acf1c42397a1c15667d5915e764337c50e8053b1da933034daf992d62a2fb85f",
@@ -98,7 +100,7 @@
     "host/tests/fixtures/train/tqdm.log": "988db0bf62634b66674ea587022a708c782fc7be28497bd3b8855f7ba8dade38"
   },
   "details": {
-    "summary": "236 passed in 9.37s",
+    "summary": "242 passed in 11.74s",
     "xfailed_known_open": [],
     "test_files": [
       "test_audit_findings.py",
@@ -109,8 +111,8 @@
       "test_state.py",
       "test_train.py"
     ],
-    "audit_test_audit_protocol.py": "21 passed in 0.78s"
+    "audit_test_audit_protocol.py": "21 passed in 1.78s"
   },
-  "timestamp": "2026-11-04T04:20:27+00:00",
-  "duration_s": 10.83
+  "timestamp": "2026-11-04T04:56:00+00:00",
+  "duration_s": 19.52
 }

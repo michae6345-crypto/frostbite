@@ -90,7 +90,7 @@
     const pins = P.matrix + P.dial + P.oled + P.led;
     const bezel = Number(s.bezel) || 0, corner = Number(s.corner) || 0, tilt = Number(s.tilt) || 0;
     const pcb = { w: r1(L.W + 2 * LIMIT.pcbMargin), h: r1(L.H + 2 * LIMIT.pcbMargin) };
-    const shellW = r1(L.W + 2 * bezel), shellD = r1(L.H + 2 * bezel);
+    const shellW = r1(L.W + 2 * (bezel + D.sideWallExtra)), shellD = r1(L.H + 2 * bezel);
     const hm = heightModel(s, L, shellD);
     const glowOn = s.glowPlace === "gap" || s.glowPlace === "band" || s.glowPlace === "base";
     const ringlit = s.knob === "ringlit";

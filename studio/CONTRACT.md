@@ -97,3 +97,5 @@ and `randomSpec(lockedAxes, rng)`. Renderers read colours from `FB.catalog.palet
   6 M3×16 screws, 6 M3 heat-set inserts. Extra parts are allowed if bought with your own money.
 - Leave about 0.2–0.4 mm tolerance where printed parts meet the PCB.
 - Sandwich mount (bottom shell + plate), XIAO on the PCB underside per the Hackpad guide.
+
+The studio is a concept model. Its width and depth match `design.json`, but its heights do not (43.4 mm tall against 49.5 mm for the CAD assembly with keycaps and knob). Use `CAD/` for real heights.

@@ -20,7 +20,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.04,
+      "duration_s": 0.28,
       "stdout_tail": [
         "{\"vendor_id\": 65261, \"product_id\": 17986, \"scenes\": {\"other QMK board with the same Raw HID usage, listed first, plus the pad\": {\"opened\": [\"frostbite-raw\"], \"want\": [\"frostbite-raw\"], \"returned\": true}, \"only another QMK board\": {\"opened\": [], \"want\": [], \"returned\": false}, \"same VID, other PID\": {\"opened\": [], \"want\": [], \"returned\": false}, \"same PID, other VID\": {\"opened\": [], \"want\": [], \"returned\": false}, \"the pad's keyboard interface only\": {\"opened\": [], \"want\": [], \"returned\": false}}}"
       ],
@@ -32,13 +32,13 @@
     "Firmware/qmk/keyboards/frostbite/keyboard.json": "374b3af90756f13e276b292544878355222d3da26e12699d2880f25489a3203b",
     "host/frostbite_host/__init__.py": "ecba807dff834af27e23799a497badcdec38889a38b5d041526ed2fa8a580e18",
     "host/frostbite_host/actions.py": "fdf794cb809a2501cda4128890380648408a9ab95b5dec8b0352dfdc8c962350",
-    "host/frostbite_host/ctl.py": "b07e81baee8c8483ccf048c225a421aa5f37c3beaa092df177658046a0151f7e",
-    "host/frostbite_host/daemon.py": "14277c094eaaae6b129795781fa66e09730e5456ec6b2daa34d2e8ad4f0f8325",
+    "host/frostbite_host/ctl.py": "750c32ac71f25b0fc7b021198e09bc14ee68d5ddbf2e2cfb1264a911bf269756",
+    "host/frostbite_host/daemon.py": "783044dade3697ef16f8023cfaf93daf9b7d84d8c931d51640aa042f6c15791c",
     "host/frostbite_host/device.py": "c826372a87d6e466d94f79beb76e9276aff31f64a8e1a32b74c863e063b25fd7",
     "host/frostbite_host/hook.py": "e99f4d502880783649908376ce07a9641838822b63bca3c75cdbbcdab41c96f2",
     "host/frostbite_host/ipc.py": "9b91b841c641febbe5833e9a6877e5ad762acff51bd66e384d0a8cfcd9342912",
-    "host/frostbite_host/state.py": "c6b511f251877b852aac7c4cab61354341e360e11784d57de1aedba2122db27b",
-    "host/frostbite_host/train.py": "59fc9caf3275e3911d922fbac87001226e09345dcf661856b4b3fdb105392188"
+    "host/frostbite_host/state.py": "969825a8fa01a45fcb24f7be4647513d697ac2269a238584a0f90064ffe3be25",
+    "host/frostbite_host/train.py": "553412cda51fd34c34c8f3ff2a40fd28b5cf3f00a0c4d5c807c6d8749cc89e8f"
   },
   "details": {
     "vendor_id": 65261,
@@ -75,6 +75,6 @@
       }
     }
   },
-  "timestamp": "2026-11-04T04:20:27+00:00",
-  "duration_s": 0.04
+  "timestamp": "2026-11-04T04:56:03+00:00",
+  "duration_s": 0.28
 }

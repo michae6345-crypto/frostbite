@@ -23,6 +23,7 @@ import sys
 from . import ipc
 from .device import NUM_SLOTS, Status
 from .hook import DEFAULT_WAIT
+from .train import done_pattern
 
 HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
                "PostToolUse", "PostToolUseFailure", "Notification", "PreCompact", "Stop",
@@ -80,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("path")
     w.add_argument("--name")
     w.add_argument("--stale-minutes", type=float)
-    w.add_argument("--done-pattern")
+    w.add_argument("--done-pattern", type=done_pattern)
     u = sub.add_parser("unwatch", help="stop watching a training run")
     u.add_argument("name")
     h = sub.add_parser("hooks", help="print a Claude Code hooks JSON snippet")

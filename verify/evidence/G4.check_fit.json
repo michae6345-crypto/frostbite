@@ -15,7 +15,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 19.81,
+      "duration_s": 120.56,
       "stdout_tail": [
         "Assembly bbox <= 200x200x100                                        PASS    79.15 x 98.86 x 49.49 mm (incl. keycaps, knob)",
         "Each part fits a 200x200 bed                                        PASS    largest footprint 97.61 mm",
@@ -82,11 +82,11 @@
     }
   ],
   "inputs_sha256": {
-    "CAD/check_fit.py": "43a109697072669d772ee82a3178e4d1161a9120b1a2b892786235d76ad2dd6e",
+    "CAD/check_fit.py": "80122d570565c3eaaac60473eff61b81d6eb087196a75fcc972d6bd75991c016",
     "CAD/frostbite_case.py": "a1a3e81d29a2a45618f10fa050289175cdb3effcc80ff419ad9827eeb31b760e",
     "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324"
   },
   "details": {},
-  "timestamp": "2026-11-04T04:19:57+00:00",
-  "duration_s": 19.92
+  "timestamp": "2026-11-04T04:54:31+00:00",
+  "duration_s": 120.78
 }

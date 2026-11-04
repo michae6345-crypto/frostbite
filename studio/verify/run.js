@@ -196,7 +196,7 @@ function dRC(r, c) {
 const dCC = (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy) - a.r - b.r;
 const dist = (a, b) => (a.r !== undefined ? (b.r !== undefined ? dCC(a, b) : dRC(b, a)) : (b.r !== undefined ? dRC(a, b) : dRR(a, b)));
 function outlineDistPt(px, py, L, b, rad) { // inside distance to the rounded shell outline (negative = outside)
-  const hx = L.W / 2 + b, hy = L.H / 2 + b, cx = L.W / 2, cy = L.H / 2, rr = Math.min(rad, hx, hy);
+  const hx = L.W / 2 + b + D.sideWallExtra, hy = L.H / 2 + b, cx = L.W / 2, cy = L.H / 2, rr = Math.min(rad, hx, hy);
   const qx = Math.abs(px - cx) - (hx - rr), qy = Math.abs(py - cy) - (hy - rr);
   return -(Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rr);
 }
@@ -298,7 +298,8 @@ function geoCombo(L, b, rad) {
   // Heat-set insert bosses: hole Ø4.7 + minWall each side; one per corner region, clear of PCB parts by tolerance.
   const Rb = G.insertHole / 2 + G.minWall;
   const keepouts = wallItems.map(w => w[1]);
-  const corners = [[-b, -b, 1, 1], [L.W + b, -b, -1, 1], [-b, L.H + b, 1, -1], [L.W + b, L.H + b, -1, -1]];
+  const bx = b + D.sideWallExtra;
+  const corners = [[-bx, -b, 1, 1], [L.W + bx, -b, -1, 1], [-bx, L.H + b, 1, -1], [L.W + bx, L.H + b, -1, -1]];
   let okCorners = 0;
   for (const [ox, oy, sx, sy] of corners) {
     let found = false;

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import queue
+import re
 import select
 import signal
 import socket
@@ -33,7 +34,7 @@ from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS
                      KeyEvent, OledLine, PingReply, SetAll, SetGlow, SetSelected, Status, Unknown)
 from .hook import MAX_WAIT
 from .state import Board
-from .train import TrainWatcher
+from .train import TrainWatcher, done_pattern
 
 log = logging.getLogger("frostbite.daemon")
 
@@ -63,6 +64,7 @@ class Daemon:
         self.q: queue.Queue[tuple] = queue.Queue()
         self._sent: dict[str, object] = {}
         self.watchers: dict[str, TrainWatcher] = {}
+        self.unwatched: set[str] = set()
         self.watcher_opts = watcher_opts or {}
         self.stop_event = threading.Event()
         self.connected: Callable[[], bool | None] = lambda: None
@@ -140,16 +142,22 @@ class Daemon:
             return {"ok": True, "connected": self.connected(), **self.board.to_dict(now)}
         if op == "watch":
             path = str(msg.get("path", ""))
-            w = self.add_watcher(path, msg.get("name"), **{
-                k: msg[k] for k in ("stale_minutes", "stale_status", "done_pattern") if k in msg})
+            try:
+                w = self.add_watcher(path, msg.get("name"), **{
+                    k: msg[k] for k in ("stale_minutes", "stale_status", "done_pattern") if k in msg})
+            except re.error as e:
+                return {"ok": False, "error": f"bad done pattern: {e}"}
             return {"ok": True, "key": w.key}
         if op == "unwatch":
             key = next((k for k, w in self.watchers.items() if w.name == msg.get("name")), None)
             w = self.watchers.pop(key, None)
             if w:
                 w.stop()
+                self.unwatched.add(key)
                 self.board.free(key)
             return {"ok": bool(w)}
+        if msg.get("source") == "train" and msg.get("key") in self.unwatched:
+            return None              # queued before unwatch: must not bring the freed slot back
         try:
             changed = self.board.apply(msg, now)
         except (ValueError, KeyError, TypeError) as e:
@@ -323,10 +331,13 @@ class Daemon:
         old = self.watchers.pop(w.key, None)
         if old:
             old.stop()
+            if old.path != w.path:
+                log.warning("%s now watches %s instead of %s", w.key, w.path, old.path)
         if any(other.name == w.name for other in self.watchers.values()):
             # runs/A/train.log and runs/B/train.log: tell them apart on the OLED
             parent = os.path.basename(os.path.dirname(w.path))
             w.name = f"{parent}/{w.name}"
+        self.unwatched.discard(w.key)
         self.watchers[w.key] = w
         w.start()
         return w
@@ -514,7 +525,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="flag a run when its log stops growing this long (default 10)")
     p.add_argument("--stale-status", choices=["idle", "done"], default="idle",
                    help="status for a stale run (default idle: dim, and a tap clears it)")
-    p.add_argument("--done-pattern", help="extra regex that marks the final log line")
+    p.add_argument("--done-pattern", type=done_pattern, help="extra regex that marks the final log line")
     p.add_argument("--linger-minutes", type=float, default=10.0,
                    help="how long finished slots stay green before they free (default 10)")
     p.add_argument("--socket", type=Path, default=None, help="socket path (default: state dir)")
@@ -523,7 +534,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    names = args.name[:len(args.watch_train)]
+    repeated = next((n for n in names if names.count(n) > 1), None)
+    if repeated:
+        parser.error(f"--name {repeated} is used for two --watch-train paths; give each its own")
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
     board = Board(linger_done=args.linger_minutes * 60)

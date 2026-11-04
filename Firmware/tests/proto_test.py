@@ -64,7 +64,7 @@ for sec in range(900):
     if sec%2==0: host(D.Ping())
     r,s=cmd('T 1000'); on.append(s['oled'])
 print('  OLED_LINE changes sent in 15 min:',changes,' OLED off seconds:',on.count(0),' of',len(on))
-print('--- control: same 15 min, no daemon text changes')
+print('--- control: same 700 s, no daemon text changes')
 offafter=None
 for sec in range(700):
     if sec%2==0: host(D.Ping())

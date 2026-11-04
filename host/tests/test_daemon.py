@@ -19,7 +19,7 @@ from frostbite_host.daemon import Daemon, SocketServer
 from frostbite_host.device import (HOLD, TAP, DeviceLink, EncoderEvent, FakeDevice, KeyEvent,
                                    OledLine, SetSelected, Status, encode)
 from frostbite_host.hook import hook_to_message
-from frostbite_host.state import Board, Slot
+from frostbite_host.state import ICE_BLUE, Board, Slot
 
 FIX = Path(__file__).parent / "fixtures"
 TTY = "/dev/ttys004"
@@ -440,3 +440,49 @@ def test_malformed_ipc_leaves_no_half_slot():
     d = Daemon(Board(), Actions(dry_run=True, out=lambda s: None), send=lambda m: None)
     r = d.handle_ipc({"op": "update", "source": "claude", "key": "k2", "terminal": "str"})
     assert r["ok"] is False and d.board.find("k2") is None
+
+
+def test_update_queued_before_unwatch_does_not_revive_the_slot(tmp_path):
+    d, *_ = make()
+    w = d.add_watcher(str(tmp_path / "t.log"), "r")
+    msg = {"op": "update", "source": "train", "key": w.key, "name": "r", "status": "run"}
+    d.handle_ipc(msg)
+    assert d.board.find(w.key) is not None
+    assert d.handle_ipc({"op": "unwatch", "name": "r"}) == {"ok": True}
+    d.handle_ipc(msg)
+    assert d.board.find(w.key) is None
+
+
+def test_bad_done_pattern_over_the_socket_is_a_plain_error(tmp_path):
+    d, *_ = make()
+    reply = d.handle_ipc({"op": "watch", "path": str(tmp_path / "t.log"), "done_pattern": "("})
+    assert reply["ok"] is False and "bad done pattern" in reply["error"]
+    assert not d.watchers
+
+
+@pytest.mark.parametrize("argv", [
+    ["--done-pattern", "("],
+    ["--watch-train", "a.log", "--name", "r", "--watch-train", "b.log", "--name", "r"],
+])
+def test_daemon_rejects_bad_arguments_before_starting(argv, capsys):
+    with pytest.raises(SystemExit) as e:
+        dm.main(["--fake", *argv])
+    assert e.value.code == 2
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_glow_matches_the_firmware_default():
+    keymap = Path(__file__).parents[2] / "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c"
+    if not keymap.is_file():
+        pytest.skip("firmware not in this copy")
+    fw = {c: int(v, 16) for c, v in re.findall(r"GLOW_DEFAULT_([RGB]) (0x[0-9a-f]+)", keymap.read_text())}
+    assert (fw["R"], fw["G"], fw["B"]) == ICE_BLUE
+
+
+def test_watching_a_name_again_after_unwatch_works(tmp_path):
+    d, *_ = make()
+    w = d.add_watcher(str(tmp_path / "t.log"), "r")
+    d.handle_ipc({"op": "unwatch", "name": "r"})
+    w = d.add_watcher(str(tmp_path / "t.log"), "r")
+    d.handle_ipc({"op": "update", "source": "train", "key": w.key, "name": "r", "status": "run"})
+    assert d.board.find(w.key) is not None

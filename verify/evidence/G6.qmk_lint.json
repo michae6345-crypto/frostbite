@@ -16,7 +16,7 @@
       ],
       "cwd": "~/qmk_firmware",
       "exit_code": 0,
-      "duration_s": 0.35,
+      "duration_s": 1.35,
       "stdout_tail": [],
       "stderr_tail": [
         "\u03a8 Lint check passed!"
@@ -35,6 +35,6 @@
   "details": {
     "qmk_link": "~/Documents/frostbite/Firmware/qmk/keyboards/frostbite"
   },
-  "timestamp": "2026-11-04T04:20:01+00:00",
-  "duration_s": 0.35
+  "timestamp": "2026-11-04T04:55:11+00:00",
+  "duration_s": 1.35
 }

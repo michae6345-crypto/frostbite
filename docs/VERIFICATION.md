@@ -23,7 +23,7 @@ The PCB is ordered once and the case is printed once, so these checks run before
 | `G3.gnd_thermal` | Every GND pour uses thermal relief, no pad or rule forces solid, and at most 45 % of a ring 0.15 mm outside each GND pad is pour. Relief measured 11-30 %, solid 49-100 %. |
 | `G4.check_fit` | `CAD/check_fit.py --no-build` exits 0 on the shipped files. |
 | `G4.stl_mesh` | All five printed parts load, are watertight with consistent winding and positive volume, and together fit 200 × 200 × 100 mm. |
-| `G4.switch_cutouts` | From the Top mesh: a 13.8 mm housing fits at each key down to the PCB, the narrowest opening is 14.0 ± 0.1 mm and centred ± 0.1, and the clips engage 1.5 ± 0.15 mm of plate. |
+| `G4.switch_cutouts` | From the Top mesh: a 13.9 mm housing fits at each key down to the PCB, the narrowest opening is 14.0 ± 0.1 mm and centred ± 0.1, and the clips engage 1.5 ± 0.15 mm of plate. |
 | `G4.encoder_clearance` | A 12 × 12 mm body swept from the skirt rim to its seat, and the Ø7 bushing above it, stay at least 0.2 mm from the Top. Any opening shape passes if it clears. |
 | `G4.oled_clearance` | The glass and 38 × 12 mm board, turned ±1° about J1 and shifted ±0.1 mm, reach their seats clear of the Top; the glass is not proud; the 22.384 × 5.584 mm active area is visible wherever it sits on the glass; `OLEDSupport.stl` height equals `module_gap` minus 2 × tape. Window size is free. |
 | `G4.step_parts` | Each part's STEP reopens, its STL volume is within 1 %, and its STEP volume is within 0.1 % of a rebuild from `CAD/frostbite_case.py`. |

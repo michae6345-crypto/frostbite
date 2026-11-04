@@ -64,7 +64,7 @@
       ecBodyH: ed.bodyH, bushD: ed.bushingDiameter, bushH: ed.bushingHeight, shaftD: ed.shaftDiameter,
       usbW: d.xiaoUsbC.w, usbH: d.xiaoUsbC.h, usbOver: d.xiaoUsbC.overhang,
       bossOD: d.heatSetBossOd, m3HeadH: d.m3HeadHeight, m3Len: d.m3ScrewLength,
-      oledTopAbovePcb: d.oledGlassTopAbovePcb
+      oledTopAbovePcb: d.oledGlassTopAbovePcb, sideWallExtra: d.sideWallExtra
     };
   }
 
@@ -107,7 +107,7 @@
     const s = norm(spec);
     const L = FB.layoutById(s.layout);
     const d = D();
-    const b = s.bezel, depth = L.H + 2 * b, width = L.W + 2 * b;
+    const b = s.bezel, depth = L.H + 2 * b, width = L.W + 2 * (b + d.sideWallExtra);
     const t = s.tilt * Math.PI / 180, cos = Math.cos(t), sin = Math.sin(t), tan = Math.tan(t);
     const floor = 2.0;
     const pcbBot = floor + d.xiaoT + 1.5, pcbTop = pcbBot + d.pcbT;
@@ -473,7 +473,7 @@
     const ell = (cx, cy, r, z, fill, attrs) => { const C = pr(cx, cy, z); return `<ellipse cx="${num(C[0])}" cy="${num(C[1])}" rx="${num(RX * r)}" ry="${num(RY * r)}" fill="${fill}" ${attrs || ""}/>`; };
     const shade = (col, k) => (k >= 0 ? mix(col, c.white, k) : mix(col, c.ink, -k));
 
-    const ox = -b, oy = -b, ow = L.W + 2 * b, oh = L.H + 2 * b, R = g.rr;
+    const ox = -b - d.sideWallExtra, oy = -b, ow = L.W + 2 * (b + d.sideWallExtra), oh = L.H + 2 * b, R = g.rr;
     const outer = rr(ox, oy, ow, oh, R, 6);
     const inner = rr(ox + g.wall, oy + g.wall, ow - 2 * g.wall, oh - 2 * g.wall, Math.max(R - g.wall, 1), 6);
     const bosses = [[ox + g.q, oy + g.q], [ox + ow - g.q, oy + g.q], [ox + ow - g.q, oy + oh - g.q], [ox + g.q, oy + oh - g.q]];
@@ -538,7 +538,7 @@
         o += flat(quad(xiao[0] - 1, xiao[1] - 1, xiao[2] + 2, xiao[3] + 2), l.z0 + g.floor, mix(c.sh.base, c.sh.edge, 0.5));
         bosses.slice().sort((a, b2) => (a[0] + a[1]) - (b2[0] + b2[1])).forEach(([x, y]) => {
           o += cyl(x, y, g.bossR, l.z0 + g.floor, l.z1 - 0.4, mix(c.sh.base, c.sh.edge, 0.4), shellTop);
-          o += ell(x, y, d.insOD / 2, l.z1 - 0.4, c.brass) + ell(x, y, 1.3, l.z1 - 0.4, mix(c.brass, c.ink, 0.6));
+          o += ell(x, y, 1.7, l.z1 - 0.4, mix(c.sh.base, c.ink, 0.6));
         });
         o += `</g>`;
         if (s.screws === "side") {
@@ -547,7 +547,7 @@
             o += screwH(ox + ow + 4, y, zz);
           });
         }
-        const sideTxt = s.screws === "side" ? "side-entry inserts" : "4 heat-set inserts";
+        const sideTxt = s.screws === "side" ? "side-entry inserts" : "4 M3 screw holes";
         labels.push({ a: anchorOf(outer, l.z1), t: "Bottom shell", sub: `${valueName("shell", s.shell)} PETG · ${sideTxt}` });
         return o;
       },
@@ -623,7 +623,7 @@
         if (s.screws === "top") bosses.forEach(([x, y]) => { holes += ell(x, y, 1.7, l.z1, c.ink, 'opacity="0.5"'); });
         o += holes + (g.rimH > 0 ? `</g>` : "");
         const nm = { floating: "floating plate on the light gap", flush: "flush with the shell rim", "deep-dish": "keys sunk 8 mm below the rim", tray: "3 mm raised lip" }[s.plate];
-        labels.push({ a: anchorOf(outer, l.z1), t: s.plate === "floating" ? "Plate" : "Top shell", sub: `${nm} · 1.5 mm at cutouts` });
+        labels.push({ a: anchorOf(outer, l.z1), t: s.plate === "floating" ? "Plate" : "Top shell", sub: `${nm} · 1.5 mm at cutouts · 4 heat-set inserts` });
         return o;
       },
       screws(l) {

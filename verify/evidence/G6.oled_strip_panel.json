@@ -5,14 +5,16 @@
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
-  "notes": [],
+  "notes": [
+    "reads the harness run recorded under G6.firmware_harness"
+  ],
   "commands": [],
   "inputs_sha256": {
     "Firmware/tests/README.md": "3c03d2de75b840d6692d9f406a8b26b6f543dea1608dce78352aea91fb80bbaa",
-    "Firmware/tests/harness.c": "dd6bd0e3c9a2cf65a51b2cdd448847699929f1214b1895f2f16d4f6d6e216313",
+    "Firmware/tests/harness.c": "f079fee63c7a5f1d5f8360eafbaae6d7c16a25aae80959e316a5e5e00e0e20a6",
     "Firmware/tests/panel.c": "f31f0892cf6fb356f952b647d9abca0b4deadde7107d6104d806f7177d4e547f",
-    "Firmware/tests/proto_test.py": "28145d6c40ca495b248e7fb2579032d4be4fc301edf8290e1c125be19a30d8a6",
-    "Firmware/tests/run.sh": "ab5688b83a8498e26dc61f5aa932adf09c8b046a2b77e5abc7615085c6c39181",
+    "Firmware/tests/proto_test.py": "b1b8291cfbf86464687fdaf8b30056eac839f5754d164366b18649772e4b418f",
+    "Firmware/tests/run.sh": "ef7362677268757a0341fa8303ca0827b923aa4ada20b7c37c091ad5f9c21437",
     "Firmware/tests/stub/compiler_support.h": "2b3b12365e8abb506d5dcc5d1dced1524ba58b3c8f000acbca00c6576c3e21c4",
     "Firmware/tests/stub/i2c_master.h": "12f874a31e35fd55085de3e71982b87bdc6e8030ca0f77790e40ef880b972e86",
     "Firmware/tests/stub/keyboard.h": "b3adf106d95b8934f690943f2921308b90be5b766c4c8ba250c792de56400201",
@@ -49,6 +51,6 @@
       "page3 buffer |1R 2? 3D 4! 5- 6R HID| panel |1R 2? 3D 4! 5- 6R HID| bytes differing=0 never-written=0"
     ]
   },
-  "timestamp": "2026-11-04T04:20:16+00:00",
-  "duration_s": 0.0
+  "timestamp": "2026-11-04T04:55:41+00:00",
+  "duration_s": 0.01
 }

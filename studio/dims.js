@@ -18,6 +18,7 @@
     ec11: { body: 12.0, shaftAbovePcb: 24.5, knobDiameter: 18.0 },  // body 11.7 x 12.0; L=20 shaft = 4.5 body + 20 -> tip 24.5 above PCB
     xiao: { w: 17.8, h: 21.0, t: 3.5 },        // Seeed wiki 21 x 17.8; t from retail listings (see tMax)
     sk6812MiniE: { w: 3.2, h: 2.8 },
+    sideWallExtra: 2.0,              // side bezels are measured from the PCB edge, 2 mm past the content
     heatSetInsert: { od: 5.0, length: 4.0, holeDiameter: 4.7 },     // kit "M3x5x4" = M3, OD 5, L 4; hole per Hackpad guide
     m3Head: 5.5,             // ISO 4762 socket head dk max
     printTolerance: 0.3,     // per side, printed part <-> PCB / parts (Hackpad: 0.2–0.4)
@@ -45,7 +46,7 @@
     oledGlass: { w: 30.0, h: 11.5, t: 1.45 },  // panel glass outline (UG-2832 type)
     oledGlassInset: 3.5,             // glass starts this far from the board end opposite the header
     oledHeader: { pins: 4, pitch: 2.54, fromEnd: 1.5, spacer: 2.5 }, // pin row 1.5 from board end; std header plastic 2.5
-    oledGlassTopAbovePcb: 5.2,       // on a std 2.5 header: 2.5 + ~1.2 board + 1.45 glass (≈ plate top level)
+    oledGlassTopAbovePcb: 4.45,      // header plastic removed: module_gap 1.8 + ~1.2 board + 1.45 glass
 
     ec11Detail: {
       bodyW: 11.7, bodyD: 12.0, bodyH: 4.5,      // metal frame + switch, above PCB
@@ -59,16 +60,16 @@
 
     xiaoDetail: { pinPitch: 2.54, rowSpacing: 15.24, pinsPerSide: 7, tMax: 4.5 },
     xiaoUsbC: { w: 9.0, h: 3.3, overhang: 1.4 },   // receptacle; overhang past the XIAO board edge
-    usbPlugRelief: { w: 13.0, h: 8.0 },            // wall opening for a typical USB-C cable overmold
+    usbPlugRelief: { w: 13.5, h: 8.0 },            // wall opening for a typical USB-C cable overmold
 
-    sk6812Detail: { t: 1.78, leadSpan: 5.88, lensBelowLeads: 0.94, holeW: 3.4, holeH: 3.0 }, // reverse-mount PCB hole (body 3.2x2.8 + clearance)
+    sk6812Detail: { t: 1.78, leadSpan: 5.88, backBelowLeads: 0.94, holeW: 3.4, holeH: 3.0 }, // reverse-mount PCB hole (body 3.2x2.8 + clearance)
 
     heatSetHoleDepth: 4.0,           // Hackpad guide: Ø4.7 x 4 deep
-    heatSetBossOd: 8.0,              // 4.7 hole + 2 x ~1.6 wall (ruthex min wall 1.3)
+    heatSetBossOd: 8.7,              // design.json case.screws: 4.7 hole + 2 x 2.0 wall
     m3Clearance: 3.4,                // Hackpad guide: screw pass-through
     m3SelfTap: 2.9,                  // Hackpad guide: screw straight into plastic
     m3HeadHeight: 3.0,
-    m3Counterbore: 6.0,              // head 5.5 + clearance
+    m3Counterbore: 5.8,              // head 5.5 + clearance, as in the CAD
     m3ScrewLength: 16
   };
   if (typeof module !== "undefined" && module.exports) module.exports = FB.dims;

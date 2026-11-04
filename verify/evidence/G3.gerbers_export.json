@@ -19,7 +19,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.27,
+      "duration_s": 1.29,
       "stdout_tail": [
         "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-F_Cu.gtl'.",
         "Plotted to '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite-B_Cu.gbl'.",
@@ -60,7 +60,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.21,
+      "duration_s": 0.66,
       "stdout_tail": [
         "Created file '~/Documents/frostbite/verify/.cache/work/gerbers/frostbite.drl'",
         "Done."
@@ -94,6 +94,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-04T04:19:37+00:00",
-  "duration_s": 0.57
+  "timestamp": "2026-11-04T04:52:29+00:00",
+  "duration_s": 2.19
 }

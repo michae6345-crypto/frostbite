@@ -22,7 +22,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.7,
+      "duration_s": 1.28,
       "stdout_tail": [
         "Found 0 violations",
         "Saved ERC Report to ~/Documents/frostbite/verify/.cache/work/erc.json"
@@ -38,6 +38,6 @@
   "details": {
     "violations": []
   },
-  "timestamp": "2026-11-04T04:19:31+00:00",
-  "duration_s": 0.71
+  "timestamp": "2026-11-04T04:52:13+00:00",
+  "duration_s": 1.28
 }

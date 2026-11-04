@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-04T04:22:46+00:00",
+  "timestamp": "2026-11-04T05:01:22+00:00",
   "status": "PASS",
   "cases": [
     {
@@ -268,7 +268,7 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "SW5: opening centre (31.075, 52.575), design (30.575, 52.575) tol 0.1",
-        "SW5: a 13.8 mm switch housing hits the Top at depth [0.0, 0.5] mm"
+        "SW5: a 13.9 mm switch housing hits the Top at depth [0.0, 0.5] mm"
       ],
       "ok": true
     },
@@ -280,9 +280,9 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "SW1: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW1: a 13.8 mm switch housing hits the Top at depth [0.55, 1.0] mm",
+        "SW1: a 13.9 mm switch housing hits the Top at depth [0.55, 1.0] mm",
         "SW2: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW2: a 13.8 mm switch housing hits the Top at depth [1.0, 1.5] mm",
+        "SW2: a 13.9 mm switch housing hits the Top at depth [1.0, 1.5] mm",
         "SW3: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1"
       ],
       "ok": true

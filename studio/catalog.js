@@ -172,7 +172,7 @@
   const defaultSpec = {
     layout: "stratum9", shell: "black", texture: "satin", plate: "floating", glowColor: "ice", glowPlace: "gap",
     corner: 12, bezel: 9, knob: "knurled-alu", oledColor: "white", capProfile: "DSA", agentCap: "frosted",
-    commandCap: "white", legends: "blank", screws: "hidden", wordmark: "front", wordmarkText: "frostbite",
+    commandCap: "white", legends: "blank", screws: "hidden", wordmark: "none", wordmarkText: "frostbite",
     tilt: 4, statuses: ["run", "done", "run", "needs", "idle", "error"]
   };
 
@@ -181,13 +181,13 @@
     out.statuses = Array.isArray(s.statuses) ? s.statuses.slice() : defaultSpec.statuses.slice();
     return out;
   }
-  const mk = (over) => cloneSpec({ ...defaultSpec, shell: "iced", ...over });
+  const mk = (over) => cloneSpec({ ...defaultSpec, shell: "iced", wordmark: "front", ...over });
 
   // All presets must pass FB.check (enforced by test/constraints.test.js).
   const presets = [
     { id: "frostbite", name: "Frostbite", note: "The build: matte black shell, floating plate over an ice-blue light gap.",
       spec: cloneSpec(defaultSpec) },
-    { id: "frostbite-halo", name: "Frostbite Halo", note: "The original with a ring-lit dial that glows with the busiest agent.",
+    { id: "frostbite-halo", name: "Frostbite Halo", note: "Iced shell with a ring-lit dial that glows with the busiest agent.",
       spec: mk({ knob: "ringlit" }) },
     { id: "glacier", name: "Glacier", note: "Pale-blue shell, glacier command caps and an ice-tinted OLED.",
       spec: mk({ shell: "glacier", commandCap: "glacier", oledColor: "ice", corner: 16, bezel: 12 }) },

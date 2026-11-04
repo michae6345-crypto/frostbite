@@ -21,7 +21,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.95,
+      "duration_s": 5.36,
       "stdout_tail": [],
       "stderr_tail": [
         "Fontconfig error: Cannot load default config file: No such file: (null)"
@@ -33,7 +33,7 @@
     "PCB/frostbite.kicad_sch": "4d947106d758fc3405be5d4da340b47f76696e6900322e39446c424f5ea3b0e2"
   },
   "details": {
-    "netlist_sha256": "bd85d2c0e389aa26bf666146e846449c87e7d672e6be74c4744b68c165200f9a",
+    "netlist_sha256": "1e0c3f4159953e32637859d025b207576dd27ee97fb36596bc2af0b116fe6f17",
     "led_chain": [
       "LED1",
       "LED2",
@@ -50,36 +50,8 @@
       "LED13"
     ],
     "components": {
-      "xiao": [
-        "U1"
-      ],
       "oled": [
         "J1"
-      ],
-      "switch": [
-        "SW1",
-        "SW2",
-        "SW3",
-        "SW4",
-        "SW5",
-        "SW6",
-        "SW7",
-        "SW8",
-        "SW9"
-      ],
-      "diode": [
-        "D1",
-        "D2",
-        "D3",
-        "D4",
-        "D5",
-        "D6",
-        "D7",
-        "D8",
-        "D9"
-      ],
-      "enc": [
-        "ENC1"
       ],
       "led": [
         "LED1",
@@ -95,9 +67,37 @@
         "LED7",
         "LED8",
         "LED9"
+      ],
+      "xiao": [
+        "U1"
+      ],
+      "diode": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9"
+      ],
+      "enc": [
+        "ENC1"
+      ],
+      "switch": [
+        "SW1",
+        "SW2",
+        "SW3",
+        "SW4",
+        "SW5",
+        "SW6",
+        "SW7",
+        "SW8",
+        "SW9"
       ]
     }
   },
-  "timestamp": "2026-11-04T04:19:31+00:00",
-  "duration_s": 0.95
+  "timestamp": "2026-11-04T04:52:11+00:00",
+  "duration_s": 5.38
 }

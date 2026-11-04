@@ -71,8 +71,9 @@ def check_envelope(m, printed):
 
 def check_reopen(m, printed):
     bad = []
-    for name, s in printed.items():
+    for name in printed:
         r = cq.importers.importStep(str(fc.PROD / f"{name}.step")).val()
+        s = fc.print_orient(name, m["parts"][name])    # fresh build: printed may be this same file
         if abs(r.Volume() - s.Volume()) > 1e-3 * s.Volume():
             bad.append(name)
     a = cq.importers.importStep(str(fc.CAD / "frostbite-assembly.step"))

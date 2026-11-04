@@ -89,7 +89,7 @@ int main(int argc,char**argv){
     housekeeping_task_user();
     printf("after fallback: status0=%d line0='%s' glow=%02x%02x%02x@%d statuses_received=%d\n",slot_status[0],host_line[0],glow_r,glow_g,glow_b,glow_bri,statuses_received);
     printf("fade ms agent LED0=%u (FALLBACK_FADE_MS=%d, FADE_MS=%d) glow LED9=%u\n",led_fade_ms[0],FALLBACK_FADE_MS,FADE_MS,led_fade_ms[9]);
-    if(led_fade_ms[0]==FALLBACK_FADE_MS)PASS("agent LED uses fallback fade"); else printf("BUG agent fallback fade overridden: %u ms instead of %d\n",led_fade_ms[0],FALLBACK_FADE_MS);
+    if(led_fade_ms[0]==FALLBACK_FADE_MS)PASS("agent LED uses fallback fade"); else FAIL("agent fallback fade overridden: %u ms instead of %d",led_fade_ms[0],FALLBACK_FADE_MS);
   }
   // encoder
   { reset_all(); g_now=30000; ping(); nreps=0; int seq[8],n=0; for(int i=0;i<7;i++){encoder_update_user(0,true);seq[n++]=selected_slot;}
@@ -100,7 +100,7 @@ int main(int argc,char**argv){
   // malformed reports and fuzz
   { reset_all(); g_now=40000; ping(); uint8_t p[32]; memset(p,'X',32); p[0]=3;p[1]=0;p[2]=255; raw_hid_receive(p,32); if(strlen(host_line[0])==21)PASS("OLED_LINE len=255 truncated to 21"); else FAIL("len255 %zu",strlen(host_line[0]));
     p[1]=2; raw_hid_receive(p,32); p[1]=255; raw_hid_receive(p,32); PASS("line=2/255 ignored (ASan clean)");
-    p[0]=3;p[1]=1;p[2]=30; raw_hid_receive(p,5); printf("short length=5 len=30: host_line1 strlen=%zu (want 2)\n",strlen(host_line[1]));
+    p[0]=3;p[1]=1;p[2]=30; raw_hid_receive(p,5); if(strlen(host_line[1])==2)PASS("OLED_LINE clamps to the bytes received"); else FAIL("short length=5 len=30: host_line1 strlen=%zu, want 2",strlen(host_line[1]));
     rx(1,6,1,0,0); rx(1,255,1,0,0); rx(6,6,0,0,0); rx(6,255,0,0,0); rx(1,0,200,0,0); if(selected_slot<6&&slot_status[0]==0)PASS("slot>5 ignored, status>4 -> idle"); else FAIL("slot");
     raw_hid_receive(p,0); raw_hid_receive(p,1); raw_hid_receive(p,2);
     uint64_t s=88172645463325252ULL; unsigned long N=3000000; for(unsigned long i=0;i<N;i++){ s^=s<<13;s^=s>>7;s^=s<<17; uint8_t q[32]; uint64_t x=s; for(int j=0;j<32;j++){ if(j%8==0){s^=s<<13;s^=s>>7;s^=s<<17;x=s;} q[j]=x>>(8*(j%8)); } if(i%2)q[0]=q[0]%8; if(i%3==0)q[1]=q[1]%8; int len=(i%5==0)?(int)(s%33):32; raw_hid_receive(q,len);
@@ -151,7 +151,7 @@ int main(int argc,char**argv){
       suspend_wakeup_init_user(); run(20); if(oled_active)PASS("each resume wakes once"); else FAIL("second resume"); t0=last_activity; run(300000); ping(); if(oled_active&&last_activity==t0)PASS("still on the same timer"); else FAIL("timer moved");
     }
   }
-  { reset_all(); g_now=90000; ping(); g_now+=6000; housekeeping_task_user(); uint32_t lp=last_ping; g_now=lp+0xFFFFFFFFu; bool h1=host_mode(); g_now=lp+1; bool h2=host_mode(); printf("wrap: elapsed=2^32-1 host_mode=%d; elapsed wrapped to 1 host_mode=%d (want 0 0)\n",h1,h2); }
+  { reset_all(); g_now=90000; ping(); g_now+=6000; housekeeping_task_user(); uint32_t lp=last_ping; g_now=lp+0xFFFFFFFFu; bool h1=host_mode(); g_now=lp+1; bool h2=host_mode(); if(!h1&&!h2)PASS("host mode stays off across timer wrap"); else FAIL("wrap: elapsed=2^32-1 host_mode=%d; elapsed wrapped to 1 host_mode=%d, want 0 0",h1,h2); }
   // OLED strip and divider reach the panel. verify/fbverify/checks.py matches the PASS F1 lines by text.
   { reset_all(); g_now=200000; lastled=g_now; run(3000);
     int bad=0; for(int b=0;b<512;b++) if(gddram[b]!=oled_buffer[b]) bad++;

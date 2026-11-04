@@ -53,7 +53,7 @@ Five values changed from the first draft: `ec11.body`, `ec11.shaftAbovePcb`, `he
 | `oledGlass` | 30.0 × 11.5 × 1.45 | Common 0.91" panel ("30.00 × 11.50 × 1.45", buydisplay / oled-info listings). The KiCad silk shows the panel spanning 3.5–33 on the 38 board. | M. Some panels are 1.2–1.34 thick. |
 | `oledGlassInset` | 3.5 | KiCad footprint silk line at x = 3.5 (non-header end) | M |
 | `oledHeader` | 4 pins, 2.54 pitch, row 1.5 from board end, spacer 2.5 | KiCad footprint pads at x 36.5, y 2.19/4.73/7.27/9.81 (centred on the 12 mm height). Pin order **GND, VCC, SCL, SDA** from pad 1 (Hackpad guide: "MAKE SURE YOUR PCB MATCHES"). | H |
-| `oledGlassTopAbovePcb` | 5.2 | 2.5 header plastic + about 1.2 board + 1.45 glass | L–M. About the plate-top height (5.0). |
+| `oledGlassTopAbovePcb` | 4.45 | 1.8 `module_gap` (header plastic removed) + about 1.2 board + 1.45 glass | L–M. Glass sits 0.55 below the plate top. |
 | (no key) OLED mounting holes | none | The common 0.91" 4-pin I²C module has **no mounting holes**, unlike the 0.96" module's four M2 holes. It is held by the header plus a printed clamp or ledge. | M |
 | `ec11Detail.bodyW/bodyD/bodyH` | 11.7 / 12.0 / 4.5 | Alps p.263 (side view: 4.5 from mounting surface to body top) | H/H/M |
 | `ec11Detail.bushingDiameter/Height` | 7 / 7 | Alps p.268 flat type: L1 20 → LB 7, φ7 bushing (M7 thread only on EC11B) | H |
@@ -71,12 +71,12 @@ Five values changed from the first draft: `ec11.body`, `ec11.shaftAbovePcb`, `he
 | `knobTypical` | φ15–20, height about 15, bore about 12 deep | Typical aluminium knobs for 6 mm D shafts | L. Knob bottom sits about 1 mm above the bushing top, so about 12.5 above the PCB (about 7.5 above the plate top), below the cap tops (about 13.6). |
 | `xiaoDetail` | pitch 2.54, rows 15.24 apart, 7 per side, tMax 4.5 | Seeed KiCad footprint pads at ±7.62. tMax is a conservative envelope: 3.26 USB-C receptacle + board. | H / H / H / L |
 | `xiaoUsbC` | w 9.0, h 3.3, overhang 1.4 | Seeed footprint silk: USB outline y ±4.5, extends to x 11.95 vs board edge 10.55 → 1.4 overhang. USB-C receptacle shell is typically 8.94 × 3.26. | M |
-| `usbPlugRelief` | 13 × 8 | USB-C spec recommended max plug overmold about 12.35 × 6.5, plus clearance. Fat cables are larger. | M |
-| `sk6812Detail` | t 1.78, lead span 5.88, `lensBelowLeads` 0.94, hole 3.4 × 3.0 | Datasheet p.4: 1.78 total, 0.84 above the lead plane, so 0.94 below. The recommended PCB opening is the 3.2 × 2.8 body. | H. The 3.4 × 3.0 hole is the datasheet body + 0.1 per side for fab tolerance (L–M). Correction from `docs/audit/pcb-physical.md`: the lens is the 0.84 side, so per-key backs protrude 0.94 and glow lenses 0.84. The key name is unchanged. |
+| `usbPlugRelief` | 13.5 × 8 | USB-C spec recommended max plug overmold about 12.35 × 6.5, plus clearance. Fat cables are larger. | M |
+| `sk6812Detail` | t 1.78, lead span 5.88, `backBelowLeads` 0.94, hole 3.4 × 3.0 | Datasheet p.4: 1.78 total, 0.84 above the lead plane, so 0.94 below. The recommended PCB opening is the 3.2 × 2.8 body. | H. The 3.4 × 3.0 hole is the datasheet body + 0.1 per side for fab tolerance (L–M). Correction from `docs/audit/pcb-physical.md`: the lens is the 0.84 side, so per-key backs protrude 0.94 and glow lenses 0.84. The key name is unchanged. |
 | `heatSetHoleDepth` | 4.0 | Hackpad guide "4mm deep". Leave a φ3.4 continuation below it if the M3×16 runs past the insert. | H |
-| `heatSetBossOd` | 8.0 | 4.7 + 2 × 1.6 wall (ruthex minimum wall 1.3) | M |
+| `heatSetBossOd` | 8.7 | 4.7 + 2 × 2.0 wall, from `design.json` (ruthex minimum wall 1.3) | M |
 | `m3Clearance` / `m3SelfTap` | 3.4 / 2.9 | Hackpad guide | H |
-| `m3HeadHeight` / `m3Counterbore` | 3.0 / 6.0 | ISO 4762 k = 3.0; counterbore = 5.5 + 0.5 | H / M |
+| `m3HeadHeight` / `m3Counterbore` | 3.0 / 5.8 | ISO 4762 k = 3.0; counterbore = 5.5 + 0.3 | H / M |
 | `m3ScrewLength` | 16 | Kit M3×16 | H |
 
 Print tolerances: 0.2–0.4 per side where printed parts meet the PCB (Hackpad). PCB pockets are the PCB outline + 0.3 per side, so 0.6 larger than the board. Holes print about 0.1–0.2 undersize on FDM, so oversize them or ream. Minimum printable wall is about 0.8–1.2 (2–3 perimeters). Use 2.0 for shell walls.

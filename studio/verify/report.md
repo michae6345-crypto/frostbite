@@ -1,19 +1,19 @@
 # Frostbite Studio verification report
 
-Generated 2026-11-04T04:17:41.734Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
+Generated 2026-11-04T04:47:48.240Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
 
-**Result: PASS**: 0 hard failures, 33 warnings.
+**Result: PASS**: 0 hard failures, 13 warnings.
 
 ## Modules
 
 | file | loaded | bytes | note |
 |---|---|---|---|
-| dims.js | yes | 5175 |  |
+| dims.js | yes | 5292 |  |
 | layouts.js | yes | 3533 |  |
-| catalog.js | yes | 18926 |  |
-| constraints.js | yes | 17043 |  |
-| render-top.js | yes | 31910 |  |
-| render-side.js | yes | 52949 |  |
+| catalog.js | yes | 18942 |  |
+| constraints.js | yes | 17063 |  |
+| render-top.js | yes | 31953 |  |
+| render-side.js | yes | 53014 |  |
 
 ## Test set
 
@@ -36,7 +36,7 @@ Generated 2026-11-04T04:17:41.734Z by `node verify/run.js` (seed 20261103, 500 r
 | renderExploded | 1881 | 0 | 0 | pass |
 | edge cases | 32 | 0 | 0 | pass |
 | geometry (layout) | 7 | 0 | 6 | warn |
-| geometry (shell) | 84 | 0 | 20 | warn |
+| geometry (shell) | 84 | 0 | 0 | pass |
 
 ## FB.check outcomes
 
@@ -49,12 +49,12 @@ Strict specs checked: 1314 ok, 567 rejected (0 rejected specs also have geometry
 
 | render | renders | min bytes | avg bytes | max bytes |
 |---|---|---|---|---|
-| renderTop | 1889 | 13716 | 20123 | 26205 |
-| renderTop+dims | 1889 | 15010 | 21088 | 27116 |
+| renderTop | 1889 | 13717 | 19789 | 26206 |
+| renderTop+dims | 1889 | 15014 | 20754 | 27120 |
 | renderSide | 1889 | 7846 | 11537 | 14790 |
-| renderExploded | 1889 | 24724 | 39263 | 44910 |
+| renderExploded | 1889 | 24622 | 39077 | 44789 |
 
-Colours not in `FB.catalog.palette` (info only; contract says renderers read palette colours): `#ffc766` ×89431, `#be8724` ×29798, `#de9c22` ×29798, `#aeaeac` ×22512, `#9c9c9b` ×22512, `#273f33` ×14899, `#cdefde` ×14899, `#7a8186` ×13223, `#9f9f9e` ×12687, `#888988` ×11256, `#868787` ×11256, `#999a99` ×11256
+Colours not in `FB.catalog.palette` (info only; contract says renderers read palette colours): `#ffc766` ×88383, `#be8724` ×29798, `#de9c22` ×29798, `#aeaeac` ×22512, `#9c9c9b` ×22512, `#273f33` ×14899, `#cdefde` ×14899, `#7a8186` ×13223, `#9f9f9e` ×12687, `#888988` ×11256, `#868787` ×11256, `#999a99` ×11256
 
 ## Geometry per layout
 
@@ -62,24 +62,19 @@ Assumptions: cap footprint 18.2 mm, switch housing 15.6 mm, knob Ø18, EC11 body
 
 | layout | content W×H | min top clearance | worst edge distance (any bezel/corner) | OLED board | XIAO (underside) | insert corners b6 / b9 / b12 (worst corner radius) |
 |---|---|---|---|---|---|---|
-| stratum9 | 57.15×79.15 | 2.42 (key3–dial1) | 2.46 (key7 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 2/4 / 4/4 / 4/4 |
-| mirror9 | 57.15×79.15 | 2.42 (key1–dial1) | 2.46 (key7 cap, b6/r16) | header→left ok | back @ 19.75 **under OLED** | 2/4 / 4/4 / 4/4 |
-| pocket6 | 57.15×60.1 | 2.42 (key3–dial1) | 2.46 (key4 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 2/4 / 4/4 / 4/4 |
-| stagger9 | 57.15×86.15 | 4.15 (dial1–oled) | 2.46 (key7 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 4/4 / 4/4 / 4/4 |
-| twin9 | 57.15×79.15 | 2.42 (key1–dial1) | 2.46 (key7 cap, b6/r16) | none | back @ 19.75 | 2/4 / 4/4 / 4/4 |
-| wide9 | 95.75×57.15 | 4.23 (key3–oled) | 2.46 (key1 cap, b6/r16) | header→right ok | back @ 56 **under OLED** | 2/4 / 4/4 / 4/4 |
-| console4 | 76.2×41.05 | 2 (dial1–oled) | 2.46 (key4 cap, b6/r16) | header→right ok | back @ 29.25 **under OLED** | 4/4 / 4/4 / 4/4 |
+| stratum9 | 57.15×79.15 | 2.42 (key3–dial1) | 3.79 (key7 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 4/4 / 4/4 / 4/4 |
+| mirror9 | 57.15×79.15 | 2.42 (key1–dial1) | 3.79 (key7 cap, b6/r16) | header→left ok | back @ 19.75 **under OLED** | 4/4 / 4/4 / 4/4 |
+| pocket6 | 57.15×60.1 | 2.42 (key3–dial1) | 3.79 (key4 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 4/4 / 4/4 / 4/4 |
+| stagger9 | 57.15×86.15 | 4.15 (dial1–oled) | 3.79 (key7 cap, b6/r16) | header→right ok | back @ 19.75 **under OLED** | 4/4 / 4/4 / 4/4 |
+| twin9 | 57.15×79.15 | 2.42 (key1–dial1) | 3.79 (key7 cap, b6/r16) | none | back @ 19.75 | 4/4 / 4/4 / 4/4 |
+| wide9 | 95.75×57.15 | 4.23 (key3–oled) | 3.79 (key1 cap, b6/r16) | header→right ok | back @ 56 **under OLED** | 4/4 / 4/4 / 4/4 |
+| console4 | 76.2×41.05 | 2 (dial1–oled) | 3.79 (key4 cap, b6/r16) | header→right ok | back @ 29.25 **under OLED** | 4/4 / 4/4 / 4/4 |
 
 ## Hard failures (0)
 
 None.
 
-## Warnings (33)
-
-### `insert-boss` ×20, geometry (shell)
-- stratum9 bezel 6 corner 4: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts (FB.check approves it)
-- stratum9 bezel 6 corner 8: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts (FB.check approves it)
-- stratum9 bezel 6 corner 12: only 2/4 corners fit a Ø8.7 insert boss (Ø4.7 hole + 2 wall) clear of parts
+## Warnings (13)
 
 ### `layout-no-spare-gpio` ×7, catalog contract
 - stratum9 uses 11/11 GPIO: zero spare pins for fixes (e.g. encoder push, LED level shifting)

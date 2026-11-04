@@ -34,7 +34,7 @@ STATUS_WORD = {
 # Glow colours. The first two are design.json protocol.status_colours.
 ERROR_RGB = (0xFF, 0x4D, 0x4F)
 NEEDS_RGB = (0xFF, 0xB0, 0x20)
-ICE_BLUE = (0x9F, 0xD8, 0xFF)
+ICE_BLUE = (0x7F, 0xE3, 0xFF)    # same as GLOW_DEFAULT in keymap.c, so connecting does not shift the colour
 SEVERITY = [Status.ERROR, Status.NEEDS, Status.RUN, Status.DONE, Status.IDLE]
 
 

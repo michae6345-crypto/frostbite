@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import argparse
 import codecs
 import json
 import logging
@@ -286,6 +287,15 @@ class RunState:
             p = self.progress()
             return ("done " + p) if p else "done"
         return self.progress() or "running"
+
+
+def done_pattern(text: str) -> str:
+    """argparse type: reject a bad regex with a usage error before anything starts."""
+    try:
+        re.compile(text)
+    except re.error as e:
+        raise argparse.ArgumentTypeError(f"bad regex {text!r}: {e}") from None
+    return text
 
 
 class TrainWatcher:

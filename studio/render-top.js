@@ -4,7 +4,7 @@
   // content area (the bezel extends outside it). Light comes from the top-left.
 
   let counter = 0;
-  const STATUS_TEXT = { idle: "IDLE", run: "RUNNING", done: "DONE", needs: "WAITING", error: "ERROR" };
+  const STATUS_TEXT = { idle: "IDLE", run: "RUN", done: "DONE", needs: "WAIT", error: "ERR" }; // STATUS_WORD in host/state.py
   const MONO = "'JetBrains Mono','IBM Plex Mono','SF Mono',ui-monospace,Menlo,Consolas,'DejaVu Sans Mono',monospace";
   const SANS = "'Space Grotesk','Inter','Helvetica Neue',Helvetica,Arial,sans-serif";
   const NB = " "; // non-breaking space (keeps OLED columns aligned)
@@ -64,7 +64,7 @@
     const darkShell = lum(sh.top) < 0.45;
     const opaqueDark = darkShell && sh.opacity >= 1; // no light passes through, so no glow on the surface
     const W = L.W, H = L.H, b = s.bezel;
-    const x0 = -b, y0 = -b, SW = W + 2 * b, SH = H + 2 * b;
+    const bx = b + FB.dims.sideWallExtra, x0 = -bx, y0 = -b, SW = W + 2 * bx, SH = H + 2 * b;
     const R = clamp(s.corner, 0.5, Math.min(SW, SH) / 2);
     const m = 9;
     const vb = [x0 - m, y0 - m, SW + 2 * m + (opts.dims ? 14 : 0), SH + 2 * m + (opts.dims ? 12 : 0)];
@@ -248,7 +248,7 @@
       const slot = (((tick % nA) + nA) % nA);
       const st = agents.length ? statusOf(slot) : "idle";
       const l1 = ("claude#" + (slot + 1)).padEnd(10, NB) + (STATUS_TEXT[st] || "IDLE");
-      const l2 = st === "error" ? `loss${NB}inf${NB}▸${NB}ep${12 + Math.abs(tick)}` : `loss${NB}${(0.418 * Math.pow(0.985, Math.abs(tick) % 60)).toFixed(3)}${NB}▸${NB}ep${12 + Math.abs(tick)}`;
+      const l2 = st === "error" ? `e${12 + Math.abs(tick)}${NB}loss${NB}inf` : `e${12 + Math.abs(tick)}${NB}loss${NB}${(0.418 * Math.pow(0.985, Math.abs(tick) % 60)).toFixed(4)}`;
       const fs = ah * 0.43;
       const pxp = num(aw / 128);
       defs.push(`<pattern id="${id("px")}" patternUnits="userSpaceOnUse" x="${num(ax)}" y="${num(ay)}" width="${pxp}" height="${pxp}"><rect width="${pxp}" height="${num(pxp * 0.22)}" fill="${glass}"/><rect width="${num(pxp * 0.22)}" height="${pxp}" fill="${glass}"/></pattern>`);

@@ -1,6 +1,6 @@
 # Frostbite verification report
 
-Generated 2026-11-04T04:20:27+00:00 by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` (commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.
+Generated 2026-11-04T04:56:03+00:00 by `verify/run.sh`. Every row comes from `verify/evidence/<check>.json` (commands, exit codes, output tails, SHA-256 of inputs). NOT_RUN is never a pass.
 
 **PASS 32 · FAIL 0 · NOT_RUN 0**, exit code 0
 
