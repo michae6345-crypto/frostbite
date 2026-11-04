@@ -56,7 +56,7 @@ Push a real Gateron KS-3 in from the flat (bed) side, the same way as assembly s
 
 Tests the real insert hole in a real length of side wall, from the Top: 8.7 mm wide, 16 mm tall, Ø3.4 blind continuation, 3.2 mm skin at the end. The holes are Ø4.5, Ø4.7 (real) and Ø4.9, labelled on the flange. The bar stays 8.7 wide, as it would if you changed only the hole, so the walls are 2.1 / 2.0 / 1.9. That is the only part of this coupon that varies.
 
-Heat-set one kit insert in each hole, iron about 230 °C, flush with the rim. Let it cool. Then pass an M3×16 through the spacer ring into the insert and tighten until snug. The ring stands in for the GlowBand and Bottom (3.6 mm), so the screw reaches its real depth.
+The kit has only 2 spare inserts (6 supplied, 4 used), so test Ø4.7 first, then the likelier neighbour, or buy a few extra M3×5×4 inserts for all three. Heat-set an insert in each hole you test, iron about 230 °C, flush with the rim. Let it cool. Then pass an M3×16 through the spacer ring into the insert and tighten until snug. The ring stands in for the GlowBand and Bottom (3.6 mm), so the screw reaches its real depth.
 
 | Result | Meaning | Change |
 |---|---|---|
@@ -120,7 +120,7 @@ That 1.76 is deliberate. `docs/audit/pcb-physical.md` found that the real LED ha
 
 Cover the two cut end faces of the band with black tape, or they will glow brightly and mislead you. Then tape the cap on and use one of these:
 
-- **One SK6812 MINI-E.** Drop it in the window, emitter toward the pad, and tape the back. It needs 5 V and a data signal, so a loose LED will not light by itself. The easiest route is a real glow LED on the real PCB running `led-test`: hold the band under it at the real position, with no cap. The firmware default is `#7fe3ff` at brightness 70 of 255 (about 27 %), so judge it there, not at full white.
+- **One SK6812 MINI-E.** Drop it in the window, emitter toward the pad, and tape the back. It needs 5 V and a data signal, so a loose LED will not light by itself. The easiest route is a real glow LED on the real PCB running `firmware.uf2` (`led-test` only flashes each LED briefly at full colour): hold the band under it at the real position, with no cap. The firmware default is `#7fe3ff` at brightness 70 of 255 (about 27 %), so judge it there, not at full white.
 - **A phone torch.** Press the cap's back against the torch, so the window acts as a small source. This only shows the **shape** of the spread.
 
 Look at the 2 mm outer face (the narrow ring face) in a normally lit room, then a dim one.

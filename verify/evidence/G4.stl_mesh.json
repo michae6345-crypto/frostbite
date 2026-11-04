@@ -11,7 +11,8 @@
     "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
     "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
     "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
-    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca"
+    "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
+    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e"
   },
   "details": {
     "combined_extents": [
@@ -53,11 +54,22 @@
           15.0
         ]
       },
+      "OLEDSupport.stl": {
+        "faces": 28,
+        "watertight": true,
+        "winding_consistent": true,
+        "volume": 259.61602344322154,
+        "extents": [
+          33.9,
+          13.5,
+          1.4
+        ]
+      },
       "Top.stl": {
         "faces": 5496,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 43282.73767288728,
+        "volume": 43176.39769975228,
         "extents": [
           79.15,
           97.15,
@@ -66,6 +78,6 @@
       }
     }
   },
-  "timestamp": "2026-11-03T22:16:36+00:00",
-  "duration_s": 0.45
+  "timestamp": "2026-11-04T01:04:47+00:00",
+  "duration_s": 0.56
 }

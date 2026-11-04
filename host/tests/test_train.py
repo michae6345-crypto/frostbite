@@ -77,7 +77,7 @@ def test_stale_flags_the_run_after_n_minutes():
     assert sent[-1]["status"] == "run"
     clock[0] += 2
     w.check_stale()
-    assert sent[-1]["status"] == "needs"       # a killed run also just goes quiet
+    assert sent[-1]["status"] == "idle"        # quiet is neither success nor waiting on you
     assert sent[-1]["detail"].startswith("quiet 5m")
     w.feed_text("step 500 loss 0.4\n")
     assert sent[-1]["status"] == "run"         # a slow eval comes back by itself

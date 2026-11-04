@@ -2,6 +2,8 @@ import pytest
 
 import frostbite_host.hook
 
+REAL_CONTROLLING_TTY = frostbite_host.hook.controlling_tty
+
 
 @pytest.fixture(autouse=True)
 def no_real_tty(monkeypatch):

@@ -1,6 +1,6 @@
 """Findings from docs/audit/host.md as normal tests. Test names carry the finding ids.
 No real command runs: the runner is fake, nothing presses keys."""
-import json, os, subprocess, sys, types
+import json, os, queue, subprocess, sys, types
 import pytest
 from frostbite_host.actions import Actions
 from frostbite_host.ctl import HOOK_EVENTS, hooks_snippet
@@ -58,10 +58,18 @@ def feed(b, *msgs, now=1000.0):
 ASK = dict(tool_name="Bash", tool_input={"command": "rm -rf build"})
 
 
-def proved_prompt(b):
-    """A waiting session in Terminal.app whose tab the runner reports as focused."""
-    feed(b, ev("PermissionRequest", **ASK))
-    b.slots[0].terminal["tty"] = TTY
+def running_session(b, sid="A", tty=TTY, bundle="com.apple.Terminal"):
+    """A running session. The tab the runner reports as focused decides whether Stop may act."""
+    feed(b, ev("UserPromptSubmit", sid, bundle=bundle, prompt="go"))
+    b.slots[b.find(f"claude:{sid}")].terminal["tty"] = tty
+
+
+def live_request(d, clock=None, **kw):
+    """A PermissionRequest hook connected and waiting, past the OLED settling time."""
+    reply = queue.Queue()
+    d.handle(("ipc", ev("PermissionRequest", **{**ASK, **kw}), reply))
+    d._shown_at -= 10
+    return reply
 
 
 # -- passes: these must keep passing -----------------------------------------------------
@@ -75,15 +83,15 @@ def test_pass_permissionrequest_means_needs():
 
 def test_pass_refuses_nonterminal_front():
     r, b, d = rig("com.tinyspeck.slackmacgap", tab=TTY)
-    proved_prompt(b)
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    running_session(b)
+    d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
 def test_pass_refuses_other_known_terminal_app():
     r, b, d = rig("com.googlecode.iterm2", tab=TTY)
-    proved_prompt(b)
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    running_session(b)
+    d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
@@ -144,23 +152,21 @@ def test_device_selection_requires_frostbite_vid_pid(monkeypatch):
 
 
 # -- keystrokes --------------------------------------------------------------------------
-def test_approve_checks_the_frontmost_tab_is_the_slots_session():
-    r, b, d = rig()
-    feed(b, ev("PermissionRequest", "A", **ASK), ev("PermissionRequest", "B", **ASK))
-    b.slots[0].terminal["tty"] = "/dev/ttys001"
-    b.slots[1].terminal["tty"] = "/dev/ttys002"
-    r.tab = "/dev/ttys002"                       # session B's tab is in front
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))  # slot 1 selected
+def test_stop_checks_the_frontmost_tab_is_the_slots_session():
+    r, b, d = rig(tab="/dev/ttys002")            # session B's tab is in front
+    running_session(b, "A", "/dev/ttys001")
+    running_session(b, "B", "/dev/ttys002")
+    d.handle_device(KeyEvent(KEY_STOP, TAP))     # slot 1 selected
+    d.push()
     assert any("tty" in " ".join(c) for c in r.calls) and r.keys == []
     assert b.oled_lines(d.clock())[1] == "tap slot first"
-    assert b.slots[0].status == Status.NEEDS     # nothing was answered
+    assert b.slots[0].status == Status.RUN       # nothing was stopped
 
 
-def test_vscode_return_not_sent_without_knowing_terminal_panel_has_focus():
+def test_vscode_gets_no_keystroke_without_knowing_terminal_panel_has_focus():
     r, b, d = rig("com.microsoft.VSCode", tab=TTY)
-    feed(b, ev("PermissionRequest", bundle="com.microsoft.VSCode", **ASK))
-    b.slots[0].terminal["tty"] = TTY             # even with a tty there is no focus proof
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    running_session(b, bundle="com.microsoft.VSCode")  # even with a tty there is no focus proof
+    d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
@@ -180,24 +186,24 @@ def test_approve_needs_a_claude_slot(msg):
     r, b, d = rig(tab=TTY)
     feed(b, msg)
     d.handle_device(KeyEvent(KEY_APPROVE, TAP))
-    assert r.keys == []
+    assert r.calls == [] and d.requests == {}
 
 
 @pytest.mark.parametrize("bundle", ["com.anthropic.claudefordesktop", "", "com.todesktop.230313mzl4w4u92"])
 def test_unknown_session_terminal_fails_closed(bundle):
     r, b, d = rig(tab=TTY)
-    feed(b, ev("PermissionRequest", bundle=bundle, **ASK))
-    b.slots[0].terminal["tty"] = TTY
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    running_session(b, bundle=bundle)
+    d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
 def test_second_approve_tap_sends_nothing():
-    r, b, d = rig(tab=TTY)
-    proved_prompt(b)
+    r, b, d = rig()
+    reply = live_request(d)
     d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    d.push()
     d.handle_device(KeyEvent(KEY_APPROVE, TAP))
-    assert len(r.keys) == 1
+    assert reply.qsize() == 1 and r.calls == []
 
 
 def test_oled_keeps_the_oldest_unanswered_prompt():
@@ -218,23 +224,23 @@ def test_frontmost_rechecked_at_keystroke():
     r = Race(tab=TTY)
     b = Board()
     d = Daemon(b, Actions(runner=r, out=lambda s: None), send=lambda m: None)
-    proved_prompt(b)
-    d.handle_device(KeyEvent(KEY_APPROVE, TAP))
+    running_session(b)
+    d.handle_device(KeyEvent(KEY_STOP, TAP))
     assert r.keys == []
 
 
 # -- hook lifecycle ----------------------------------------------------------------------
 def test_needs_clears_when_approved_tool_starts():
     # Docs: the only later events are PostToolUse (tool finished) / PostToolUseFailure.
-    r, b, d = rig(tab=TTY)
-    proved_prompt(b)
+    r, b, d = rig()
+    live_request(d)
     d.handle_device(KeyEvent(KEY_APPROVE, TAP))
     assert b.slots[0].status != Status.NEEDS
 
 
 def test_deny_leaves_needs():
-    r, b, d = rig(tab=TTY)
-    proved_prompt(b)
+    r, b, d = rig()
+    live_request(d)
     d.handle_device(KeyEvent(KEY_APPROVE, HOLD))
     assert b.slots[0].status != Status.NEEDS
 

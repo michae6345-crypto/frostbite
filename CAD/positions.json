@@ -80,11 +80,17 @@
     "w": 30.0,
     "h": 11.5,
     "cut": {
-      "x": 5.7,
-      "y": 6.95,
-      "w": 30.6,
-      "h": 12.1
+      "x": 5.5,
+      "y": 6.51,
+      "w": 31.0,
+      "h": 12.98
     }
+  },
+  "oled_stack": {
+    "module_gap": 1.8,
+    "glass_below_plate": 0.55,
+    "lip_gap": 1.0,
+    "header_plastic": "removed"
   },
   "usb_cutout": {
     "x": 21.0,

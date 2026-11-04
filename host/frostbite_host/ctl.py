@@ -22,19 +22,24 @@ import sys
 
 from . import ipc
 from .device import NUM_SLOTS, Status
+from .hook import DEFAULT_WAIT
 
 HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
                "PostToolUse", "PostToolUseFailure", "Notification", "PreCompact", "Stop",
                "StopFailure", "SessionEnd"]
 TOOL_EVENTS = {"PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure"}
+HOOK_TIMEOUT = 5
+# Longer than the hook's own wait, so the hook always ends first and exits cleanly.
+PERMISSION_TIMEOUT = int(DEFAULT_WAIT) + 10
 
 
 def hooks_snippet(hook_path: str) -> dict:
     # Claude Code runs this through a shell, so a path with spaces has to be quoted.
-    entry = {"type": "command", "command": shlex.quote(hook_path), "timeout": 5}
+    entry = {"type": "command", "command": shlex.quote(hook_path)}
     hooks = {}
     for ev in HOOK_EVENTS:
-        group: dict = {"hooks": [dict(entry)]}
+        timeout = PERMISSION_TIMEOUT if ev == "PermissionRequest" else HOOK_TIMEOUT
+        group: dict = {"hooks": [{**entry, "timeout": timeout}]}
         if ev in TOOL_EVENTS:
             group = {"matcher": "*", **group}
         hooks[ev] = [group]

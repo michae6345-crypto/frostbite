@@ -14,10 +14,13 @@ log = logging.getLogger("frostbite.state")
 
 LINGER_DONE = 10 * 60.0     # finished slots stay green this long, then free
 LINGER_ERROR = 30 * 60.0    # failed slots stay red a bit longer
-QUIET_RUN = 60 * 60.0       # a Claude session this silent is not running: Stop never fires
-                            # after an interrupt, and a turn can end without any event
+QUIET_RUN = 60 * 60.0       # silent this long inside one tool call: Stop never fires after an
+                            # interrupt, and cancelling a tool fires nothing either
+QUIET_TURN = 15 * 60.0      # silent this long with no tool in flight
+QUIET_NEEDS = 30 * 60.0     # an amber slot nobody can answer from the pad stops being amber
 DEAD_AFTER = 24 * 60 * 60.0 # any slot this silent is dead (crash, closed window, no SessionEnd)
 ANSWER_GRACE = 15.0         # Notification arrives ~6 s after the dialog: ignore it once answered
+PAGE_SECONDS = 2.0          # a prompt too long for the OLED pages through at this rate
 OVERFLOW_TTL = 60 * 60.0    # how long a session with no free slot keeps the glow amber
 MAX_PENDING = 16
 FLASH_SECONDS = 3.0
@@ -87,7 +90,8 @@ class Prompt:
     text: str                 # what the OLED shows, e.g. "Bash(npm test)?"
     tool: str = ""            # matched against PostToolUse to close it
     agent: str | None = ""    # subagent id, "" for the main thread, None if unknown
-    kind: str = "permission"  # "permission" (Return answers it) or "question" (needs reading)
+    kind: str = "permission"  # "permission", or "question" (only the terminal can answer it)
+    request: str | None = None  # id of the hook waiting on the pad; None once nothing is waiting
 
 
 @dataclass
@@ -105,6 +109,7 @@ class Slot:
     tool: str = ""           # last tool description (Claude), used for "needs" detail
     pending: list[Prompt] = field(default_factory=list)  # oldest first
     answered: float = -1e12  # when a prompt was last closed
+    tool_open: bool = False  # a PreToolUse has had no PostToolUse yet
 
     def title(self, index: int) -> str:
         n = index + 1
@@ -133,6 +138,8 @@ class Board:
         self.linger_done = linger_done
         self.linger_error = linger_error
         self.quiet_run = QUIET_RUN
+        self.quiet_turn = QUIET_TURN
+        self.quiet_needs = QUIET_NEEDS
         self.dead_after = DEAD_AFTER
         self.overflow: dict[str, float] = {}  # sessions waiting on you with no slot to show it
         self._flash: tuple[str, float, float] | None = None
@@ -151,7 +158,8 @@ class Board:
         # Full: reuse a finished slot, then an idle one. A red slot may not have been seen
         # yet, so it goes last. Running and waiting slots are never pushed out.
         for wanted in ((Status.DONE,), (Status.IDLE,), (Status.ERROR,)):
-            cands = [(s.since, i) for i, s in enumerate(self.slots) if s and s.status in wanted]
+            cands = [(s.since, i) for i, s in enumerate(self.slots)
+                     if s and s.status in wanted and not s.tool_open]
             if cands:
                 _, i = min(cands)
                 log.info("slots full: evicting slot %d (%s) for %s", i + 1, self.slots[i].key, key)
@@ -204,6 +212,8 @@ class Board:
             s.log_path = log_path
         if terminal:
             s.terminal.update({k: v for k, v in terminal.items() if v})
+            if "tty" in terminal and not terminal["tty"]:
+                s.terminal.pop("tty", None)  # a failed lookup must not keep proving the old tab
             self._drop_same_tty(i, s, now)
         if tool is not None:
             s.tool = clean(tool)
@@ -211,32 +221,65 @@ class Board:
         return i
 
     def _drop_same_tty(self, index: int, s: Slot, now: float) -> None:
-        """One tty runs one Claude session, so an older slot on it is dead. Left in place it
-        could pass the tty check and have Approve answer the wrong session."""
+        """A finished slot on a tty a new session now uses is dead. A running or waiting one
+        might be a nested `claude -p`, so it stays."""
         tty = s.terminal.get("tty")
         if not tty or s.source != "claude":
             return
         for j, other in enumerate(self.slots):
-            if j != index and other and other.source == "claude" and other.terminal.get("tty") == tty:
+            if (j != index and other and other.source == "claude" and other.terminal.get("tty") == tty
+                    and other.status in (Status.IDLE, Status.DONE)):
                 log.info("slot %d freed: %s took over %s", j + 1, s.key, tty)
                 self.slots[j] = None
 
     # ------------------------------------------------------------------ prompts
+    @staticmethod
+    def _showing(s: Slot) -> Prompt | None:
+        """The prompt a slot shows: the oldest the pad can answer, else the oldest open."""
+        return next((p for p in s.pending if p.request), s.pending[0] if s.pending else None)
+
+    def find_request(self, request: str) -> tuple[int, Prompt] | None:
+        for i, s in enumerate(self.slots):
+            if s is not None:
+                for p in s.pending:
+                    if p.request == request:
+                        return i, p
+        return None
+
+    def shown_request(self, now: float) -> str | None:
+        """The request on the OLED right now, if any. A flash hides it."""
+        s = self.slots[self.selected]
+        if s is None or not s.pending or self.flash_active(now):
+            return None
+        return self._showing(s).request
+
+    def has_live_request(self, index: int) -> bool:
+        s = self.slots[index]
+        return s is not None and any(p.request for p in s.pending)
+
+    def release_request(self, request: str) -> None:
+        """Nothing is waiting on the pad any more. The prompt itself may still be on screen."""
+        found = self.find_request(request)
+        if found:
+            found[1].request = None
+            s = self.slots[found[0]]
+            s.detail = self._showing(s).text
+
     def answer(self, index: int, now: float, *, status: Status, detail: str,
-               all_prompts: bool = False) -> None:
-        """A keystroke was sent for this slot. No hook fires at that moment, so close the
-        prompt here. That also makes Approve one-shot."""
+               request: str | None = None, all_prompts: bool = False) -> None:
+        """A press answered a request, or Stop ended the turn. No hook fires at that moment,
+        so close it here."""
         s = self.slots[index]
         if s is None:
             return
         if all_prompts:
             s.pending.clear()
-        elif s.pending:
-            s.pending.pop(0)
+        else:
+            s.pending = [p for p in s.pending if p.request != request]
         s.answered = now
         s.updated = now
         if s.pending:
-            s.detail = s.pending[0].text
+            s.detail = self._showing(s).text
             return
         if s.status != status:
             s.status = status
@@ -278,17 +321,23 @@ class Board:
             if s is None:
                 continue
             s.since, s.updated = min(s.since, now), min(s.updated, now)  # clock stepped back
-            limit = {Status.DONE: self.linger_done, Status.ERROR: self.linger_error}.get(s.status)
+            limits = {Status.DONE: self.linger_done, Status.ERROR: self.linger_error}
+            if s.source == "train":
+                limits[Status.IDLE] = self.linger_done  # a run that went quiet
+            limit = limits.get(s.status)
             quiet = now - s.updated
             if (limit is not None and now - s.since >= limit) or quiet >= self.dead_after:
                 log.info("slot %d expired (%s %s)", i + 1, s.key, s.status.name.lower())
                 self.slots[i] = None
                 changed = True
-            elif s.source == "claude" and s.status == Status.RUN and quiet >= self.quiet_run:
+            elif s.source == "claude" and (
+                    (s.status == Status.RUN and quiet >= (self.quiet_run if s.tool_open else self.quiet_turn))
+                    or (s.status == Status.NEEDS and quiet >= self.quiet_needs and not self.has_live_request(i))):
                 log.info("slot %d went quiet (%s)", i + 1, s.key)
                 s.status = Status.IDLE
                 s.since = now
                 s.detail = f"quiet {ago(quiet)}"
+                s.pending.clear()
                 changed = True
         return changed
 
@@ -306,7 +355,7 @@ class Board:
         """Apply one IPC message (from frostbite-hook, frostbite-ctl or a watcher).
         Returns True if anything visible may have changed."""
         op = msg.get("op")
-        if op == "update":
+        if op in ("update", "permission"):
             return self._apply_update(msg, now)
         if op == "free":
             return self.free(str(msg.get("key")))
@@ -364,7 +413,8 @@ class Board:
                     hint = msg.get("tool_hint")
                     if prev and prev.tool and hint and prev.tool.startswith(hint):
                         tool = prev.tool
-                prompt = Prompt(clean(detail), tool, agent, msg.get("kind") or "permission")
+                prompt = Prompt(clean(detail), tool, agent, msg.get("kind") or "permission",
+                                msg.get("id") if msg.get("op") == "permission" else None)
             elif prev and prev.pending:
                 # Something else in this session moved on; the open prompt is still open.
                 st, detail = None, None
@@ -380,15 +430,22 @@ class Board:
         if i is None:
             if st == Status.NEEDS:
                 self.overflow[key] = now
+            else:
+                self.overflow.pop(key, None)  # answered: no longer waiting on you
             return False
         self.overflow.pop(key, None)
         s = self.slots[i]
+        if source == "claude":
+            if msg.get("tool") and status == "run":
+                s.tool_open = True
+            elif msg.get("resolve") or msg.get("clears"):
+                s.tool_open = False
         if prompt is not None and not (prompt.kind == "question" and any(
                 p.kind == "question" and p.tool == prompt.tool and p.agent == prompt.agent
                 for p in s.pending)):
             s.pending = (s.pending + [prompt])[-MAX_PENDING:]
         if s.pending:
-            s.detail = s.pending[0].text  # the oldest prompt is the dialog on screen
+            s.detail = self._showing(s).text
         return True
 
     # ------------------------------------------------------------------ rendering
@@ -401,7 +458,7 @@ class Board:
         else:
             line0 = fit_lr(s.title(i), STATUS_WORD[s.status])
             if s.detail:
-                line1 = fit(s.detail)
+                line1 = self._paged(s.detail, now) if s.pending else fit(s.detail)
             elif s.status in (Status.DONE, Status.ERROR):
                 line1 = fit(f"{s.status.name.lower()} {ago(now - s.since)} ago")
             else:
@@ -409,6 +466,16 @@ class Board:
         if self.flash_active(now):
             line1 = fit(self._flash[0])
         return line0, line1
+
+    @staticmethod
+    def _paged(text: str, now: float) -> str:
+        """A long prompt pages through, so the tail of a command can be read before answering."""
+        if len(text) <= OLED_COLS:
+            return text
+        size = OLED_COLS - 1
+        pages = [text[i:i + size] for i in range(0, len(text), size)]
+        page = int(now // PAGE_SECONDS) % len(pages)
+        return pages[page] + (">" if page < len(pages) - 1 else "")
 
     def summary(self) -> str:
         counts = {st: 0 for st in Status}

@@ -231,12 +231,13 @@ def place():
             ref_t.SetTextAngleDegrees(0)
             if p["bottom"]:
                 dy = 3.0 if p["y"] < H / 2 else -3.0
-                ref_t.SetPosition(pt(p["x"], p["y"] + dy))
+                dx = 0.35 if ref == "LED12" else 0.0   # clear of LED9's pin-1 triangle
+                ref_t.SetPosition(pt(p["x"] + dx, p["y"] + dy))
             else:
                 ref_t.SetPosition(pt(p["x"], p["y"] + 2.4))
         if ref == "SW3":
             # LED11's GND pad is 0.84 mm from this joint and neither part can move.  Pad 2 -> 2.0 mm
-            # (ring 0.24, JLCPCB minimum 0.18): +0.15 mm gap, and LED11's pin-1 mark keeps its silk.
+            # (ring 0.24, JLCPCB minimum 0.20): +0.15 mm gap, and LED11's pin-1 mark keeps its silk.
             for q in fp.Pads():
                 if q.GetNumber() == "2":
                     q.SetSize(pcbnew.F_Cu, pcbnew.VECTOR2I(mm(2.0), mm(2.0)))
@@ -246,7 +247,7 @@ def place():
     F, B = pcbnew.F_SilkS, pcbnew.B_SilkS
     text(board, F, "FROSTBITE", 39.0, 3.2, size=1.6, thick=0.28)
     snowflake(board, F, 55.6, 3.4, 2.4)
-    text(board, B, "FROSTBITE", W / 2, 43.4, size=3.0, thick=0.45, mirror=True)
+    text(board, B, "FROSTBITE", W / 2, 43.7, size=3.0, thick=0.45, mirror=True)
     text(board, B, "Frostbite 9  rev A  Hack Club Hackpad", W / 2, 61.9, size=1.0, thick=0.15, mirror=True)
     snowflake(board, B, 8.0, 43.4, 2.4)
     snowflake(board, B, W - 8.0, 43.4, 2.4)
@@ -373,6 +374,10 @@ def route():
             t.SetWidth(mm(MIN_SIGNAL_TRACK))
             widened += 1
     print("widened", widened, "neck-down segments to", MIN_SIGNAL_TRACK, "mm")
+    # SWCLK (19.75, 1.8), SWDIO (22.25, 1.8), RST (22.25, 4.4), same source as xiao_vin_gnd: GND
+    # under RST would hold the XIAO in reset if the mask wore through.  Added after routing because
+    # it only affects the pour and already sits inside xiao_back, so the DSN and routes are unchanged.
+    keepout(board, "xiao_swd_rst", 18.7, 0.7, 23.3, 5.5, no_pour=True)
     add_zones(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     pcbnew.SaveBoard(str(BOARD), board)

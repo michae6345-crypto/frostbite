@@ -30,8 +30,9 @@ cp ~/qmk_firmware/frostbite_ledtest.uf2 ../production/led-test.uf2
 ## Flash
 
 1. Put the XIAO into the UF2 bootloader:
+   - hold the XIAO **BOOT** button while plugging in USB. **Use this for the first flash:** the other two ways are part
+     of the Frostbite firmware, so they do nothing until it is on the XIAO, or
    - double-tap the XIAO **RESET** button, or
-   - hold the XIAO **BOOT** button while plugging in USB, or
    - **bootmagic combo**: hold **Approve + Stop** (bottom-left and bottom-right keys) while
      plugging in. This also clears EEPROM.
 2. A drive named **RPI-RP2** appears. Drag `firmware.uf2` (or `led-test.uf2`) onto it.
@@ -42,7 +43,8 @@ red, green, blue and then white in chain order while the OLED shows `LED TEST n/
 If LED n works but n+1 never lights, check LED n's DOUT, LED n+1's DIN, and its 5 V/GND.
 The test build also shows the last key pressed (`key: rR cC`) and an encoder count.
 
-Three things still have to be checked on the assembled pad:
+Three things need the real parts. The OLED and the knob can be checked with `led-test.uf2` on the bench as soon as J1 is
+soldered, before the PCB goes into the case:
 
 - **OLED orientation**: the display is rotated 180 degrees by default because the header sits at
   the right end of the module, and four reference Hackpads with that placement flip it. This has not
@@ -53,7 +55,9 @@ Three things still have to be checked on the assembled pad:
   generates `ENCODER_RESOLUTION`), and it means encoder transitions per step. It is currently 4.
   - One detent moves the count by two (one detent moves two slots): double the value.
   - Two detents are needed for one count, as on a true 30-detent/15-pulse EC11E: set it to 2.
-- **Encoder direction**: if clockwise counts down, swap `pin_a` and `pin_b` in `keyboard.json`.
+- **Encoder direction**: if clockwise counts down, swap `pin_a` and `pin_b` in `keyboard.json`. Do not resolder. The swap
+  makes `PCB/tools/check_netlist.py` and `verify` G2.firmware_pins fail, because both require `pin_a` on `ENC_A`, so those
+  checks need updating with it.
 
 ## Keymap
 
@@ -72,7 +76,7 @@ Key index = `row * 3 + col` (design.json `keys[]` order). LED = the per-key LED 
 | Stop    | 8 | (2,2) | 8 | KEY 8 | Escape |
 | Encoder | - | GP1/GP2 | - | select slot 0-5 (wraps), ENCODER event | Volume up / down |
 
-Glow LEDs 9-12 sit at the four corners. They show the SET_GLOW colour, which defaults to ice blue `#7fe3ff` at about 27 % brightness.
+Glow LEDs 9-12 sit at the four corners. They show the SET_GLOW colour. With no host that is ice blue `#7fe3ff` at 70 of 255, about 27 % (`GLOW_DEFAULT_BRI`). With the daemon running, the host sets it: `glow()` in `host/frostbite_host/state.py`.
 
 ## Raw HID protocol (design.json `protocol`)
 
@@ -91,6 +95,8 @@ Usage page `0xFF60`, usage `0x61`, 32-byte reports. Byte 0 is the command and un
 
 **Talk** always sends F20 (held while the key is held) in both modes, so push-to-talk tools work
 whether or not the host app is running. In host mode it also sends its KEY event, and the host ignores that event on purpose.
+
+**Stop** in fallback is a plain Escape to whatever app is in front, with no proof of anything (see `host/README.md`).
 
 **Report ID**: the raw HID descriptor has no report IDs. hidapi's leading `0x00` on writes is
 consumed by the OS, so the firmware sees the command as the first byte.
@@ -114,11 +120,12 @@ white and brighten while pressed. Colour changes cross-fade. A simple current li
 - Row 1 shows OLED_LINE 0, or `slot N  STATUS` for the selected slot (N is 1-6 on screen).
 - Row 2 shows OLED_LINE 1, or a summary such as `3 run 1 wait 2 done` once the host has sent statuses, or otherwise a hint.
 - Row 4 is a slot strip (`1- 2R 3D 4? 5! 6-`), with the selected slot inverted and `HID` or `KBD` showing the mode.
-- Burn-in protection: the display turns off after 10 minutes without activity. Only a key press, an encoder turn or a real status change (SET_SLOT or SET_ALL with a different value) counts as activity. PING, OLED_LINE (so `N ago` updates are safe), SET_GLOW, SET_SELECTED and a repeated SET_ALL neither wake it nor keep it on, though the text still updates for the next wake. Resuming from USB suspend does not wake it either once the 10 minutes have passed.
+- Burn-in protection: the display turns off after 10 minutes without activity. Only a key press, an encoder turn, a real status change (SET_SLOT or SET_ALL with a different value) or a USB resume counts as activity. PING, OLED_LINE (so `N ago` updates are safe), SET_GLOW, SET_SELECTED and a repeated SET_ALL neither wake it nor keep it on, though the text still updates for the next wake. When the laptop wakes from sleep, the USB resume lights the display once so a waiting prompt is visible, and the normal 10-minute timer runs from there. PINGs cannot extend it.
 - Row 3 is a dotted divider. Do not write text to it: blanking it every frame re-dirties that block and starves row 4 of QMK's one-block-per-loop OLED render.
 
 On macOS, F14 and F15 (Agent 2 and 3 in fallback) may change display brightness. This has not been tested. The keycodes come from design.json.
 
 ## Bootloader combo
 
-Hold **Approve + Stop** while plugging in. Double-tapping RESET on the XIAO also works, and so does holding BOOT while plugging in.
+Hold **Approve + Stop** while plugging in. Both keys are needed: `bootmagic_should_reset` in `frostbite.c` replaces the
+single-key default that `keyboard.json` names. Double-tapping RESET on the XIAO also works, and so does holding BOOT while plugging in.

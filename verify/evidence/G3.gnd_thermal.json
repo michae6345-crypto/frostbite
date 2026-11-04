@@ -8,8 +8,8 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "PCB/frostbite.kicad_pcb": "770580175ef843e0c52be8d97ae1b60e5ec0be06cc4cbaaaf57661391c552e7e",
-    "PCB/frostbite.kicad_dru": "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2"
+    "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd",
+    "PCB/frostbite.kicad_dru": "0f325e07b633db253f2415d09fab14b62e6e0da87da8d0a569bcb8fb2a48816c"
   },
   "details": {
     "pads_measured": 23,
@@ -18,11 +18,6 @@
         "pad": "ENC1 pad C",
         "layer": "F.Cu",
         "ring_copper": 0.223
-      },
-      {
-        "pad": "LED6 pad 3",
-        "layer": "B.Cu",
-        "ring_copper": 0.157
       },
       {
         "pad": "LED5 pad 3",
@@ -36,6 +31,11 @@
       },
       {
         "pad": "LED2 pad 3",
+        "layer": "B.Cu",
+        "ring_copper": 0.157
+      },
+      {
+        "pad": "LED6 pad 3",
         "layer": "B.Cu",
         "ring_copper": 0.157
       },
@@ -56,6 +56,6 @@
       }
     ]
   },
-  "timestamp": "2026-11-03T22:16:13+00:00",
-  "duration_s": 0.12
+  "timestamp": "2026-11-04T01:04:16+00:00",
+  "duration_s": 0.16
 }

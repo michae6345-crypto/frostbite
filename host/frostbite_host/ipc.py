@@ -60,3 +60,24 @@ def send(msg: dict, timeout: float = 0.25, want_reply: bool = False,
                 break
             buf += chunk
         return json.loads(buf) if buf.strip() else None
+
+
+def ask(msg: dict, wait: float, connect_timeout: float = 0.2, path: Path | None = None) -> dict | None:
+    """Send one message and hold the connection until the daemon answers or `wait` runs out.
+    The open connection is what tells the daemon this request is still alive, so this side
+    never half-closes it. Raises OSError if the daemon is not reachable or does not answer."""
+    data = (json.dumps(msg, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+    if len(data) > MAX_MSG:
+        raise ValueError("message too large")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(connect_timeout)
+        s.connect(str(path or socket_path()))
+        s.sendall(data)
+        s.settimeout(wait)
+        buf = b""
+        while not buf.endswith(b"\n") and len(buf) < MAX_MSG:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+    return json.loads(buf) if buf.strip() else None

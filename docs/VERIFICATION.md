@@ -1,8 +1,8 @@
 # Frostbite verification workflow
 
 From a design spec in the Studio to a working macropad on the desk. The PCB is ordered once
-(JLCPCB, $15 grant) and the case is printed once by someone else (Printing Legion). Neither can be
-patched later, so the checks before submission carry most of the weight.
+(JLCPCB, $15 grant) and the full case is printed once by someone else (Printing Legion), after the small test prints in
+`docs/coupons/`. Neither can be patched later, so the checks before submission carry most of the weight.
 
 **Principles**
 1. **One source of truth.** The chosen spec plus `FB.layoutById` produce `build/design.json`: switch
@@ -62,9 +62,9 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
   - Analog use only on D0–D3 (none planned); LED data on one GPIO, chain DIN→DOUT in `design.json.leds` order. No decoupling caps: the kit has none, and the reference Hackpad boards checked in docs/audit/electrical.md run without them; a known risk, checked at bring-up.
   - Matrix: one 1N4148 per switch, same direction (COL2ROW); no column or row shorted to another net.
   - Encoder A/B on two GPIO, C to GND; push wired only if the layout says `dialPress`.
-  - SK6812 on 5 V with 3.3 V data is marginal (VIH ≈ 3.5 V). Feed the first LED's VDD through a
-    spare 1N4148 (≈ 4.3 V) or prove it at bring-up (G10). The kit has 20 diodes, the matrix uses ≤ 9.
-  - Starting map for stratum9: rows D0 D1 D2, cols D3 D6 D7, enc A/B D8 D9, LED D10, OLED D4/D5 = 11/11. No spare pin.
+  - SK6812 on 5 V with 3.3 V data is marginal (VIH ≈ 3.5 V). Prove it at bring-up (G10). The board has no footprint for a
+    spare 1N4148 on the first LED's VDD (≈ 4.3 V), so that fallback means cutting a trace.
+  - Pin map (`design.json` `pins`): rows D0 D1 D2, cols D3 D9 D10, enc A/B D7 D8, LED D6, OLED D4/D5 = 11/11. No spare pin.
 - **Tool / who:** `kicad-cli sch erc --severity-error --exit-code-violations PCB/frostbite.kicad_sch`;
   `kicad-cli sch export netlist` → `verify/netlist.js` diffs nets against design.json (V).
 - **Pass:** 0 ERC errors; netlist diff empty.
@@ -76,7 +76,7 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
   - Board file has only F.Cu/B.Cu; Edge.Cuts bounding box ≤ 100 × 100 (parse `.kicad_pcb` or the DRC report).
   - Every footprint lib id is on the allowlist above; XIAO footprint on **B.Cu**, its USB connector ≥ 1 mm past Edge.Cuts.
   - `kicad-cli pcb export pos` centres match design.json within 0.05 mm (switches on the 19.05 grid, dial and OLED header where the case expects them).
-  - M3 MountingHole footprints at design.json screw positions, ≥ 0.5 mm from every courtyard.
+  - No PCB mounting holes: the inserts sit in the Top's side walls, outside the PCB's path.
   - Silkscreen has "Frostbite" and "XIAO HERE" on B.Silkscreen.
   - Gerbers + drill → `production/gerbers.zip`, opened in a Gerber viewer (or JLC's preview) once.
 - **Tool / who:** kicad-cli + `verify/pcb.js` (V); fixes by P.
@@ -88,7 +88,7 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
   - Bounding box of the assembly ≤ 200 × 200 × 100.
   - Plate cutouts 14.0 mm (+0.05 max), plate 1.5 mm at the clips or relief pockets; EC11 bushing hole ≥ 7.4 mm.
   - PCB pocket = PCB outline + 0.2–0.4 mm per side; standoffs under the PCB clear of THT pins.
-  - Insert holes 4.7 Ø × 4 deep inside bosses ≥ 8.7 Ø; screw pass-through 3.4; bosses at the PCB MountingHoles.
+  - Insert holes 4.7 Ø × 4 deep inside bosses ≥ 8.7 Ø; screw pass-through 3.4; bosses in the Top's side walls, outside the PCB insertion envelope.
   - USB-C cutout centred on the XIAO receptacle from `kicad-cli pcb export step` (x from the pos file, z from the stack)
     with ≥ 0.5 mm clearance around a 12.5 × 7 mm cable overmold through the full wall (bezels 9–12 mm are deeper
     than a USB-C plug reaches, so the wall needs a recess there).
@@ -98,7 +98,7 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
     each part has a flat face for the bed; walls ≥ 2.0 mm. Report any support that is still needed.
   - All parts are printed (PETG); nothing references acrylic or laser-cut sheet.
 - **Tool / who:** C writes it, V runs it.
-- **Pass:** all checks pass; exported `production/Top.step`, `Bottom.step`, `Spacer.step`, `CAD/frostbite.step` open again in CadQuery.
+- **Pass:** all checks pass; exported `production/Top.step`, `Bottom.step`, `GlowBand.step`, `OLEDSupport.step`, `Knob.step` and `CAD/frostbite-assembly.step` open again in CadQuery.
 - **Fail:** case geometry → G4. Hole or connector position → G3 or G0 (design.json). Envelope → G0.
 
 ### G5 BOM vs kit
@@ -148,13 +148,21 @@ Agents: **V** verifier, **P** PCB (schematic + layout), **C** case CAD, **F** fi
 ### G10 Physical bring-up (kit, PCB and case arrive)
 Order matters; stop at the first failure.
 1. Bare PCB: continuity VBUS–GND, 3V3–GND open; every matrix row/column isolated from its neighbours.
-2. Solder the XIAO (underside) only. Flash the `ledtest` uf2. Solder the LEDs and OLED: all N LEDs light in
-   chain order, colours correct (GRB order), no flicker at full white; I²C scan finds 0x3C; OLED text upright.
-3. Diodes, then switches (check stripe direction before soldering all). QMK `KEY_LOG` / matrix tester: each key once, no ghosts.
-4. Encoder: clockwise = volume up / next slot; if reversed, swap pins in keyboard.json, do not resolder.
-5. Raw HID: host `ping` returns the firmware version; replay one fixture and watch the slots change.
-6. Case: PCB drops into the pocket without force, USB-C plug seats fully, inserts take the screws straight,
-   switches clip into the plate, caps clear the plate and each other, glow gap evenly lit.
+2. Solder the XIAO (underside) only. Flash `led-test.uf2` with the BOOT button.
+3. LED1 alone on the highest-voltage USB port, then LED2 to LED9, then LED10, then LED11 to LED13. Each LED steps red,
+   green, blue, white in chain order, one at a time at level 90 of 255, colours correct (GRB order), no flicker.
+4. Diodes (check stripe direction before soldering all), encoder, then the OLED on J1 with the header plastic removed.
+   Upright OLED text proves I²C, since `ledtest` has no I²C scan. Turn the knob: `knob:` counts one per click.
+5. Clip the switches into the plate, lower the PCB onto them, solder 18 joints. `ledtest` shows `key: rR cC`: each key
+   once, no ghosts.
+6. Encoder: clockwise = volume up / next slot; if reversed, swap pins in keyboard.json, do not resolder. The swap fails
+   `PCB/tools/check_netlist.py` and `verify` G2.firmware_pins until they are updated with it.
+7. Raw HID: flash `firmware.uf2`. `HidTransport.find()` sees the pad, and a running daemon shows `HID` on the OLED. The PING
+   reply carries protocol version 1; there is no host `ping` command. `frostbite-ctl set 1 run test`, up to slot 6, changes
+   the slots and lights all 13 LEDs together. No shipped build drives the chain at full white: the default keymap caps
+   output at 40 % of full scale.
+8. Case: the PCB goes in without force, USB-C plug seats fully, inserts take the screws straight, caps clear the plate
+   and each other, glow gap evenly lit.
 - **Fail:** assembly fault → rework and repeat the step. Design fault → note it under "Rev B" in the README and
   loop to G2/G3/G4; firmware fault → G6.
 

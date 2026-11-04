@@ -23,7 +23,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 2.68,
+      "duration_s": 2.89,
       "stdout_tail": [
         "Found 0 violations",
         "Found 0 unconnected items",
@@ -36,8 +36,8 @@
     }
   ],
   "inputs_sha256": {
-    "PCB/frostbite.kicad_dru": "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2",
-    "PCB/frostbite.kicad_pcb": "770580175ef843e0c52be8d97ae1b60e5ec0be06cc4cbaaaf57661391c552e7e",
+    "PCB/frostbite.kicad_dru": "0f325e07b633db253f2415d09fab14b62e6e0da87da8d0a569bcb8fb2a48816c",
+    "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd",
     "PCB/frostbite.kicad_prl": "c99b6e681d204f9aae83f8bb89617a6d7a139efcfca526f4b1d7539fb2a0ff6f",
     "PCB/frostbite.kicad_pro": "4686fcef6140bbdf6bad51e75773ce22f6f03f0f79816a8b020ceb1dc45d411d",
     "PCB/frostbite.kicad_sch": "4d947106d758fc3405be5d4da340b47f76696e6900322e39446c424f5ea3b0e2",
@@ -60,6 +60,6 @@
       "schematic_parity": 0
     }
   },
-  "timestamp": "2026-11-03T22:16:09+00:00",
-  "duration_s": 2.7
+  "timestamp": "2026-11-04T01:04:12+00:00",
+  "duration_s": 2.92
 }

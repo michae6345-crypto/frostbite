@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import checks as C
 from . import geom
-from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, sha256
+from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli, sha256
 from .main import NEEDS_REAL_PARTS, exit_code, write_report
 
 # ---------------------------------------------------------------- synthetic fixtures
@@ -146,8 +146,13 @@ def synth_solid(d: dict):
     return trimesh.creation.extrude_polygon(g.box(0, 0, sh["w"], sh["h"]).buffer(-1), 1.5)
 
 
-def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(30.6, 12.1), boss_x=None,
-              depth=16.0, usb_w=None, hole_move=0.0):
+def synth_box(height: float):
+    import trimesh
+    return trimesh.creation.box(extents=(34.0, 13.5, height))
+
+
+def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(31.0, 12.98), window_dx=0.0,
+              boss_x=None, depth=16.0, usb_w=None, hole_move=0.0):
     """A Top like the real one, in print orientation: plate top on the bed at z=0, skirt rising to z=depth."""
     import shapely.geometry as g
     import shapely.ops as o
@@ -173,8 +178,9 @@ def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(3
         eo = g.box(ex - enc[1] / 2, ey - enc[2] / 2, ex + enc[1] / 2, ey + enc[2] / 2)
     w, mod = d["oled"]["window"], d["oled"]["module"]
     cxw, cyw = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
+    cxw += window_dx
     win = g.box(cxw - window[0] / 2, cyw - window[1] / 2, cxw + window[0] / 2, cyw + window[1] / 2)
-    recess = g.box(mod["x"] - tol, mod["y"] - tol, mod["x"] + mod["w"] + tol, mod["y"] + mod["h"] + tol)
+    recess = g.box(mod["x"] - 1.1, mod["y"] - 0.8, mod["x"] + mod["w"] + tol, mod["y"] + mod["h"] + 0.8)
     bosses, holes = [], []
     for sc in d["case"]["screws"]["positions"]:
         x = sc["x"] if boss_x is None else (boss_x[0] if sc["x"] < W / 2 else boss_x[1])
@@ -201,15 +207,17 @@ def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(3
 # ---------------------------------------------------------------- harness
 
 class Case:
-    def __init__(self, name, cid, fn, clean, fault, expect_reason):
+    def __init__(self, name, cid, fn, clean, fault, expect_reason, kicad=False):
         self.name, self.cid, self.fn, self.clean, self.fault, self.expect = name, cid, fn, clean, fault, expect_reason
+        self.kicad = kicad
 
 
-def _ctx(root: Path, base: Path) -> Ctx:
+def _ctx(root: Path, base: Path, kicad=False) -> Ctx:
     ev = base / "evidence"
     work = base / "work"
     work.mkdir(parents=True, exist_ok=True)
-    return Ctx(root=root, evidence_dir=ev, work=work, kicad_cli=None, env=base_env(), run_qmk=False, allow_regen=False)
+    return Ctx(root=root, evidence_dir=ev, work=work, kicad_cli=find_kicad_cli() if kicad else None, env=base_env(),
+               run_qmk=False, allow_regen=False)
 
 
 def _copy_project(real: Path, dst: Path):
@@ -315,7 +323,8 @@ def run_selftest(verify: Path, real: Path) -> int:
         for q in prod.glob("*"):
             if q.suffix.lower() == ".stl":
                 q.unlink()
-        synth_solid(d).export(prod / "Top.stl")
+        for n in C.PARTS:
+            synth_solid(d).export(prod / f"{n}.stl")
 
     def stl_hole(root):
         import trimesh
@@ -326,23 +335,20 @@ def run_selftest(verify: Path, real: Path) -> int:
         m.update_faces(keep)
         m.export(p)
 
-    def stl_stale(root):
-        import os
-        import time
-        later = time.time() + 60
-        os.utime(root / "design.json", (later, later))
-
     def top_write(root, **kw):
         prod = root / "production"
         prod.mkdir(exist_ok=True)
         for q in prod.glob("*"):
             if q.suffix.lower() == ".stl":
                 q.unlink()
-        synth_top(kw.pop("dd", d), **kw).export(prod / "Top.stl")
+        dd = kw.pop("dd", d)
+        synth_top(dd, **kw).export(prod / "Top.stl")
+        sup = dd["case"]["oled_support"]
+        synth_box(sup["module_gap"] - 2 * sup["tape"]).export(prod / "OLEDSupport.stl")
         r = d["mcu"]["rect"]
         o = d["oled"]["window"]
-        c = kw.get("window", (30.6, 12.1))
-        cut = {"x": o["x"] + o["w"] / 2 - c[0] / 2, "y": o["y"] + o["h"] / 2 - c[1] / 2, "w": c[0], "h": c[1]}
+        c = kw.get("window", (31.0, 12.98))
+        cut = {"x": o["x"] + o["w"] / 2 + kw.get("window_dx", 0.0) - c[0] / 2, "y": o["y"] + o["h"] / 2 - c[1] / 2, "w": c[0], "h": c[1]}
         pos = {"keys": [{"ref": k["ref"], "x": k["x"], "y": k["y"]} for k in d["keys"]],
                "encoder": {"x": d["encoder"]["x"], "y": d["encoder"]["y"]},
                "usb_cutout": {"x": r["x"] + r["w"] / 2, "w": d["case"]["usb_cutout"]["w"], "h": d["case"]["usb_cutout"]["h"]},
@@ -356,6 +362,48 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def t(**kw):
         return lambda root: top_write(root, **kw)
+
+    def with_gap(gap):
+        def fn(root):
+            _edit_json(root / "design.json", lambda j: j["case"]["oled_support"].__setitem__("module_gap", gap))
+        return fn
+
+    def sunk(**kw):
+        """Glass under the lip (module_gap 0.9): a window smaller than the glass is fine if the active area shows."""
+        def fn(root):
+            dd = json.loads(json.dumps(d))
+            dd["case"]["oled_support"]["module_gap"] = 0.9
+            top_write(root, dd=dd, **kw)
+            with_gap(0.9)(root)
+        return fn
+
+    def prose_edit(root):
+        _edit_json(root / "design.json", lambda j: j["oled"].__setitem__("mount", "reworded"))
+
+    def no_gap(root):
+        _edit_json(root / "design.json", lambda j: j["case"]["oled_support"].pop("module_gap"))
+
+    def wrong_support(root):
+        synth_box(2.0).export(root / "production/OLEDSupport.stl")
+
+    def support_missing(root):
+        (root / "production/OLEDSupport.stl").unlink()
+
+    def step_swapped(root):
+        shutil.copy2(root / "production/Knob.step", root / "production/OLEDSupport.step")
+
+    def annular_019(root):
+        p = root / "PCB/frostbite.kicad_pcb"
+        t0 = p.read_text()
+        t1, n = re.subn(r'\(size 2\.3 2\.3\)(\s+)\(drill 1\.524\)', r'(size 1.904 1.904)\1(drill 1.524)', t0, count=1)
+        assert n == 1, "fixture: no 2.3 / 1.524 pad in the PCB"
+        p.write_text(t1)
+
+    def project_loosens(root):
+        p = root / "PCB/frostbite.kicad_dru"
+        t0 = p.read_text()
+        assert "(min 0.20mm)" in t0, "fixture: project rule text changed"
+        p.write_text(t0.replace("(min 0.20mm)", "(min 0.15mm)"))
 
     def top_broken(root):
         import trimesh
@@ -510,7 +558,9 @@ def run_selftest(verify: Path, real: Path) -> int:
         prod.mkdir(exist_ok=True)
         (prod / "gerbers.zip").write_bytes(b"PK\x05\x06" + b"\0" * 18)
         (prod / "firmware.uf2").write_bytes(synth_uf2())
-        (prod / "Top.step").write_text("ISO-10303-21;")
+        for n in C.PARTS:
+            (prod / f"{n}.step").write_text("ISO-10303-21;")
+            (prod / f"{n}.stl").write_text("solid x")
         img = root / "docs"
         img.mkdir(exist_ok=True)
         for n in ("render", "schematic", "pcb", "case-exploded"):
@@ -521,6 +571,7 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     def pkg_broken(root):
         (root / "production/gerbers.zip").unlink()
+        (root / "production/OLEDSupport.step").unlink()
         (root / "docs/schematic.png").unlink()
 
     def netlist_check(kind):
@@ -556,14 +607,25 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("boss (CAD/positions.json) moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, boss_on_pad_cad, "[CAD/positions.json vs"),
         Case("bottom_pads.json: pad 0.15 mm from a boss", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, pad_under_boss_json, "vs PCB/build/bottom_pads.json] boss 0"),
         Case("real PCB: design.json boss moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, real_boss_clean, boss_on_pad_design, "D9 pad 2"),
-        Case("stl: older than design.json", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, stl_stale, "older than design.json"),
+        Case("stl: OLEDSupport.stl missing", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, support_missing, "production/OLEDSupport.stl missing"),
         Case("top: one cutout 14.3 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(cut=[14.0] * 4 + [14.3] + [14.0] * 4), "14.300"),
         Case("top: one cutout moved 0.5 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(move=(4, 0.5)), "opening centre"),
         Case("top 13 mm tall: heights come from the part", "G4.switch_cutouts", C.g4_switch_cutouts, t(depth=13.0), t(depth=13.0, cut=13.7), "13.700"),
         Case("top: walls missing, slicer must not guess", "G4.switch_cutouts", C.g4_switch_cutouts, t(), top_broken, "lost material"),
         Case("encoder: round 17.4 clears, 15.0 hits the body", "G4.encoder_clearance", C.g4_encoder_clearance, t(enc=("round", 17.4)), t(enc=("round", 15.0)), "EC11 body"),
         Case("encoder: 12.98 x 16 clears, 11.9 x 16 does not", "G4.encoder_clearance", C.g4_encoder_clearance, t(), t(enc=("rect", 11.9, 16.0)), "EC11 body"),
-        Case("oled: window smaller than the glass", "G4.oled_clearance", C.g4_oled_clearance, t(), t(window=(29.0, 12.1)), "OLED glass"),
+        Case("oled window: 34 x 16 passes, 29 x 12.98 hits the glass", "G4.oled_clearance", C.g4_oled_clearance, t(window=(34.0, 16.0)), t(window=(29.0, 12.98)), "OLED glass hits"),
+        Case("oled window: 12.98 clears the turned glass, 12.4 does not", "G4.oled_clearance", C.g4_oled_clearance, t(), t(window=(31.0, 12.4)), "OLED glass hits"),
+        Case("oled window: smaller than the glass passes if the glass stays under the lip", "G4.oled_clearance", C.g4_oled_clearance,
+             sunk(window=(28.0, 10.4), window_dx=1.8), sunk(window=(20.0, 10.4), window_dx=1.8), "active area not fully visible"),
+        Case("oled: lip over the active area", "G4.oled_clearance", C.g4_oled_clearance, sunk(window=(28.0, 10.4), window_dx=1.8), sunk(window=(28.0, 6.0), window_dx=1.8), "active area not fully visible"),
+        Case("oled gap 3.0 read from design.json: board hits the lip", "G4.oled_clearance", C.g4_oled_clearance, t(), with_gap(3.0), "OLED board hits"),
+        Case("oled gap 2.5 read from design.json: glass proud", "G4.oled_clearance", C.g4_oled_clearance, t(), with_gap(2.5), "stands proud"),
+        Case("oled gap missing from design.json", "G4.oled_clearance", C.g4_oled_clearance, t(), no_gap, "module_gap missing"),
+        Case("oled: support height disagrees with module_gap", "G4.oled_clearance", C.g4_oled_clearance, t(), wrong_support, "OLEDSupport is 2.000"),
+        Case("oled: OLEDSupport.stl missing", "G4.oled_clearance", C.g4_oled_clearance, t(), support_missing, "OLEDSupport.stl missing"),
+        Case("step: OLEDSupport.step is another part", "G4.step_parts", C.g4_step_parts, noop, step_swapped, "OLEDSupport: STEP volume"),
+        Case("step: prose edit in design.json is fine, a real geometry edit is stale", "G4.step_parts", C.g4_step_parts, prose_edit, with_gap(2.0), "OLEDSupport: production STEP"),
         Case("oled: positions.json states the design window, not the cut", "G4.oled_clearance", C.g4_oled_clearance, t(), stale_cut, "oled_window cut"),
         Case("pcb insertion: bosses at old x -3.0 / 64.15", "X.pcb_insertion", C.x_pcb_insertion, t(), t(boss_x=(-3.0, 64.15)), "cannot reach its seat"),
         Case("pcb insertion: the real audited B1 Top", "X.pcb_insertion", C.x_pcb_insertion, t(), old_b1, "cannot reach its seat"),
@@ -572,6 +634,8 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("usb: host VID/PID filter removed", "X.usb_ids", C.x_usb_ids, noop, usb_filter_removed, "keychron"),
         Case("usb: keyboard.json PID differs", "X.usb_ids", C.x_usb_ids, noop, fw_pid, "keyboard.json usb"),
         Case("usb: design.json PID differs", "X.usb_ids", C.x_usb_ids, noop, design_pid, "VENDOR_ID/PRODUCT_ID"),
+        Case("drc: pad annular 0.19 fails", "G3.drc_jlcpcb", C.g3_drc_jlcpcb, real_gnd_clean, annular_019, "annular_width", True),
+        Case("drc: project rules loosened to 0.15, pinned file still gates and 0.20 floor fails", "G3.drc_jlcpcb", C.g3_drc_jlcpcb, real_gnd_clean, project_loosens, "PTH annular ring gates at 0.18", True),
         Case("gnd: one pad set to full", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_override, "zone_connect 2"),
         Case("gnd: zone set to solid", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_zone_solid, "must be thermal"),
         Case("gnd: pour floods the pads", "G3.gnd_thermal", C.g3_gnd_thermal, gnd_clean, gnd_flooded_fill, "no working thermal relief"),
@@ -590,7 +654,9 @@ def run_selftest(verify: Path, real: Path) -> int:
         row = {"case": cs.name, "check": cs.cid}
         try:
             cs.clean(root)
-            clean = cs.fn(_ctx(root, base / "clean"))
+            if cs.kicad and find_kicad_cli() is None:
+                raise SkipCase("kicad-cli not installed")
+            clean = cs.fn(_ctx(root, base / "clean", cs.kicad))
             row["clean_status"] = clean.status
             row["clean_reasons"] = clean.failures[:3] or ([clean.not_run_reason] if clean.not_run_reason else [])
             if cs.fault is None:
@@ -598,7 +664,7 @@ def run_selftest(verify: Path, real: Path) -> int:
                 faulty = None
             else:
                 cs.fault(root)
-                faulty = cs.fn(_ctx(root, base / "fault"))
+                faulty = cs.fn(_ctx(root, base / "fault", cs.kicad))
             if faulty is None:
                 kind = {"OLED1 pin 3": "oled_swap", "LED chain": "chain_break", "XIAO D9": "xiao_pin"}[cs.expect]
                 clean = netlist_check("clean")(_ctx(root, base / "clean"))

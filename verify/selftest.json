@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-03T22:17:51+00:00",
+  "timestamp": "2026-11-04T01:07:10+00:00",
   "status": "PASS",
   "cases": [
     {
@@ -238,13 +238,13 @@
       "ok": true
     },
     {
-      "case": "stl: older than design.json",
+      "case": "stl: OLEDSupport.stl missing",
       "check": "G4.stl_mesh",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "Top.stl is older than design.json: rebuild the case"
+        "production/OLEDSupport.stl missing"
       ],
       "ok": true
     },
@@ -280,9 +280,9 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "SW1: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW1: a 13.8 mm switch housing hits the Top at depth [0.0, 0.5] mm",
+        "SW1: a 13.8 mm switch housing hits the Top at depth [0.55, 1.0] mm",
         "SW2: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW2: a 13.8 mm switch housing hits the Top at depth [1.3, 1.5] mm",
+        "SW2: a 13.8 mm switch housing hits the Top at depth [1.0, 1.5] mm",
         "SW3: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1"
       ],
       "ok": true
@@ -309,7 +309,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "EC11 body gap -4.076 mm at depth [0.5, 1.0] mm, want >= 0.2"
+        "EC11 body gap -4.076 mm at depth [0.55, 1.0] mm, want >= 0.2"
       ],
       "ok": true
     },
@@ -320,18 +320,133 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "EC11 body gap -1.200 mm at depth [0.5, 1.0] mm, want >= 0.2"
+        "EC11 body gap -1.200 mm at depth [0.5, 0.55] mm, want >= 0.2"
       ],
       "ok": true
     },
     {
-      "case": "oled: window smaller than the glass",
+      "case": "oled window: 34 x 16 passes, 29 x 12.98 hits the glass",
       "check": "G4.oled_clearance",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "OLED glass gap -11.500 mm at depth [0.0, 0.5] mm, want >= 0.1"
+        "OLED glass hits the Top on its way in, at depth [0.55, 1.0] mm (16.99 mm2, module turned 1.0 deg and shifted 0.1)",
+        "active area not fully visible: 3.27 mm2 covered by the Top at depth [0.0, 0.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled window: 12.98 clears the turned glass, 12.4 does not",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLED glass hits the Top on its way in, at depth [0.55, 1.0] mm (3.00 mm2, module turned 1.0 deg and shifted 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled window: smaller than the glass passes if the glass stays under the lip",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "active area not fully visible: 58.17 mm2 covered by the Top at depth [0.0, 0.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled: lip over the active area",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "active area not fully visible: 87.88 mm2 covered by the Top at depth [0.0, 0.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled gap 3.0 read from design.json: board hits the lip",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLED glass stands proud of the plate by 0.65 mm with module_gap 3.0",
+        "OLED board hits the Top on its way in, at depth [0.8, 1.0] mm (96.97 mm2, module turned 1.0 deg and shifted 0.1)",
+        "OLEDSupport is 1.400 mm tall, module_gap 3.0 - 2 x tape 0.2 needs 2.600"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled gap 2.5 read from design.json: glass proud",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLED glass stands proud of the plate by 0.15 mm with module_gap 2.5",
+        "OLEDSupport is 1.400 mm tall, module_gap 2.5 - 2 x tape 0.2 needs 2.100"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled gap missing from design.json",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "design.json case.oled_support.module_gap missing: the OLED height is not known"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled: support height disagrees with module_gap",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLEDSupport is 2.000 mm tall, module_gap 1.8 - 2 x tape 0.2 needs 1.400"
+      ],
+      "ok": true
+    },
+    {
+      "case": "oled: OLEDSupport.stl missing",
+      "check": "G4.oled_clearance",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/OLEDSupport.stl missing: nothing sets the module height"
+      ],
+      "ok": true
+    },
+    {
+      "case": "step: OLEDSupport.step is another part",
+      "check": "G4.step_parts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLEDSupport: STEP volume 3217.6 mm3, STL volume 259.6 mm3: not the same part",
+        "OLEDSupport: production STEP is 3217.6 mm3, a rebuild from the current source is 259.6 mm3: stale, rebuild the case"
+      ],
+      "ok": true
+    },
+    {
+      "case": "step: prose edit in design.json is fine, a real geometry edit is stale",
+      "check": "G4.step_parts",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "OLEDSupport: production STEP is 259.6 mm3, a rebuild from the current source is 296.7 mm3: stale, rebuild the case"
       ],
       "ok": true
     },
@@ -342,7 +457,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "CAD/positions.json: oled_window cut {'x': 6.0, 'y': 7.25, 'w': 30.0, 'h': 11.5} != measured {'x': 5.7, 'y': 6.95, 'w': 30.6, 'h': 12.1}"
+        "CAD/positions.json: oled_window cut {'x': 6.0, 'y': 7.25, 'w': 30.0, 'h': 11.5} != measured {'x': 5.5, 'y': 6.51, 'w': 31.0, 'h': 12.98}"
       ],
       "ok": true
     },
@@ -432,6 +547,28 @@
       "ok": true
     },
     {
+      "case": "drc: pad annular 0.19 fails",
+      "check": "G3.drc_jlcpcb",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "DRC exit 5, counts {'violations': 1, 'unconnected_items': 0, 'schematic_parity': 0}, violation types ['annular_width']; first: annular_width: Annular width (rule 'JLCPCB: PTH Annular Ring' min annular width 0.2000 mm; actual 0.1900 mm)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "drc: project rules loosened to 0.15, pinned file still gates and 0.20 floor fails",
+      "check": "G3.drc_jlcpcb",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PTH annular ring gates at 0.18 mm, JLCPCB's published minimum is 0.2"
+      ],
+      "ok": true
+    },
+    {
       "case": "gnd: one pad set to full",
       "check": "G3.gnd_thermal",
       "clean_status": "PASS",
@@ -486,9 +623,10 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
+        "missing from harness output: 'PASS F1 KBD: panel matches buffer on all 4 pages'",
         "missing from harness output: 'PASS F1 idle screen: 0 I2C bytes in 1000 loops'",
         "missing from harness output: 'PASS F1 HID: slot strip and HID reach the panel'",
-        "panel differs from the frame buffer: page3 buffer |1R 2? 3D 4! 5- 6R HID| panel |1- 2- 3- 4- 5- 6- KBD| bytes differing=40 never-written=0"
+        "panel differs from the frame buffer: page3 buffer |1R 2? 3D 4! 5- 6R HID| panel |1? 2- 3- 4- 5- 6- HID| bytes differing=39 never-written=0"
       ],
       "ok": true
     },
@@ -499,10 +637,11 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "harness exited 1; FAIL F1 idle i2c 42000",
+        "harness exited 1; FAIL resume panel |1- 2- 3- 4- 5- 6- KBD|",
+        "FAIL resume panel |1- 2- 3- 4- 5- 6- KBD|",
+        "FAIL F1 KBD diff=20",
         "FAIL F1 idle i2c 42000",
-        "FAIL F1 HID diff=40 |1- 2- 3- 4- 5- 6- KBD|",
-        "FAIL F3 strip |1- 2- 3- 4- 5- 6- KBD|"
+        "FAIL F1 HID diff=39 |1? 2- 3- 4- 5- 6- HID|"
       ],
       "ok": true
     },
@@ -537,6 +676,7 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "production/gerbers.zip missing",
+        "production/OLEDSupport.step missing",
         "README image link does not resolve: docs/schematic.png"
       ],
       "ok": true
@@ -615,5 +755,5 @@
     }
   ],
   "skipped": [],
-  "tmp": "/var/folders/2g/b60087014tq94njh6r4zdmhm0000gn/T/fbverify-selftest-erncqqzn"
+  "tmp": "/var/folders/2g/b60087014tq94njh6r4zdmhm0000gn/T/fbverify-selftest-3gdtg1_f"
 }

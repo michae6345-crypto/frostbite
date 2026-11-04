@@ -1,6 +1,6 @@
 # Frostbite Studio verification report
 
-Generated 2026-11-03T21:46:53.315Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
+Generated 2026-11-04T01:07:47.790Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).
 
 **Result: PASS** — 0 hard failures, 33 warnings.
 

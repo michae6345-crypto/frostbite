@@ -41,7 +41,7 @@
           {
             "type": "command",
             "command": "/ABSOLUTE/PATH/TO/frostbite-hook",
-            "timeout": 5
+            "timeout": 40
           }
         ]
       }

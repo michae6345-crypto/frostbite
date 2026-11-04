@@ -8,18 +8,20 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/gerbers.zip": "dfeb9ce92a876ea1c5764342da446d0782858d279ba35e1ba50849f2acc0a99d",
-    "production/firmware.uf2": "ede4ffa4cc2c5996e2c78265528bce57938a03d70635e8b77469ad53df32761a",
-    "CAD/frostbite-assembly.step": "4f88a83e372e81bd3cc099a30e67007d0b539ffd1ea0e2ee4a211bed02eee452",
+    "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906",
+    "production/firmware.uf2": "046855ee04f45ef8adce095890e9fcd61bb5b6d5c49badc2046ca2d0e2eba76e",
+    "CAD/frostbite-assembly.step": "c56660b9af632786893e2717f7d6b4e907ee3208be6eb9b86763c8fb1829a38e",
+    "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
     "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
-    "production/GlowBand.step": "3730d1899ba17579a6adc61f95c4640807204e2d817ea6a2e830b584c4596d41",
-    "production/Top.step": "cd666793ad2d4ffa6c0b649b78a612b471fcc9d303c90ec8373a4193fe215938",
-    "production/Bottom.step": "5401d8c1958e58f5799c46a97c783328220f565cab4ed762700d40e6428d9fc2",
+    "production/OLEDSupport.step": "0c170fb7dbafaa5908d0d60b16c0e0032db21cbc68531116b684715289da2bf1",
+    "production/GlowBand.step": "ea6fe4dec50fbd4eddbc23eb7f3e9383975dcb4aae79b130c460c00db3931605",
+    "production/Top.step": "2a98cf93bdb7a78ce385acb3ee8c687c7f543a655b2b9e5ea3afd2bd0f39e3d3",
+    "production/Bottom.step": "e97d0f6432a801002b66769039a27d9cb8efbd7d2487f1d581a74304a955bd39",
     "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
     "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
-    "production/Top.stl": "2f1245ee88d0b5a03b2cc0b5788e36675fdfc5df98d23c236c522c1093e33bca",
-    "production/Knob.step": "7fbb374cc16ff13b2814fc14191a6ff7d2082617cbad2f5828f11c4b9f321e7b",
-    "README.md": "48a50f1957b4a5ad6f332167c729908ea2bbc51b4c763ae014105258a60e4f0c"
+    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e",
+    "production/Knob.step": "4860b8273eaeaad75db35a2b69c292cfb24d7e07c1456c7d0d50e27ba1f32825",
+    "README.md": "6d591a7b96ea5631fa5c9b47382beb94ebc5d55320e22209a5c2795a436f6437"
   },
   "details": {
     "images": [
@@ -77,6 +79,6 @@
       }
     ]
   },
-  "timestamp": "2026-11-03T22:16:57+00:00",
-  "duration_s": 0.12
+  "timestamp": "2026-11-04T01:05:21+00:00",
+  "duration_s": 0.13
 }

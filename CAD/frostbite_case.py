@@ -89,10 +89,25 @@ def z_under(y_pcb: float) -> float:
 
 # OLED (module on a 2.5 mm header)
 OL = D["oled"]
-OLED_BOARD_Z0 = PCB_TOP + 2.5
-OLED_BOARD_Z1 = OLED_BOARD_Z0 + 1.2
-OLED_GLASS_Z1 = OLED_BOARD_Z1 + 1.45            # 6.75, 0.15 proud of the plate
-OLED_RECESS_TOP = OLED_BOARD_Z1 + TOL            # 5.6
+# The header plastic comes off: the module rests on the printed OLEDSupport, which sets the height.
+SUP = D["case"]["oled_support"]
+OLED_GAP, OLED_TAPE = float(SUP["module_gap"]), float(SUP["tape"])  # 1.8, 0.2
+OLED_BOARD_T, OLED_GLASS_T = 1.2, 1.45
+OLED_BOARD_Z0 = PCB_TOP + OLED_GAP               # 3.4
+OLED_BOARD_Z1 = OLED_BOARD_Z0 + OLED_BOARD_T     # 4.6
+OLED_GLASS_Z1 = OLED_BOARD_Z1 + OLED_GLASS_T     # 6.05, 0.55 below the plate top
+OLED_LIP_T = 1.0
+OLED_RECESS_TOP = PLATE_TOP - OLED_LIP_T         # 5.6, 1.0 of air above the module board
+# The module is soldered to J1 before it meets the Top, so the opening must take its misalignment:
+# about +/-1 deg of yaw (pin play in the J1 holes) and +/-0.1 shift. Far end also leaves ribbon room.
+OLED_WIN_CLR_X, OLED_WIN_CLR_Y = 0.5, 0.74       # window 31.0 x 12.98 around the 30 x 11.5 design window
+OLED_RECESS_FAR, OLED_RECESS_Y = 1.1, 0.8        # recess past the far end / past each long side
+OLED_YAW_DEG, OLED_SHIFT = 1.0, 0.1              # misalignment the path check must survive
+# x0, x1, y0, y1 in PCB coords. Free PCB top: U1 pad rows at x 10.5-14.2 and 25.8-31.4, y up to 19.0; J1 pads from x 38.15
+SUPPORT_FAR, SUPPORT_NEAR = (3.5, 9.5, 7.6, 21.1), (32.2, 37.4, 8.0, 21.1)
+SUPPORT_RAIL = (3.5, 37.4, 19.5, 21.1)
+RIBBON_UP, RIBBON_OUT = 0.8, 0.8                 # unknown ribbon: room left above the board and past its end
+JOINT_UP = 0.8                                   # room for trimmed header joints above the board
 # Encoder
 EN = D["encoder"]
 EC_BODY = (11.7, 12.0, 4.5)
@@ -176,6 +191,12 @@ def solid(wp: cq.Workplane) -> cq.Shape:
 
 
 # ------------------------------------------------------------------ parts
+def oled_recess(z0, z1) -> cq.Workplane:
+    m = OL["module"]
+    return box(m["x"] - OLED_RECESS_FAR, m["x"] + m["w"] + TOL,
+               m["y"] - OLED_RECESS_Y, m["y"] + m["h"] + OLED_RECESS_Y, z0, z1)
+
+
 def make_top() -> cq.Workplane:
     body = shell_prism(SKIRT_BOT, PLATE_TOP)
     body = body.cut(pocket_prism(SKIRT_BOT - 1, PLATE_UNDER))
@@ -184,11 +205,11 @@ def make_top() -> cq.Workplane:
         body = body.cut(cbox(k["x"], k["y"], CUTOUT, CUTOUT, PLATE_UNDER - 1, PLATE_TOP + 1))
         body = body.cut(cbox(k["x"], k["y"], CLIP_POCKET, CLIP_POCKET, PLATE_UNDER - 1, PLATE_TOP - PLATE_T_CLIP))
     # OLED: glass window (design window + tol) through, module recess from below
-    w, m = OL["window"], OL["module"]
-    body = body.cut(box(w["x"] - TOL, w["x"] + w["w"] + TOL, w["y"] - TOL, w["y"] + w["h"] + TOL,
+    w = OL["window"]
+    body = body.cut(box(w["x"] - OLED_WIN_CLR_X, w["x"] + w["w"] + OLED_WIN_CLR_X,
+                        w["y"] - OLED_WIN_CLR_Y, w["y"] + w["h"] + OLED_WIN_CLR_Y,
                         OLED_RECESS_TOP - 0.5, PLATE_TOP + 1))
-    body = body.cut(box(m["x"] - TOL, m["x"] + m["w"] + TOL, m["y"] - TOL, m["y"] + m["h"] + TOL,
-                        PLATE_UNDER - 1, OLED_RECESS_TOP))
+    body = body.cut(oled_recess(PLATE_UNDER - 1, OLED_RECESS_TOP))
     # encoder: the plate is only 0.5 above the EC11 body, so the opening clears the body
     body = body.cut(rrect(EN["x"], EN["y"], EC_OPEN[0], EC_OPEN[1], EC_OPEN[2], PLATE_UNDER - 1, PLATE_TOP + 1))
     # heat-set insert holes + screw continuation (blind, hidden)
@@ -253,6 +274,16 @@ def make_bottom() -> cq.Workplane:
     return body
 
 
+def make_oled_support() -> cq.Workplane:
+    """C-shaped spacer: fills the gap under the module and carries finger load on the glass to the PCB.
+
+    One foot under the far end, one beside J1, joined by a rail outside the module and past the XIAO
+    pad rows. Taped to the module first, so the module positions it. 0.2 tape above and below.
+    """
+    z0, z1 = PCB_TOP + OLED_TAPE, OLED_BOARD_Z0 - OLED_TAPE
+    return (box(*SUPPORT_FAR, z0, z1).union(box(*SUPPORT_NEAR, z0, z1)).union(box(*SUPPORT_RAIL, z0, z1)))
+
+
 def make_knob() -> cq.Workplane:
     """18 mm knob for a 6 mm D-shaft, 30 printable vertical knurl ribs, design frame."""
     n, ro, ri = 30, KNOB_D / 2, KNOB_D / 2 - 0.5
@@ -294,7 +325,11 @@ def placeholders() -> dict[str, cq.Workplane]:
     for g in GLOW:
         ph[f"glow{g['led']}_led"] = cbox(g["x"], g["y"], LED_W, LED_H, -LED_T, 0)
     m, w, h = OL["module"], OL["window"], OL["header"]
-    ph["OLED_header"] = cbox(h["pin_row_x"], h["centre_y"], 2.54, 4 * 2.54, PCB_TOP, OLED_BOARD_Z0)
+    pins = None
+    for i in range(4):                          # bare header pins, plastic removed, flush on the module
+        p = cbox(h["pin_row_x"], h["centre_y"] + (i - 1.5) * h["pitch"], 0.64, 0.64, -THT_TAIL, OLED_BOARD_Z1)
+        pins = p if pins is None else pins.union(p)
+    ph["OLED_pins"] = pins
     ph["OLED_board"] = box(m["x"], m["x"] + m["w"], m["y"], m["y"] + m["h"], OLED_BOARD_Z0, OLED_BOARD_Z1)
     ph["OLED_glass"] = box(w["x"], w["x"] + w["w"], w["y"], w["y"] + w["h"], OLED_BOARD_Z1, OLED_GLASS_Z1)
     ph["XIAO_board"] = box(MCU["x"], MCU["x"] + MCU["w"], MCU["y"], MCU["y"] + MCU["h"], -XIAO_T, 0)
@@ -315,6 +350,18 @@ def placeholders() -> dict[str, cq.Workplane]:
         pins = p if pins is None else pins.union(p)
     ph["EC11_pins"] = pins
     return ph
+
+
+def oled_envelopes() -> dict[str, cq.Workplane]:
+    """Room deliberately left for things the design cannot know yet (no drawing of the module)."""
+    m, h = OL["module"], OL["header"]
+    ribbon = box(m["x"] - RIBBON_OUT, OL["window"]["x"], m["y"], m["y"] + m["h"],
+                 OLED_BOARD_Z0, OLED_BOARD_Z1 + RIBBON_UP)
+    joints = None
+    for i in range(4):
+        c = cyl(h["pin_row_x"], h["centre_y"] + (i - 1.5) * h["pitch"], 1.1, OLED_BOARD_Z1, OLED_BOARD_Z1 + JOINT_UP)
+        joints = c if joints is None else joints.union(c)
+    return {"OLED_ribbon_room": ribbon, "OLED_joint_room": joints}
 
 
 def switch_rigid(x, y) -> cq.Workplane:
@@ -353,13 +400,14 @@ def print_orient(name: str, s: cq.Shape) -> cq.Shape:
 
 
 def build() -> dict:
-    parts = {"Top": make_top(), "GlowBand": make_band(), "Bottom": make_bottom(), "Knob": make_knob()}
+    parts = {"Top": make_top(), "GlowBand": make_band(), "Bottom": make_bottom(), "Knob": make_knob(),
+             "OLEDSupport": make_oled_support()}
     return {"parts": {k: solid(v) for k, v in parts.items()},
             "ph": {k: solid(v) for k, v in placeholders().items()}}
 
 
 COLORS = {"Top": (0.80, 0.90, 0.97, 0.55), "GlowBand": (0.45, 0.80, 1.0, 0.8), "Bottom": (0.80, 0.90, 0.97, 0.55),
-          "Knob": (0.85, 0.92, 0.98, 1.0)}
+          "Knob": (0.85, 0.92, 0.98, 1.0), "OLEDSupport": (0.25, 0.25, 0.28, 1.0)}
 
 
 def ph_color(name):
@@ -381,7 +429,7 @@ def ph_color(name):
 def assembly(model: dict, explode: float = 0.0) -> cq.Assembly:
     off = desk_offset(model["parts"]["Bottom"])
     a = cq.Assembly(name="frostbite")
-    lift = {"Bottom": 0, "GlowBand": 1, "Top": 2, "Knob": 3}
+    lift = {"Bottom": 0, "GlowBand": 1, "Top": 2, "Knob": 3, "OLEDSupport": 1.5}
     for k, s in model["parts"].items():
         s2 = to_desk(s).translate(cq.Vector(0, 0, off + explode * lift[k]))
         a.add(s2, name=k, color=cq.Color(*COLORS[k]))
@@ -398,7 +446,10 @@ def positions() -> dict:
         "keys": [{"ref": k["ref"], "id": k["id"], "x": k["x"], "y": k["y"], "cutout": CUTOUT} for k in D["keys"]],
         "encoder": {"x": EN["x"], "y": EN["y"], "opening": {"w": EC_OPEN[0], "h": EC_OPEN[1], "r": EC_OPEN[2]}},
         "oled_window": {"x": w["x"], "y": w["y"], "w": w["w"], "h": w["h"],
-                        "cut": {"x": w["x"] - TOL, "y": w["y"] - TOL, "w": w["w"] + 2 * TOL, "h": w["h"] + 2 * TOL}},
+                        "cut": {"x": w["x"] - OLED_WIN_CLR_X, "y": w["y"] - OLED_WIN_CLR_Y,
+                                "w": w["w"] + 2 * OLED_WIN_CLR_X, "h": w["h"] + 2 * OLED_WIN_CLR_Y}},
+        "oled_stack": {"module_gap": OLED_GAP, "glass_below_plate": round(PLATE_TOP - OLED_GLASS_Z1, 2),
+                       "lip_gap": round(OLED_RECESS_TOP - OLED_BOARD_Z1, 2), "header_plastic": "removed"},
         "usb_cutout": {"x": USB_CX, "z_from_pcb_bottom": USB_CZ, "w": UC["w"], "h": UC["h"]},
         "screws": [{"x": sx, "y": sy, "insert": "Top", "head": "Bottom underside", "boss_od": BOSS_OD}
                    for sx, sy in SCREWS],

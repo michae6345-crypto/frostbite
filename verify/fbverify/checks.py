@@ -26,6 +26,8 @@ KIT = {"switches": 16, "keycaps": 16, "diodes": 20, "encoders": 2, "oled": 1, "l
        "screws": 6, "inserts": 6, "mcu_xiao_rp2040": 1}
 JLC_DRU = "verify/rules/JLCPCB-2L-1oz.kicad_dru"
 JLC_DRU_SHA256 = "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2"
+JLC_PTH_ANNULAR_MIN = 0.20   # jlcpcb.com/capabilities/pcb-capabilities; the pinned third-party file says 0.18
+PARTS = ("Top", "Bottom", "GlowBand", "Knob", "OLEDSupport")
 POS_TOL = 0.05
 OUTLINE_TOL = 0.1
 CUTOUT = 14.0
@@ -41,8 +43,11 @@ EC11_BODY_W = 12.0          # Alps 11.7 x 12.0; square so the check holds for ei
 EC11_BODY_H = 4.5
 EC11_BUSH_D = 7.0
 EC11_CLEAR = 0.2            # printed part to real part (docs/VERIFICATION.md fits)
-OLED_STANDOFF, OLED_BOARD_T = 2.5, 1.2
-OLED_CLEAR = 0.1
+OLED_BOARD_T, OLED_GLASS_T = 1.2, 1.45     # docs/DIMENSIONS.md; the stack height is design.json case.oled_support.module_gap
+OLED_ACTIVE = (22.384, 5.584)               # panel datasheets, docs/DIMENSIONS.md oledActive
+# Where the active area sits on the glass isn't documented: centred, up to 3.5 toward the header (audit N10: 2.5 +/-1), +/-1.5 in y
+OLED_ACTIVE_DX, OLED_ACTIVE_DY = (0.0, 3.5), 1.5
+OLED_YAW, OLED_SHIFT = 1.0, 0.1             # soldered to J1 before the Top: pin play about the header, CAD/README.md
 SHELL_TOL = 0.2
 INSERT_HOLE, INSERT_HOLE_TOL = 4.7, 0.1
 USB_WALL_Y = (-0.5, -3.5, -6.5)
@@ -600,6 +605,84 @@ def _pcb(chk: Check):
     return chk.ctx.cache[key], kf["pcb"]
 
 
+def _rule_blocks(text: str) -> list[tuple[str, str]]:
+    """[(name, block text)] for each (rule "name" ...) in a .kicad_dru. Comment lines are dropped."""
+    text = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+    out, i = [], 0
+    while True:
+        m = re.compile(r'\(rule\s+"([^"]*)"').search(text, i)
+        if not m:
+            return out
+        depth, j, quoted = 0, m.start(), False
+        while j < len(text):
+            ch = text[j]
+            if ch == '"':
+                quoted = not quoted
+            elif not quoted and ch == "(":
+                depth += 1
+            elif not quoted and ch == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        out.append((m.group(1), text[m.start():j + 1]))
+        i = j + 1
+
+
+CONSTRAINT_RE = re.compile(r"\(constraint\s+(\w+)((?:\s*\((?:min|opt|max)\s+[\d.]+mm\))+)\s*\)")
+BOUND_RE = re.compile(r"\((min|opt|max)\s+([\d.]+)mm\)")
+
+
+def _condition(block: str):
+    m = re.search(r'\(condition\s+"((?:[^"\\]|\\.)*)"\)', block)
+    return m.group(1) if m else None
+
+
+def strictest_rules(pinned: str, project: str) -> tuple[str, list[dict]]:
+    """One rule set in which the stricter of the two files gates, whatever their order.
+
+    KiCad lets a later rule override an earlier one, so concatenating the files lets the last
+    one loosen the other. Rules with the same name and condition are merged bound by bound."""
+    own = {(n, _condition(b)): b for n, b in _rule_blocks(project)}
+    used, blocks, tightened = set(), [], []
+    for name, block in _rule_blocks(pinned):
+        key = (name, _condition(block))
+        other = own.get(key)
+        if other is not None:
+            used.add(key)
+            theirs = {}
+            for c, body in CONSTRAINT_RE.findall(other):
+                theirs[c] = {b: float(v) for b, v in BOUND_RE.findall(body)}
+
+            def merge(m, name=name, theirs=theirs):
+                c, body = m.group(1), m.group(2)
+                vals = {b: float(v) for b, v in BOUND_RE.findall(body)}
+                for bound, val in vals.items():
+                    t = theirs.get(c, {}).get(bound)
+                    if t is None or t == val or bound == "opt":
+                        continue
+                    gate = max(val, t) if bound == "min" else min(val, t)
+                    if gate != val:
+                        tightened.append({"rule": name, "constraint": c, "bound": bound, "pinned": val, "project": t, "gates": gate})
+                    vals[bound] = gate
+                return f"(constraint {c} " + " ".join(f"({b} {v:g}mm)" for b, v in vals.items()) + ")"
+            block = CONSTRAINT_RE.sub(merge, block)
+        blocks.append(block)
+    blocks += [b for k, b in own.items() if k not in used]
+    return "(version 1)\n\n" + "\n\n".join(blocks) + "\n", tightened
+
+
+def rule_value(text: str, rule: str, constraint: str, bound: str):
+    for name, block in _rule_blocks(text):
+        if name == rule:
+            for c, body in CONSTRAINT_RE.findall(block):
+                if c == constraint:
+                    for b, v in BOUND_RE.findall(body):
+                        if b == bound:
+                            return float(v)
+    return None
+
+
 def _drc(ctx: Ctx, cid: str, title: str, jlc: bool) -> Check:
     chk = Check(ctx, cid, "G3", title)
     kf = kicad_files(ctx)
@@ -624,11 +707,15 @@ def _drc(ctx: Ctx, cid: str, title: str, jlc: bool) -> Check:
             chk.fail(f"{JLC_DRU} SHA-256 {got} != pinned {JLC_DRU_SHA256}")
             return chk
         target = board.with_suffix(".kicad_dru")
-        rules = dru.read_text()
-        if target.is_file():
-            own = target.read_text()
-            rules = own + "\n" + re.sub(r"^\s*\(version\s+\d+\)\s*$", "", rules, count=1, flags=re.M)
-            chk.note("project .kicad_dru merged with the JLCPCB rules")
+        own = target.read_text() if target.is_file() else ""
+        rules, tightened = strictest_rules(dru.read_text(), own)
+        chk.details["rules_tightened"] = tightened
+        for t in tightened:
+            chk.note(f"{t['rule']}: {t['constraint']} {t['bound']} is {t['gates']} (pinned {t['pinned']}, project {t['project']})")
+        pth = rule_value(rules, "JLCPCB: PTH Annular Ring", "annular_width", "min")
+        chk.details["pth_annular_gates_at_mm"] = pth
+        if pth is None or pth < JLC_PTH_ANNULAR_MIN:
+            chk.fail(f"PTH annular ring gates at {pth} mm, JLCPCB's published minimum is {JLC_PTH_ANNULAR_MIN}")
         target.write_text(rules)
     out = dst / "drc.json"
     code, so, se = chk.run([ctx.kicad_cli, "pcb", "drc", "--format", "json", "--severity-error",
@@ -642,7 +729,8 @@ def _drc(ctx: Ctx, cid: str, title: str, jlc: bool) -> Check:
             chk.details[k] = [f"{v.get('type')}: {v.get('description')}" for v in items[:30]]
     chk.details["counts"] = counts
     if code != 0 or any(counts.values()):
-        chk.fail(f"DRC exit {code}, counts {counts}" +
+        kinds = sorted({v.split(":")[0] for v in chk.details.get("violations", [])})
+        chk.fail(f"DRC exit {code}, counts {counts}, violation types {kinds}" +
                  (f"; first: {chk.details.get('violations', [''])[0]}" if chk.details.get("violations") else ""))
     return chk
 
@@ -652,7 +740,7 @@ def g3_drc(ctx):
 
 
 def g3_drc_jlcpcb(ctx):
-    return _drc(ctx, "G3.drc_jlcpcb", "kicad-cli pcb drc with pinned JLCPCB 2-layer rules", True)
+    return _drc(ctx, "G3.drc_jlcpcb", "kicad-cli pcb drc: pinned JLCPCB 2-layer rules, tightened by the project rules where those are stricter", True)
 
 
 def pcb_origin(pcb):
@@ -960,6 +1048,10 @@ def g4_stl_mesh(ctx: Ctx) -> Check:
     if not stls:
         return chk.not_run("no production/*.stl")
     import numpy as np
+    names = {p.stem for p in stls}
+    for n in PARTS:
+        if n not in names:
+            chk.fail(f"production/{n}.stl missing")
     lo, hi, parts = None, None, {}
     for p in stls:
         try:
@@ -980,11 +1072,6 @@ def g4_stl_mesh(ctx: Ctx) -> Check:
         b = m.bounds
         lo = b[0] if lo is None else np.minimum(lo, b[0])
         hi = b[1] if hi is None else np.maximum(hi, b[1])
-    srcs = [q for q in (ctx.p("design.json"), ctx.p("CAD/frostbite_case.py")) if q.is_file()]
-    for p in stls:
-        for src in srcs:
-            if p.stat().st_mtime < src.stat().st_mtime:
-                chk.fail(f"{p.name} is older than {src.relative_to(ctx.root)}: rebuild the case")
     if lo is not None:
         ext = (hi - lo).tolist()
         chk.details["combined_extents"] = [round(x, 3) for x in ext]
@@ -999,10 +1086,20 @@ def top_stl(ctx: Ctx):
     return [p for p in stl_files(ctx) if re.search(r"top|plate", p.stem, re.I)]
 
 
-def heights():
-    board_top = MX_PLATE_TO_PCB - OLED_STANDOFF - OLED_BOARD_T
-    return {"ec11_body_top": MX_PLATE_TO_PCB - EC11_BODY_H, "oled_board_top": board_top,
-            "pcb_top": MX_PLATE_TO_PCB, "pcb_under": MX_PLATE_TO_PCB + PCB_T, "clip": CLIP_PLATE}
+def module_gap(d: dict):
+    return ((d.get("case") or {}).get("oled_support") or {}).get("module_gap")
+
+
+def heights(d: dict) -> dict:
+    """Depth below the plate top of everything that starts or stops somewhere, from design.json where it says."""
+    h = {"ec11_body_top": MX_PLATE_TO_PCB - EC11_BODY_H, "pcb_top": MX_PLATE_TO_PCB,
+         "pcb_under": MX_PLATE_TO_PCB + PCB_T, "clip": CLIP_PLATE}
+    gap = module_gap(d)
+    if gap is not None:
+        h["oled_board_under"] = MX_PLATE_TO_PCB - gap
+        h["oled_board_top"] = h["oled_board_under"] - OLED_BOARD_T
+        h["oled_glass_top"] = h["oled_board_top"] - OLED_GLASS_T
+    return h
 
 
 def top_model(chk: Check, d: dict):
@@ -1016,7 +1113,7 @@ def top_model(chk: Check, d: dict):
         chk.note(f"several top/plate STLs {[p.name for p in tops]}; using {tops[0].name}")
     key = ("top", str(tops[0]), tops[0].stat().st_mtime_ns)
     if key not in chk.ctx.cache:
-        chk.ctx.cache[key] = topmodel.register(load_mesh(chk, tops[0]), d, extra_h=tuple(heights().values()))
+        chk.ctx.cache[key] = topmodel.register(load_mesh(chk, tops[0]), d, extra_h=tuple(heights(d).values()))
     chk.hash(tops[0])
     M, info = chk.ctx.cache[key]
     chk.details["registration"] = info
@@ -1081,7 +1178,7 @@ def g4_encoder_clearance(ctx: Ctx) -> Check:
     e = d["encoder"]
     x, y = e["x"], e["y"]
     h = EC11_BODY_W / 2
-    bt = heights()["ec11_body_top"]
+    bt = heights(d)["ec11_body_top"]
     body, at = M.min_gap(g.box(x - h, y - h, x + h, y + h), bt, M.hmax)
     bush, at2 = M.min_gap(g.Point(x, y).buffer(EC11_BUSH_D / 2, 64), 0, bt)
     chk.details["body_gap_mm"], chk.details["bushing_gap_mm"] = round(body, 3), round(bush, 3)
@@ -1099,39 +1196,115 @@ def g4_encoder_clearance(ctx: Ctx) -> Check:
     return chk
 
 
+def _pose_envelope(rect, pivot):
+    """Everywhere a part soldered to J1 can be: turned about the header, then shifted. Union of the extreme poses."""
+    import shapely.ops as o
+    from shapely import affinity
+    poses = []
+    for yaw in (-OLED_YAW, 0.0, OLED_YAW):
+        turned = affinity.rotate(rect, yaw, origin=pivot)
+        poses += [affinity.translate(turned, dx, dy) for dx in (-OLED_SHIFT, OLED_SHIFT) for dy in (-OLED_SHIFT, OLED_SHIFT)]
+    return o.unary_union(poses).convex_hull
+
+
 def g4_oled_clearance(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G4.oled_clearance", "G4", "Top clears the OLED glass and board; window measured from the mesh")
+    chk = Check(ctx, "G4.oled_clearance", "G4", "OLED glass and board clear the Top along the PCB's path; active area fully visible; window size is free")
     d = design(chk)
     if d is None:
         return chk
     M = top_model(chk, d)
     if M is None:
         return chk
+    gap = module_gap(d)
+    if gap is None:
+        chk.fail("design.json case.oled_support.module_gap missing: the OLED height is not known")
+        return chk
     import shapely.geometry as g
-    w, mod = d["oled"]["window"], d["oled"]["module"]
-    ht = heights()["oled_board_top"]
-    glass = g.box(w["x"], w["y"], w["x"] + w["w"], w["y"] + w["h"])
-    board = g.box(mod["x"], mod["y"], mod["x"] + mod["w"], mod["y"] + mod["h"])
-    gg, a1 = M.min_gap(glass, 0, ht)
-    gb, a2 = M.min_gap(board, ht, ht + OLED_BOARD_T)
+    w, mod, hdr = d["oled"]["window"], d["oled"]["module"], d["oled"]["header"]
+    H = heights(d)
+    pivot = (hdr["pin_row_x"], hdr["centre_y"])
+    glass = _pose_envelope(g.box(w["x"], w["y"], w["x"] + w["w"], w["y"] + w["h"]), pivot)
+    board = _pose_envelope(g.box(mod["x"], mod["y"], mod["x"] + mod["w"], mod["y"] + mod["h"]), pivot)
+    cx, cy = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
+    aw, ah = OLED_ACTIVE
+    active = _pose_envelope(g.box(cx + OLED_ACTIVE_DX[0] - aw / 2, cy - OLED_ACTIVE_DY - ah / 2,
+                                  cx + OLED_ACTIVE_DX[1] + aw / 2, cy + OLED_ACTIVE_DY + ah / 2), pivot)
+    chk.details["stack_depth_below_plate_top"] = {k: round(v, 3) for k, v in H.items() if k.startswith("oled")}
+    chk.details["module_gap"] = gap
+    gt, bt = H["oled_glass_top"], H["oled_board_top"]
+    if gt < 0:
+        chk.fail(f"OLED glass stands proud of the plate by {-gt:.2f} mm with module_gap {gap}")
+    gg, a1 = M.min_gap(glass, max(gt, 0.0), M.hmax)
+    gb, a2 = M.min_gap(board, bt, M.hmax)
     chk.details["glass_gap_mm"], chk.details["board_gap_mm"] = round(gg, 3), round(gb, 3)
-    if gg < OLED_CLEAR:
-        chk.fail(f"OLED glass gap {gg:.3f} mm at depth {a1} mm, want >= {OLED_CLEAR}")
-    if gb < OLED_CLEAR:
-        chk.fail(f"OLED board gap {gb:.3f} mm at depth {a2} mm, want >= {OLED_CLEAR}")
-    op = M.opening_at(w["x"] + w["w"] / 2, w["y"] + w["h"] / 2, 0.05)
+    if gg < 0:
+        chk.fail(f"OLED glass hits the Top on its way in, at depth {a1} mm ({-gg:.2f} mm2, module turned {OLED_YAW} deg and shifted {OLED_SHIFT})")
+    if gb < 0:
+        chk.fail(f"OLED board hits the Top on its way in, at depth {a2} mm ({-gb:.2f} mm2, module turned {OLED_YAW} deg and shifted {OLED_SHIFT})")
+    if gt > 0:
+        ga, a3 = M.min_gap(active, 0.0, gt)
+        chk.details["active_area_gap_mm"] = round(ga, 3)
+        if ga < 0:
+            chk.fail(f"active area not fully visible: {-ga:.2f} mm2 covered by the Top at depth {a3} mm")
+    support = ctx.p("production/OLEDSupport.stl")
+    tape = (d["case"]["oled_support"] or {}).get("tape", 0.0)
+    if support.is_file():
+        import numpy as np
+        ext = float(np.min(load_mesh(chk, support).extents))
+        want = gap - 2 * tape
+        chk.details["support_height_mm"] = round(ext, 3)
+        if abs(ext - want) > 0.05:
+            chk.fail(f"OLEDSupport is {ext:.3f} mm tall, module_gap {gap} - 2 x tape {tape} needs {want:.3f}")
+    else:
+        chk.fail("production/OLEDSupport.stl missing: nothing sets the module height")
+    op = M.opening_at(cx, cy, 0.05)
     if op is None:
-        chk.fail("no opening over the OLED window at the plate top")
+        chk.note("no closed opening around the window centre at the plate top; the record check is skipped")
         return chk
     b = op.bounds
     cut = {"x": round(b[0], 3), "y": round(b[1], 3), "w": round(b[2] - b[0], 3), "h": round(b[3] - b[1], 3)}
     chk.details["measured_window"] = cut
     cp, rel = load_cad_positions(ctx, chk)
     pw = (cp or {}).get("oled_window")
-    if pw is not None:
+    if pw is not None:                     # the record must describe the file; any size is allowed
         stated = pw.get("cut", pw)
         if any(abs(stated[k] - cut[k]) > CAD_POS_TOL for k in ("x", "y", "w", "h")):
             chk.fail(f"{rel}: oled_window cut {stated} != measured {cut}")
+    return chk
+
+
+def g4_step_parts(ctx: Ctx) -> Check:
+    chk = Check(ctx, "G4.step_parts", "G4", "Every printed part: STEP reopens, its STL is the same solid, and both match a rebuild from the current source")
+    py = Path(__file__).resolve().parents[2] / "CAD/.venv/bin/python"
+    if not py.is_file():
+        return chk.not_run("CAD/.venv/bin/python missing")
+    pairs = [(n, ctx.p(f"production/{n}.step"), ctx.p(f"production/{n}.stl")) for n in PARTS]
+    have = [(n, a, b) for n, a, b in pairs if a.is_file() and b.is_file()]
+    if not have:
+        return chk.not_run("no production STEP/STL pairs")
+    for n, a, b in pairs:
+        if not (a.is_file() and b.is_file()):
+            chk.fail(f"{n}: production .step or .stl missing")
+    for _, a, _ in have:
+        chk.hash(a)
+    code, so, se = chk.run([py, Path(__file__).with_name("probe_step.py"), ctx.root, *[a for _, a, _ in have]], timeout=300,
+                           env={"PYTHONDONTWRITEBYTECODE": "1"})
+    if code != 0:
+        chk.fail(f"probe_step.py exited {code}")
+        return chk
+    r = json.loads(so.strip().splitlines()[-1])
+    rows = {}
+    for n, a, b in have:
+        vs, vm = r["step"][str(a)], float(load_mesh(chk, b).volume)
+        vb = r["built"].get(n)
+        rows[n] = {"step_mm3": round(vs, 1), "stl_mm3": round(vm, 1), "rebuilt_mm3": None if vb is None else round(vb, 1)}
+        if abs(vs - vm) > 0.01 * abs(vs):
+            chk.fail(f"{n}: STEP volume {vs:.1f} mm3, STL volume {vm:.1f} mm3: not the same part")
+        if vb is None:
+            chk.fail(f"{n}: the CAD source no longer builds this part")
+        elif abs(vb - vs) > 0.001 * abs(vb):
+            chk.fail(f"{n}: production STEP is {vs:.1f} mm3, a rebuild from the current source is {vb:.1f} mm3: stale, rebuild the case")
+    chk.details["parts"] = rows
     return chk
 
 
@@ -1436,8 +1609,14 @@ def g8_package(ctx: Ctx) -> Check:
             chk.hash(ctx.p(f))
     parts = [p for p in (ctx.p("production").glob("*") if ctx.p("production").is_dir() else [])
              if p.suffix.lower() in (".step", ".stp", ".stl")]
-    if not parts:
-        chk.fail("production/ has no case STEP/STL")
+    for n in PARTS:
+        st = ctx.p(f"production/{n}.step")
+        if not ctx.p(f"production/{n}.stl").is_file():
+            chk.fail(f"production/{n}.stl missing")
+        if not st.is_file():
+            chk.fail(f"production/{n}.step missing")
+        elif not st.read_bytes()[:12].startswith(b"ISO-10303-21"):
+            chk.fail(f"production/{n}.step is not a STEP file")
     for p in cad + parts:
         chk.hash(p)
     readme = ctx.p("README.md")
@@ -1566,7 +1745,7 @@ def x_cross_positions(ctx: Ctx) -> Check:
             if du:
                 xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
                 z = -(1.2 + 3.26 / 2)            # receptacle centre below the PCB underside (XIAO 1.2 + shell 3.26 / 2)
-                h = heights()["pcb_under"] - z
+                h = heights(d)["pcb_under"] - z
                 spans = [M.spans(xc, y, "x", h, h + 0.001) for y in USB_WALL_Y]
                 if any(not q for q in spans):
                     chk.fail(f"Top STL: back wall is solid at the USB receptacle (x {xc}, depth {h:.2f} mm)")
@@ -1599,7 +1778,7 @@ def x_pcb_insertion(ctx: Ctx) -> Check:
     tol = d["case"]["tolerance"]
     W, H = d["pcb"]["w"], d["pcb"]["h"]
     env = g.box(-tol, -tol, W + tol, H + tol)
-    seat = heights()["pcb_top"]
+    seat = heights(d)["pcb_top"]
     vol, rows, worst = 0.0, [], None
     for s in M.slabs_between(seat, M.hmax):
         ov = s["mat"].intersection(env)

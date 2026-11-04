@@ -8,6 +8,7 @@ Warnings (thin spots, bridges) are printed but do not fail the run.
 from __future__ import annotations
 
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -80,7 +81,7 @@ def check_reopen(m, printed):
     nsol = len(a.solids().vals())
     expect = len(m["parts"]) + len(m["ph"])
     rec("STEP files reopen in CadQuery", not bad and nsol >= expect,
-        f"4 part STEPs volume-identical; assembly has {nsol} solids (>= {expect})" if not bad else f"mismatch {bad}")
+        f"{len(printed)} part STEPs volume-identical; assembly has {nsol} solids (>= {expect})" if not bad else f"mismatch {bad}")
     try:
         import trimesh
         nonwt = []
@@ -88,7 +89,7 @@ def check_reopen(m, printed):
             t = trimesh.load(str(fc.PROD / f"{name}.stl"), force="mesh", process=True)
             if not (t.is_watertight and t.is_winding_consistent and t.volume > 0):
                 nonwt.append(name)
-        rec("STL watertight", not nonwt, "all 4 watertight, consistent winding" if not nonwt else f"bad: {nonwt}")
+        rec("STL watertight", not nonwt, f"all {len(printed)} watertight, consistent winding" if not nonwt else f"bad: {nonwt}")
     except ImportError:
         WARN.append("trimesh not installed: STL watertightness not checked")
 
@@ -124,7 +125,7 @@ def check_interference(m):
             if v > EPS_VOL:
                 hits.append(f"{names[i]}x{names[j]}={v:.3f}")
     rec("Interference: printed parts vs PCB/components/each other", not hits,
-        f"{len(parts) * len(ph) + 6} pairs, max overlap {worst:.4f} mm^3" + ("; " + ", ".join(hits[:6]) if hits else ""))
+        f"{len(parts) * len(ph) + len(names) * (len(names) - 1) // 2} pairs, max overlap {worst:.4f} mm^3" + ("; " + ", ".join(hits[:6]) if hits else ""))
     # keycaps at bottom-out (4 mm travel)
     down = [ph[f"{k['ref']}_keycap"].translate(cq.Vector(0, 0, -4.0)) for k in D["keys"]]
     v = sum(inter_vol(parts[p], c) for p in parts for c in down)
@@ -205,8 +206,7 @@ def check_inserts(m):
     w, mo = fc.OL["window"], fc.OL["module"]
     feats = {f"{k['ref']} cutout": fc.cbox(k["x"], k["y"], fc.CLIP_POCKET, fc.CLIP_POCKET, fc.PLATE_UNDER, fc.PLATE_TOP)
              for k in D["keys"]}
-    feats["OLED recess"] = fc.box(mo["x"] - fc.TOL, mo["x"] + mo["w"] + fc.TOL, mo["y"] - fc.TOL, mo["y"] + mo["h"] + fc.TOL,
-                                  fc.PLATE_UNDER, fc.PLATE_TOP)
+    feats["OLED recess"] = fc.oled_recess(fc.PLATE_UNDER, fc.PLATE_TOP)
     feats["encoder opening"] = fc.rrect(fc.EN["x"], fc.EN["y"], *fc.EC_OPEN, fc.PLATE_UNDER, fc.PLATE_TOP)
     feats["USB window"] = fc.box(fc.USB_CX - fc.UC["w"] / 2, fc.USB_CX + fc.UC["w"] / 2, -9, 1,
                                  fc.USB_CZ - fc.UC["h"] / 2, fc.USB_CZ + fc.UC["h"] / 2)
@@ -272,10 +272,67 @@ def check_oled(m):
     o = P(cx, cy, fc.PLATE_TOP - 0.25)
     xp, xm, yp, ym = (r.first(o, d) for d in ((1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0)))
     mw, mh = xp + xm, yp + ym
-    v = sum(inter_vol(top, ph[n]) for n in ("OLED_glass", "OLED_board", "OLED_header"))
-    ok = abs(mw - (w["w"] + 2 * fc.TOL)) < 0.01 and abs(mh - (w["h"] + 2 * fc.TOL)) < 0.01 and v < EPS_VOL
-    rec("OLED window = design window + tol, module recess", ok,
-        f"window {mw:.2f}x{mh:.2f} (design {w['w']}x{w['h']}), overlap {v:.4f}; glass {fc.OLED_GLASS_Z1 - fc.PLATE_TOP:+.2f} mm vs plate top")
+    want_w, want_h = w["w"] + 2 * fc.OLED_WIN_CLR_X, w["h"] + 2 * fc.OLED_WIN_CLR_Y
+    v = sum(inter_vol(top, ph[n]) for n in ("OLED_glass", "OLED_board", "OLED_pins"))
+    ok = abs(mw - want_w) < 0.01 and abs(mh - want_h) < 0.01 and v < EPS_VOL
+    rec("OLED window around the design window, module recess", ok,
+        f"window {mw:.2f}x{mh:.2f} (design {w['w']}x{w['h']}), overlap {v:.4f}")
+    # H1: glass must not stand proud, also with thicker tape than planned
+    below = fc.PLATE_TOP - fc.OLED_GLASS_Z1
+    worst = below - 2 * 0.1                     # 0.3 tape instead of 0.2, both layers
+    rec("OLED glass not proud of the plate", below > 0 and worst > 0,
+        f"glass top {below:.2f} below the plate top, {worst:.2f} with 0.3 tape on both faces")
+    # lip gap measured on the real Top, over the far end and over the header pins
+    mo = fc.OL["module"]
+    gaps = {}
+    for name, x in (("far lip", mo["x"] + 1.5), ("pin end", fc.OL["header"]["pin_row_x"])):
+        gaps[name] = r.first(P(x, cy, fc.OLED_BOARD_Z1), (0, 0, 1))
+    rec("OLED lip gap is real (>= 0.8)", min(gaps.values()) >= 0.8,
+        ", ".join(f"{k} {v:.2f}" for k, v in gaps.items()) + " mm above the module board")
+    env = {k: fc.solid(v) for k, v in fc.oled_envelopes().items()}
+    d = {k: dist(top, v) for k, v in env.items()}
+    far = fc.OL["module"]["x"] - (fc.OL["module"]["x"] - fc.OLED_RECESS_FAR)
+    rec("Room left for the unknown ribbon and joints", min(d.values()) > 0,
+        f"ribbon {fc.RIBBON_UP} above / {fc.RIBBON_OUT} past the board end fits with {d['OLED_ribbon_room']:.2f} spare; "
+        f"joints {fc.JOINT_UP} tall with {d['OLED_joint_room']:.2f} spare; recess {far:.1f} past the far end")
+
+
+def pcb_top_copper():
+    """Exposed copper on the PCB top in the support area: plated pads (shared with the bottom pad list) and vias."""
+    rects = [(f"{p['ref']}.{p['pad']}", p["x0"], p["x1"], p["y0"], p["y1"]) for p in fc.bottom_pads() if p["through_hole"]]
+    txt = (fc.ROOT / "PCB" / "frostbite.kicad_pcb").read_text()
+    for i, (a, b) in enumerate(re.findall(r"\(via\b.*?\(at ([\d.\-]+) ([\d.\-]+)\)", txt, re.S)):
+        x, y = float(a), float(b)
+        rects.append((f"via{i}", x - 0.4, x + 0.4, y - 0.4, y + 0.4))
+    return rects
+
+
+def check_oled_support(m):
+    sup = m["parts"]["OLEDSupport"]
+    # plan clearance, footprint vs every plated pad and via on the top side
+    outline = [fc.SUPPORT_FAR, fc.SUPPORT_NEAR, fc.SUPPORT_RAIL]
+    worst = (math.inf, "")
+    rects = pcb_top_copper()
+    for x0, x1, y0, y1 in outline:
+        for n, a0, a1, b0, b1 in rects:
+            d = math.hypot(max(a0 - x1, 0, x0 - a1), max(b0 - y1, 0, y0 - b1))
+            if d < worst[0]:
+                worst = (d, n)
+    rec("OLEDSupport clear of J1, XIAO pads, joints, vias (>= 0.5)", worst[0] >= 0.5,
+        f"closest {worst[0]:.2f} mm in plan: {worst[1]} ({len(rects)} pads and vias)")
+    gaps = {n: dist(sup, m["ph"][n]) for n in ("PCB", "OLED_board", "OLED_pins", "OLED_glass")}
+    dtop = dist(sup, m["parts"]["Top"])
+    ok = abs(gaps["PCB"] - fc.OLED_TAPE) < 1e-6 and abs(gaps["OLED_board"] - fc.OLED_TAPE) < 1e-6 and gaps["OLED_pins"] >= 0.5
+    rec("OLEDSupport fills the gap under the module", ok and dtop >= 0.3,
+        f"printed height {sup.BoundingBox().zlen:.1f}, tape {gaps['PCB']:.1f} above and below, pins {gaps['OLED_pins']:.2f}, Top {dtop:.2f} mm")
+    mo = fc.OL["module"]
+    inside = all(mo["x"] <= f[0] and f[1] <= mo["x"] + mo["w"] for f in (fc.SUPPORT_FAR, fc.SUPPORT_NEAR))
+    far, near = fc.SUPPORT_FAR, fc.SUPPORT_NEAR
+    g = fc.OL["window"]
+    span = g["x"] >= far[0] and far[1] < near[0] and near[1] <= fc.OL["header"]["pin_row_x"]
+    rec("Glass press stays between the supports (H2)", inside and span,
+        f"feet at x {far[0]}-{far[1]} and {near[0]}-{near[1]}, glass x {g['x']}-{g['x'] + g['w']}: "
+        f"a press past x {near[1]} is over the pins, no lever on one pin row")
 
 
 def check_glow(m):
@@ -380,14 +437,44 @@ def sweep(moving: dict, fixed: dict, start: float, step: float = 0.5):
 def path_groups(m):
     ph = m["ph"]
     rigid = {f"{k['ref']}_rigid": fc.solid(fc.switch_rigid(k["x"], k["y"])) for k in D["keys"]}
-    # everything soldered to the PCB before it meets the switches (OLED sits loose in J1, moves with it)
+    # everything soldered to the PCB before it meets the switches, including the OLED on J1 and its
+    # support, plus the room left for its ribbon and joints
     board = {k: v for k, v in ph.items()
              if k == "PCB" or k.startswith(("XIAO", "EC11", "OLED", "glow")) or k.endswith("_led")}
+    board["OLEDSupport"] = m["parts"]["OLEDSupport"]
+    board.update({k: fc.solid(v) for k, v in fc.oled_envelopes().items()})
     pins = {k: v for k, v in ph.items() if k.endswith("_pins")}
     tails = {f"tail_{p['ref']}.{p['pad']}": fc.solid(fc.box(p["x0"], p["x1"], p["y0"], p["y1"], -fc.THT_TAIL, 0))
              for p in fc.bottom_pads() if p["through_hole"]}
     caps = {k: v for k, v in ph.items() if k.endswith("keycap")}
     return rigid, board, pins, tails, caps
+
+
+def oled_misaligned(m, yaw, dx, dy):
+    """The module as soldered badly: turned about the J1 pin row and shifted."""
+    names = ("OLED_board", "OLED_glass")
+    shapes = {n: m["ph"][n] for n in names}
+    shapes.update({k: fc.solid(v) for k, v in fc.oled_envelopes().items()})
+    h = fc.OL["header"]
+    a, b = cq.Vector(h["pin_row_x"], -h["centre_y"], 0), cq.Vector(h["pin_row_x"], -h["centre_y"], 1)
+    return {n: s.rotate(a, b, yaw).translate(cq.Vector(dx, dy, 0)) for n, s in shapes.items()}
+
+
+def check_oled_misalignment(m):
+    top = m["parts"]["Top"]
+    worst, seen = 0.0, 0
+    y, sh = fc.OLED_YAW_DEG, fc.OLED_SHIFT
+    for yaw in (-y, y):
+        for dx in (-sh, sh):
+            for dy in (-sh, sh):
+                w, _ = sweep(oled_misaligned(m, yaw, dx, dy), {"Top": top}, -45.0, 0.5)
+                worst = max(worst, w)
+                seen += 1
+    rec("Path: OLED soldered crooked still enters its opening", worst < EPS_VOL,
+        f"{seen} cases of +/-{y} deg yaw and +/-{sh} shift, worst overlap {worst:.3f} mm^3")
+    w, _ = sweep(oled_misaligned(m, 3.0, 0, 0), {"Top": top}, -45.0, 0.5)
+    rec("Self-test: module sweep FAILS at 3 deg yaw", w > 1.0,
+        f"{w:.1f} mm^3 overlap at the worst step (must be > 0), so the sweep sees the module")
 
 
 def stage(name, moving, fixed, start, step=0.5):
@@ -427,7 +514,8 @@ def check_assembly_path(m):
                for i, (sx, sy) in enumerate(fc.SCREWS)}
     stage("1 inserts into Top", inserts, {"Top": top}, -30.0)
     stage("2 switches into plate (no clips)", rigid, {"Top": top}, +30.0)
-    stage("3 PCB + soldered parts into Top", board, {"Top": top, **rigid}, -45.0)
+    stage("3 PCB + soldered parts + OLED on J1 into Top", board, {"Top": top, **rigid}, -45.0)
+    check_oled_misalignment(m)
     seated = {"Top": top, **rigid, **board, **pins, **tails}
     stage("4 GlowBand onto Top", {"GlowBand": parts["GlowBand"]}, seated, -45.0)
     stage("5 Bottom onto stack", {"Bottom": parts["Bottom"]}, {**seated, "GlowBand": parts["GlowBand"]}, -45.0)
@@ -507,7 +595,7 @@ def check_printability(printed, m):
                     + (f" (max span {max(b[0] for b in br):.1f} mm)" if br else ""))
     rec("Printable without supports (no >45 deg overhang, bridges <= 10 mm)", ok_all, "; ".join(rows))
     mins = []
-    for name in ("Top", "GlowBand", "Bottom"):
+    for name in ("Top", "GlowBand", "Bottom", "OLEDSupport"):
         sp = thin_walls(m["parts"][name])
         hard = [x for x in sp if x[0] < 0.8]
         mins.append(f"{name} {sp[0][0]:.2f}" if sp else f"{name} ok")
@@ -516,7 +604,7 @@ def check_printability(printed, m):
         if hard:
             ok_all = False
     rec("Walls >= 0.8 printable (spots < 1.2 listed as warnings)", all(
-        not [x for x in thin_walls(m["parts"][n]) if x[0] < 0.8] for n in ("Top", "GlowBand", "Bottom")),
+        not [x for x in thin_walls(m["parts"][n]) if x[0] < 0.8] for n in ("Top", "GlowBand", "Bottom", "OLEDSupport")),
         "thinnest: " + ", ".join(mins) + " mm (knob knurl ribs excluded)")
 
 
@@ -561,6 +649,7 @@ def main():
     check_usb(m)
     check_encoder(m)
     check_oled(m)
+    check_oled_support(m)
     check_glow(m)
     check_bottom_pads(m)
     check_assembly_path(m)

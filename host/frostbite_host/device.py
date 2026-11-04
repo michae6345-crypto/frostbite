@@ -44,6 +44,7 @@ OLED_COLS = 21
 PING_INTERVAL = 2.0
 PONG_TIMEOUT = 6.5       # no PING reply for this long: the link is wedged, reopen it
 HANDSHAKE_TIMEOUT = 1.0  # a pad must answer the first PING before it gets anything else
+STALL_SECONDS = 0.5      # a read this late means reports sat in a buffer, so their age is unknown
 
 
 class Status(IntEnum):
@@ -588,6 +589,8 @@ class DeviceLink:
                 self.connected.set()
                 last_ping = time.monotonic()
                 self.last_pong = last_ping
+                read_end = last_ping
+                distrust_until = 0.0
                 self.on_event("connected")
             try:
                 while True:
@@ -605,11 +608,21 @@ class DeviceLink:
                     extra = self.keepalive() if self.keepalive else None
                     if extra is not None:
                         self.transport.write(encode(extra))
+                read_start = time.monotonic()
                 data = self.transport.read(self.read_timeout_ms)
+                now = time.monotonic()
+                if (read_start - read_end > STALL_SECONDS
+                        or now - read_start > self.read_timeout_ms / 1000 + STALL_SECONDS):
+                    distrust_until = now + 0.2
+                read_end = now
                 if data:
                     msg = decode_device(data)
                     if isinstance(msg, PingReply):
-                        self.last_pong = time.monotonic()
+                        self.last_pong = now
+                    if isinstance(msg, KeyEvent) and now < distrust_until:
+                        # A press from before the stall must not land on what is shown now.
+                        log.info("dropped %s press: it may be from before a stall", msg.name)
+                        continue
                     self.on_event(msg)
             except Exception as e:  # noqa: BLE001  (OSError on unplug, anything else: reconnect)
                 log.info("device I/O error: %s", e)

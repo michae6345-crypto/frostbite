@@ -43,26 +43,27 @@ you are looking at. A daemon on the laptop feeds the pad over Raw HID.
 `CAD/frostbite-assembly.step` is the full assembly with the PCB. `python CAD/check_fit.py` checks the fit
 (PCB pocket, switch cutouts, OLED window, USB-C opening, insert bosses vs the PCB's underside pads).
 
-The case is generated from `design.json` in CadQuery and printed in four parts:
+The case is generated from `design.json` in CadQuery and printed in five parts:
 
 | Part | What it does |
 |---|---|
 | `Top` | Shell and MX plate in one piece (1.5 mm at the switch clips), OLED window, encoder hole, USB-C cutout at the back |
 | `GlowBand` | 2 mm band in clear / natural PETG between Top and Bottom; the 4 glow LEDs shine down into it |
 | `Bottom` | Base with a 4° typing tilt; the M3 screws go in from underneath so none show from above |
+| `OLEDSupport` | Small spacer under the OLED module, which sets its height and carries a press on the glass to the PCB |
 | `Knob` | Optional printable 18 mm knob for the 6 mm D-shaft (30 knurl ribs) |
 
 - Outer shell 79.15 × 97.15 mm, 12 mm corner radius, 9 mm bezel.
 - 4 × M3 heat-set inserts (4.7 mm hole, 4 mm deep) in the Top's side walls, M3×16 screws up from underneath
-  through Bottom and GlowBand. The bosses tuck under the PCB edge, so they are placed clear of the underside pads.
+  through Bottom and GlowBand. The bosses sit fully outside the PCB, so the PCB can pass them on its way in.
 - 0.3 mm tolerance per side where print meets PCB.
-- Outputs: `CAD/frostbite-assembly.step` (full assembly with the PCB) and `production/{Top,GlowBand,Bottom,Knob}.{step,stl}`.
+- Outputs: `CAD/frostbite-assembly.step` (full assembly with the PCB) and `production/{Top,GlowBand,Bottom,OLEDSupport,Knob}.{step,stl}`.
 
 <img src="docs/images/top-dims.png" alt="To-scale top view of the Frostbite case with dimensions in mm" width="420"/>
 <img src="docs/images/side.png" alt="To-scale side view of the Frostbite case showing the 4 degree tilt" width="420"/>
 
 How it fits together (studio exploded view, top to bottom): knob, keycaps (6 frosted, 3 white), switches, plate,
-PCB with the XIAO on its underside, glow band, bottom shell with the heat-set inserts, M3 screws from underneath.
+PCB with the XIAO on its underside, glow band, bottom shell, M3 screws from underneath into heat-set inserts in the Top.
 
 <img src="docs/images/exploded.png" alt="Exploded view of the Frostbite case and PCB stack" width="500"/>
 
@@ -104,9 +105,9 @@ QMK, in `Firmware/qmk/keyboards/frostbite/`. Two keymaps: `default` (the agent d
 | Key | Host connected (Raw HID) | No host (fallback) |
 |---|---|---|
 | Agent 1-6 | tap: select slot / focus its terminal; hold (400 ms): open its log | F13-F18 |
-| Approve | tap: Return to a waiting prompt; hold: Escape (deny) | F19 |
+| Approve | tap: allow the request on the OLED; hold: deny. Goes through Claude Code's PermissionRequest hook, with no keystroke | F19 |
 | Talk | always F20, held while held (bind a push-to-talk dictation tool to it) | F20 |
-| Stop | Escape to the terminal (interrupts Claude Code) | Escape |
+| Stop | Escape to a running session it can prove is in front | Escape, to whatever app is in front |
 | Dial | select slot 1-6 (wraps) | volume up / down |
 
 - **Raw HID**: usage page `0xFF60`, usage `0x61`, 32-byte reports. The host sends SET_SLOT, SET_ALL, OLED_LINE,
@@ -120,9 +121,9 @@ QMK, in `Firmware/qmk/keyboards/frostbite/`. Two keymaps: `default` (the agent d
 **Flashing**
 
 1. Enter the UF2 bootloader, any of:
-   - **bootmagic combo**: hold **Approve + Stop** (bottom-left + bottom-right) while plugging in (also clears EEPROM);
-   - double-tap the XIAO **RESET** button;
-   - hold the XIAO **BOOT** button while plugging in.
+   - hold the XIAO **BOOT** button while plugging in (the only way for the first flash);
+   - bootmagic combo: hold **Approve + Stop** (bottom-left + bottom-right) while plugging in (also clears EEPROM);
+   - double-tap the XIAO **RESET** button.
 2. A drive named **RPI-RP2** appears. Drag `production/firmware.uf2` onto it. The board reboots by itself.
 
 For bring-up, flash `led-test.uf2` first, before soldering switches: each LED lights red, green, blue, white in
@@ -147,11 +148,13 @@ From the Hackpad kit:
 - 4x M3×16 screws
 - 4x M3 heat-set inserts
 - 1x PCB, 2-layer, 61.15 × 83.15 mm (JLCPCB)
-- Printed case: Top, Bottom (and GlowBand, see below)
+- Printed case: Top, Bottom, OLEDSupport (and GlowBand, see below)
 
 Extras to buy:
 
 - 6x frosted translucent DSA keycaps, blank (kit caps are opaque, so status colour would not show)
+- Thin double-sided tape, about 0.2 mm, for the OLEDSupport
+- 4x stick-on feet
 - 1x 18 mm knob for a 6 mm D-shaft (knurled aluminium; or print `production/Knob.stl`)
 - Clear / natural PETG filament, about 50 g, for the GlowBand
 
@@ -191,15 +194,16 @@ UserPromptSubmit / PreToolUse set `run`, PermissionRequest and permission Notifi
 
 **Training runs.** `frostbite-daemon --watch-train train.log --name my-run` tails a text log or `metrics.jsonl`
 and reads step / epoch / loss. A NaN or inf loss, a Python traceback, an `...Error:` line or CUDA/MPS out of memory
-sets `error`. Lines such as `Training complete` (or your own `--done-pattern`), or a log that stops growing for
-10 minutes, set `done`.
+sets `error`. Lines such as `Training complete` (or your own `--done-pattern`) set `done`. A log that stops growing for
+10 minutes goes dim as `quiet`.
 
 **Anything else.** `frostbite-ctl set 3 run "CI build" --detail "deploy #42"` from any script;
 `host/examples/gh-actions-slot.sh` mirrors a GitHub Actions run on a slot.
 
-**Keys.** Keystrokes (Return, Escape) are only sent when the frontmost app is a terminal (Terminal, iTerm2,
-Ghostty, WezTerm, VS Code), and Approve only acts when the selected slot is `needs`. macOS asks for Accessibility
-and Automation permission the first time. Details and a LaunchAgent example: [host/README.md](host/README.md).
+**Keys.** Approve answers Claude Code's PermissionRequest hook and sends no keystroke. Stop is the one real keystroke:
+Escape, sent only to a running session in Terminal or iTerm2 that is in front, and macOS asks for Accessibility and
+Automation permission the first time. With no daemon, Stop is a plain Escape to the frontmost app. Details and a
+LaunchAgent example: [host/README.md](host/README.md).
 
 Try it without hardware: `frostbite-daemon --fake --dry-run`.
 
@@ -222,11 +226,11 @@ Try it without hardware: `frostbite-daemon --fake --dry-run`.
 **Evidence.** Each check writes `verify/evidence/<check>.json` with every command, exit code, output tail,
 measurements, and the SHA-256 of every input file. A claim only counts if its evidence file exists and its input
 hashes match the current files. A check is PASS only when every command exited 0 and every value matched;
-NOT_RUN (missing input or tool) is never counted as a pass. `verify/run.sh --self-test` injects 45 known faults
+NOT_RUN (missing input or tool) is never counted as a pass. `verify/run.sh --self-test` injects 57 known faults
 (a swapped pin, a moved switch, a truncated UF2, a leaky STL, a screw boss on a solder pad, ...) into copies of the
 project and confirms the right check fails for each.
 
-**Current status** (from [verify/REPORT.md](verify/REPORT.md)): **PASS 31 · FAIL 0 · NOT_RUN 0**, self-test 45/45
+**Current status** (from [verify/REPORT.md](verify/REPORT.md)): **PASS 32 · FAIL 0 · NOT_RUN 0**, self-test 57/57
 faults caught. Rerun `verify/run.sh` to refresh.
 
 Six separate audits (in [docs/audit/](docs/audit)) then looked for what those checks can't see, compared against

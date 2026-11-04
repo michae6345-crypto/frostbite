@@ -1,5 +1,7 @@
 import json
 import os
+import queue
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,7 +20,7 @@ from frostbite_host.state import Board
 
 FIX = Path(__file__).parent / "fixtures"
 TTY = "/dev/ttys004"
-RETURN, ESCAPE = "36", "53"
+ESCAPE = "key code 53"
 
 
 class FakeRunner:
@@ -42,8 +44,9 @@ class FakeRunner:
         return subprocess.CompletedProcess(args, 0, out, "")
 
     def keystrokes(self):
-        """The key number of every keystroke script run."""
-        return [c[-1] for c in self.calls if c[0] == "osascript" and "key code" in " ".join(c)]
+        """Which key each keystroke script pressed."""
+        return [re.search(r"key code \d+", " ".join(c)).group(0) for c in self.calls
+                if c[0] == "osascript" and "key code" in " ".join(c)]
 
 
 def make(front="com.apple.Terminal", tab=TTY):
@@ -55,14 +58,23 @@ def make(front="com.apple.Terminal", tab=TTY):
     return d, fake, runner, clock
 
 
-def hook(d, name):
+def hook(d, name, reply=None, **over):
     from frostbite_host.hook import hook_to_message
 
-    payload = json.loads((FIX / "hooks" / name).read_text())
+    payload = {**json.loads((FIX / "hooks" / name).read_text()), **over}
     msg = hook_to_message(payload, {"__CFBundleIdentifier": "com.apple.Terminal"})
     if "terminal" in msg:
         msg["terminal"]["tty"] = TTY
-    d.handle(("ipc", msg, None))
+    d.handle(("ipc", msg, reply))
+    return msg
+
+
+def ask(d, clock, **over):
+    """A PermissionRequest hook connected and waiting; its request has been on the OLED a while."""
+    reply = queue.Queue()
+    msg = hook(d, "permission_request.json", reply, **over)
+    clock[0] += 1
+    return msg["id"], reply
 
 
 def test_claude_session_flow_bytes():
@@ -70,16 +82,17 @@ def test_claude_session_flow_bytes():
     hook(d, "user_prompt_submit.json")
     assert fake.slots[0] is Status.RUN
     hook(d, "pre_tool_use_bash.json")
-    hook(d, "notification_permission.json")
+    rid, reply = ask(d, clock)
     assert fake.slots[0] is Status.NEEDS
     assert fake.oled[0] == "claude#1 my-app  WAIT"
     assert fake.oled[1].rstrip() == "Bash(npm test)?"
     # exact report for the status change
     all_reports = [r for r in fake.reports if r[0] == 0x02]
     assert all_reports[-1] == bytes([0x02, 3, 0, 0, 0, 0, 0]) + bytes(25)
-    # approve: frontmost is Terminal -> Return sent
+    # approve answers that hook and presses nothing
     d.handle(("dev", KeyEvent(6, TAP)))
-    assert runner.keystrokes() == [RETURN]
+    assert reply.get_nowait() == {"id": rid, "decision": "allow"}
+    assert runner.calls == []
     assert fake.slots[0] is Status.RUN           # flipped at once: no hook fires at approval
     assert fake.oled[1].rstrip() == "approved"
     hook(d, "post_tool_use.json")
@@ -92,36 +105,40 @@ def test_claude_session_flow_bytes():
     assert fake.oled[0].rstrip() == "#1 empty"
 
 
-def test_approve_refused_when_terminal_is_not_in_front_or_nothing_waits():
-    d, fake, runner, _ = make(front="com.google.Chrome")
+def test_approve_with_nothing_waiting():
+    d, fake, runner, clock = make()
     d.handle(("dev", KeyEvent(6, TAP)))
     assert fake.oled[1].rstrip() == "nothing to approve"
-    hook(d, "permission_request.json")
-    d.handle(("dev", KeyEvent(6, TAP)))
-    d.handle(("dev", KeyEvent(6, HOLD)))
-    d.handle(("dev", KeyEvent(8, TAP)))
-    assert runner.keystrokes() == []
-    assert fake.oled[1].rstrip() == "tap slot first"
+    assert runner.calls == []
 
 
-def test_refused_when_other_terminal_frontmost():
-    d, fake, runner, _ = make(front="com.googlecode.iterm2")
-    hook(d, "permission_request.json")   # session runs in Terminal.app (env bundle)
-    d.handle(("dev", KeyEvent(6, TAP)))
-    assert runner.keystrokes() == []
-    assert fake.oled[1].rstrip() == "tap slot first"
+def test_stop_refused_when_session_is_not_in_front():
+    for kw in ({"front": "com.google.Chrome"}, {"front": "com.googlecode.iterm2"}, {"tab": "/dev/ttys009"}):
+        d, fake, runner, clock = make(**kw)
+        hook(d, "user_prompt_submit.json")
+        d.handle(("dev", KeyEvent(8, TAP)))
+        assert runner.keystrokes() == []
+        assert fake.slots[0] is Status.RUN and fake.oled[1].rstrip() == "tap slot first"
 
 
-def test_hold_approve_denies_and_stop_escapes():
+def test_hold_approve_denies_without_a_keystroke():
     d, fake, runner, clock = make()
-    hook(d, "permission_request.json")
+    rid, reply = ask(d, clock)
     d.handle(("dev", KeyEvent(6, HOLD)))
-    assert runner.keystrokes() == [ESCAPE]
-    assert fake.slots[0] is Status.DONE and fake.oled[1].rstrip() == "denied"
+    assert reply.get_nowait() == {"id": rid, "decision": "deny"}
+    assert runner.calls == []
+    assert fake.oled[1].rstrip() == "denied" and fake.slots[0] is Status.RUN
+
+
+def test_stop_escapes_only_a_running_session():
+    d, fake, runner, clock = make()
+    ask(d, clock)
+    d.handle(("dev", KeyEvent(8, TAP)))           # waiting, not running
+    assert runner.keystrokes() == [] and fake.oled[1].rstrip() == "answer in terminal"
     clock[0] += 5
     hook(d, "user_prompt_submit.json")
     d.handle(("dev", KeyEvent(8, TAP)))
-    assert runner.keystrokes() == [ESCAPE, ESCAPE]
+    assert runner.keystrokes() == [ESCAPE]
     assert fake.slots[0] is Status.DONE and fake.oled[1].rstrip() == "stop sent"
     assert d.board.slots[0].detail == "interrupted"
 
@@ -176,8 +193,8 @@ def test_dry_run_sends_no_keystrokes():
     from frostbite_host.state import Slot
 
     slot = Slot("k", "claude", "n", terminal={"bundle": "com.apple.Terminal", "tty": TTY})
-    ok, msg = a.guarded_key("return", slot, "approved")
-    assert ok and runner.keystrokes() == [] and "key code 36" in out[-1]
+    ok, msg = a.guarded_escape(slot, "stop sent")
+    assert ok and runner.keystrokes() == [] and "key code 53" in out[-1]
 
 
 # ----------------------------------------------------------------- threaded end to end
@@ -251,18 +268,16 @@ def test_end_to_end_hook_ctl_train_unplug(running):
         f.write("Epoch 3/10 | step 812 | loss: nan\n")
     assert wait_for(lambda: fake.slots[1] is Status.ERROR)
 
-    # key press from the pad: approve slot 1 (selected) -> Return
-    key = "claude:9f2c1e4a-7b3d-4c11-a2e5-0d8f6b1c3e77"
-    ipc.send({"op": "update", "key": key, "terminal": {"tty": TTY}}, path=sock)
-    assert wait_for(lambda: d.board.slots[0].terminal.get("tty") == TTY)
+    # the hook that raised the amber has gone, so Approve finds nothing to answer
     fake.press("approve")
-    assert wait_for(lambda: len(runner.keystrokes()) == 1)
+    assert wait_for(lambda: fake.oled[1].rstrip() == "answer in terminal")
+    assert runner.keystrokes() == []
 
     # unplug / replug: full state comes back
     fake.unplug()
     time.sleep(0.3)
     fake.replug()
-    assert wait_for(lambda: fake.slots[:3] == [Status.RUN, Status.ERROR, Status.RUN])
+    assert wait_for(lambda: fake.slots[:3] == [Status.NEEDS, Status.ERROR, Status.RUN])
     assert wait_for(lambda: fake.oled[0].startswith("claude#1 my-app"))
     assert fake.glow is not None and fake.glow[:3] == (0xFF, 0x4D, 0x4F)
 
@@ -356,52 +371,53 @@ def test_open_failure_is_logged_once_not_hidden(caplog):
 
 def test_stale_queued_press_is_dropped():
     d, fake, runner, clock = make()
-    hook(d, "permission_request.json")
+    rid, reply = ask(d, clock)
     d.handle(("dev", KeyEvent(6, TAP), time.monotonic() - 2))
-    assert runner.keystrokes() == []
-    assert fake.slots[0] is Status.NEEDS
+    assert reply.empty() and fake.slots[0] is Status.NEEDS
     d.handle(("dev", KeyEvent(6, TAP), time.monotonic()))
-    assert runner.keystrokes() == [RETURN]
+    assert reply.get_nowait()["decision"] == "allow"
 
 
 def test_double_tap_cannot_answer_the_next_prompt():
     d, fake, runner, clock = make()
-    hook(d, "permission_request.json")
-    d.handle(("ipc", {"op": "update", "key": d.board.slots[0].key, "status": "needs",
-                      "detail": "Edit(a.py)?", "tool": "Edit(a.py)"}, None))
+    first, a = ask(d, clock)
+    second, b = ask(d, clock, tool_input={"command": "rm -rf build"})
     d.handle(("dev", KeyEvent(6, TAP)))
-    assert fake.slots[0] is Status.NEEDS and d.board.slots[0].detail == "Edit(a.py)?"
+    d.handle(("dev", KeyEvent(6, TAP)))           # "approved" is on the OLED, not the next prompt
+    assert a.get_nowait() == {"id": first, "decision": "allow"} and b.empty()
+    assert fake.slots[0] is Status.NEEDS
+    clock[0] += 3.1
+    d.tick()
+    assert "rm -rf" in fake.oled[1]
+    d.handle(("dev", KeyEvent(6, TAP)))           # on screen, but not long enough to have been read
+    assert b.empty()
+    clock[0] += 1
     d.handle(("dev", KeyEvent(6, TAP)))
-    assert runner.keystrokes() == [RETURN]
-    clock[0] += 1.1
-    d.handle(("dev", KeyEvent(6, TAP)))
-    assert runner.keystrokes() == [RETURN, RETURN]
-    assert fake.slots[0] is Status.RUN
+    assert b.get_nowait() == {"id": second, "decision": "allow"}
 
 
-def test_question_is_never_answered_blind():
+def test_question_is_never_answered_from_the_pad():
     d, fake, runner, clock = make()
-    for hold in (TAP, HOLD):
-        msg = {"op": "update", "source": "claude", "key": "claude:q", "name": "n", "status": "needs",
-               "detail": "question?", "tool": "AskUserQuestion", "kind": "question",
-               "terminal": {"bundle": "com.apple.Terminal", "tty": TTY}}
-        d.handle(("ipc", msg, None))
-        d.handle(("dev", KeyEvent(6, hold)))
-    assert runner.keystrokes() == []
+    for key in (TAP, HOLD):
+        hook(d, "permission_request.json", tool_name="AskUserQuestion", tool_input={})
+        d.handle(("dev", KeyEvent(6, key)))
+    assert d.requests == {} and runner.calls == []
     assert fake.oled[1].rstrip() == "answer in terminal"
 
 
-def test_sessions_the_pad_can_never_prove_say_so():
-    d, fake, runner, clock = make(front="com.mitchellh.ghostty")
-    d.handle(("ipc", {"op": "update", "source": "claude", "key": "claude:g", "name": "n",
-                      "status": "needs", "terminal": {"bundle": "com.mitchellh.ghostty", "tty": TTY}}, None))
-    d.handle(("dev", KeyEvent(6, TAP)))
-    assert runner.keystrokes() == [] and fake.oled[1].rstrip() == "answer in terminal"
+def test_stop_in_sessions_the_pad_can_never_prove():
+    for term in ({"bundle": "com.mitchellh.ghostty", "tty": TTY},
+                 {"bundle": "com.apple.Terminal", "tty": "/dev/ttys050", "tmux": "1"}):
+        d, fake, runner, clock = make(tab="/dev/ttys001")
+        d.handle(("ipc", {"op": "update", "source": "claude", "key": "claude:g", "name": "n",
+                          "status": "run", "terminal": term}, None))
+        d.handle(("dev", KeyEvent(8, TAP)))
+        assert runner.keystrokes() == [] and fake.oled[1].rstrip() == "answer in terminal"
 
 
-def test_refused_at_the_keystroke_is_not_counted_as_answered():
+def test_refused_at_the_keystroke_is_not_counted_as_stopped():
     d, fake, runner, clock = make()
-    hook(d, "permission_request.json")
+    hook(d, "user_prompt_submit.json")
 
     class Late(FakeRunner):
         def __call__(self, args, **kw):
@@ -409,8 +425,8 @@ def test_refused_at_the_keystroke_is_not_counted_as_answered():
             return subprocess.CompletedProcess(args, 0, "refused\n", "") if r.stdout == "sent\n" else r
 
     d.actions.runner = Late()
-    d.handle(("dev", KeyEvent(6, TAP)))
-    assert fake.slots[0] is Status.NEEDS and fake.oled[1].rstrip() == "tap slot first"
+    d.handle(("dev", KeyEvent(8, TAP)))
+    assert fake.slots[0] is Status.RUN and fake.oled[1].rstrip() == "tap slot first"
 
 
 def test_fake_flag_never_sends_real_keystrokes(monkeypatch):

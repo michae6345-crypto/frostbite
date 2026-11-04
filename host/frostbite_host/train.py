@@ -2,8 +2,10 @@
 
   run    once lines arrive (detail: "e3 s812 loss 0.4213")
   done   on a final line ("training complete", {"event": "end"}, --done-pattern ...)
-  needs  when the file stops growing for `stale_minutes`: a killed run also just goes
-         quiet, so silence is never shown as success (--stale-status done restores that)
+  idle   when the file stops growing for `stale_minutes`: dim white, freed after the same
+         linger as a finished run, cleared by tapping the selected slot, and back to run if
+         lines resume. A killed run also goes quiet, so silence is never shown as success, and
+         nothing is waiting on you, so it is not amber. --stale-status done shows green instead
   error  on a nan/inf loss, a Python traceback or an "...Error:" line
 """
 
@@ -26,6 +28,7 @@ CHUNK = 1 << 20           # bytes read at a time
 MAX_BACKLOG = 16 << 20    # a file bigger than this is read from its last 16 MiB
 MAX_PARTIAL = 1 << 20     # longest line kept while waiting for its newline
 HEAD_BYTES = 256          # start of the file, compared to notice copytruncate
+HEARTBEAT = 600.0         # a growing log refreshes its slot this often, even with no new text
 
 NUM = r"[-+]?(?:nan|inf(?:inity)?|\d+(?:\.\d*)?(?:e[-+]?\d+)?|\.\d+(?:e[-+]?\d+)?)"
 BAD = r"(?:nan|[-+]?inf(?:inity)?)"
@@ -62,7 +65,7 @@ FATAL_RE = re.compile(r"\b(?:CUDA|MPS|GPU|backend)\b.*\bout of memory\b|\bSegmen
 DONE_RE = re.compile(
     r"\b(training (?:is )?(?:complete|completed|finished|done)|finished training|done training|"
     r"run (?:complete|completed|finished)|saved final model|saving final model|"
-    r"training ended|FROSTBITE_DONE)\b", re.I)
+    r"training ended|Trainer\.fit.{0,2} stopped|FROSTBITE_DONE)\b", re.I)
 # "Stage 1 training complete, starting stage 2" and "warmup training finished" are not the end.
 NOT_FINAL_RE = re.compile(r"\b(?:warm-?up|stage|phase|pre-?train\w*)\b|,\s*(?:now\s+)?"
                           r"(?:starting|start|moving|next|beginning|begin|proceeding)\b", re.I)
@@ -216,7 +219,7 @@ def _fmt_epoch(e: float) -> str:
 @dataclass
 class RunState:
     """Folds parsed lines into a status + detail string."""
-    status: str = "idle"          # idle | run | done | needs | error
+    status: str = "idle"          # idle | run | done | error
     step: int | None = None
     epoch: float | None = None
     loss: float | None = None
@@ -296,7 +299,7 @@ class TrainWatcher:
     run's status stays on the slot until the new file has content."""
 
     def __init__(self, path: str, name: str | None, emit: Callable[[dict], None], *,
-                 stale_minutes: float = 10.0, stale_status: str = "needs",
+                 stale_minutes: float = 10.0, stale_status: str = "idle",
                  done_pattern: str | None = None, poll: float = 1.0, from_start: bool = True,
                  clock: Callable[[], float] = time.monotonic):
         self.path = os.path.abspath(os.path.expanduser(path))
@@ -313,6 +316,7 @@ class TrainWatcher:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_sent: tuple[str, str] | None = None
+        self._last_emit = clock()
         self._last_growth = clock()
         self._fh = None
         self._ino = None
@@ -341,7 +345,7 @@ class TrainWatcher:
         for ln in parts:
             self.state.feed(parse_line(ln, self.done_re), ln)
         self._last_growth = self.clock()
-        self._publish()
+        self._publish(heartbeat=True)
 
     def _flush_partial(self) -> None:
         """A final line with no newline still counts if it ends or fails the run."""
@@ -359,12 +363,14 @@ class TrainWatcher:
             self.state.status = self.stale_status
             self._publish(detail=f"quiet {mins}m {self.state.progress()}".strip())
 
-    def _publish(self, detail: str | None = None) -> None:
+    def _publish(self, detail: str | None = None, heartbeat: bool = False) -> None:
         st = self.state.status
         det = detail or self.state.detail()
-        if (st, det) == self._last_sent:
+        due = heartbeat and self.clock() - self._last_emit >= HEARTBEAT
+        if (st, det) == self._last_sent and not due:
             return
         self._last_sent = (st, det)
+        self._last_emit = self.clock()
         self.emit({"op": "update", "source": "train", "key": self.key, "name": self.name,
                    "status": st, "detail": det, "log": self.path})
 
@@ -438,9 +444,12 @@ class TrainWatcher:
             log.info("%s was truncated", self.path)
             self._seek(0)
             self._fresh = True
-        if not self._read_available():
+        if self._read_available():
+            # The file's own age, so a restart does not make a month-old log look live.
+            self._last_growth = self.clock() - max(0.0, time.time() - st.st_mtime)
+        else:
             self._flush_partial()
-            self.check_stale()
+        self.check_stale()
 
     def start(self) -> None:
         self.emit({"op": "update", "source": "train", "key": self.key, "name": self.name,

@@ -131,8 +131,24 @@ int main(int argc,char**argv){
     rx(1,0,0,0,0); run(10); if(!oled_active)PASS("no-change SET_SLOT does not wake"); else FAIL("nochange woke");
     rx(1,0,1,0,0); run(10); if(oled_active)PASS("changed SET_SLOT wakes"); else FAIL("no wake");
     run(610000); printf("off again=%d\n",!oled_active); ev(0,0,true); ev(0,0,false); run(10); if(oled_active)PASS("key wakes"); else FAIL("key no wake");
-    // suspend/resume > 10 min
-    reset_all(); run(10); oled_off(); /* QMK does this itself on suspend */ int aoff=oled_active; g_now+=700000; run(50); printf("suspend: active during=%d; after 11.6 min host sleep, resume, 50 ms later oled_active=%d\n",aoff,oled_active);
+    // suspend/resume: USB resume wakes once, then the normal timer; PING never counts (R2-08 / F9)
+    { reset_all(); g_now=800000; lastled=g_now; ping(); uint8_t a[32]={2,3,0,0,0,0,0}; raw_hid_receive(a,32); run(10); wake();
+      run(610000); if(!oled_active)PASS("before sleep: OLED already asleep"); else FAIL("not asleep");
+      oled_off(); /* QMK does this itself on suspend */ g_now+=3600000; housekeeping_task_user(); run(50);
+      if(!oled_active)PASS("no resume event yet: stays dark"); else FAIL("lit without resume");
+      suspend_wakeup_init_user(); run(50); printf("resume after 60 min sleep: oled_active=%d\n",oled_active);
+      if(oled_active)PASS("USB resume wakes the OLED"); else FAIL("resume did not wake");
+      ping(); run(50); char r[22]; paneltext(3,r); if(!strncmp(r,"1? 2- 3- 4- 5- 6- HID",21))PASS("waiting prompt is on the panel after resume"); else FAIL("resume panel |%s|",r);
+      /* 15 min of PINGs, same-value SET_ALL and changing text after that one resume */
+      uint32_t t0=last_activity; uint32_t first_off=0; int off_ms=0, relit=0; bool prev=true;
+      for(uint32_t t=0;t<900000;t++){ loop1(); if(t%2000==0){ ping(); raw_hid_receive(a,32); } if(t%1000==0){ char q[32]={3,1,21}; memset(q+3,' ',21); q[3]='0'+(t/1000)%10; raw_hid_receive((uint8_t*)q,32); }
+        if(!oled_active){ off_ms++; if(!first_off)first_off=g_now-t0; } if(oled_active&&!prev&&first_off)relit++; prev=oled_active; }
+      printf("after resume: last_activity moved=%d, first off %u ms after resume, off for %d s of 900, relit=%d\n",last_activity!=t0,first_off,off_ms/1000,relit);
+      if(last_activity==t0)PASS("PING, SET_ALL and OLED_LINE do not extend the resume wake"); else FAIL("activity moved");
+      if(first_off>600000&&first_off<=600100&&!relit)PASS("sleeps 10 min after resume with PINGs running, stays off"); else FAIL("first_off=%u relit=%d",first_off,relit);
+      /* second resume: wakes once more; a short sleep restarts the timer once */
+      suspend_wakeup_init_user(); run(20); if(oled_active)PASS("each resume wakes once"); else FAIL("second resume"); t0=last_activity; run(300000); ping(); if(oled_active&&last_activity==t0)PASS("still on the same timer"); else FAIL("timer moved");
+    }
   }
   { reset_all(); g_now=90000; ping(); g_now+=6000; housekeeping_task_user(); uint32_t lp=last_ping; g_now=lp+0xFFFFFFFFu; bool h1=host_mode(); g_now=lp+1; g_now+=0; /* elapsed wraps to 1 */ bool h2=host_mode(); printf("wrap: elapsed=2^32-1 host_mode=%d; elapsed wrapped to 1 host_mode=%d (F11 fix: want 0 0)\n",h1,h2); }
   // ---- fix round 2

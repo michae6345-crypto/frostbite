@@ -49,9 +49,10 @@
 	(constraint hole_size (min 0.5mm))
 )
 
+# Raised from the generator's 0.18: jlcpcb.com/capabilities/pcb-capabilities says >= 0.20.
 (rule "JLCPCB: PTH Annular Ring"
 	(condition "A.Type == 'Pad' && A.Pad_Type == 'Through-hole' && A.isPlated()")
-	(constraint annular_width (min 0.18mm))
+	(constraint annular_width (min 0.20mm))
 )
 
 (rule "JLCPCB: NPTH Annular Ring"

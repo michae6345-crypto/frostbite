@@ -256,7 +256,7 @@
       "pitch": 2.54,
       "centre_y": 13.0
     },
-    "mount": "standard 2.5 mm header so the glass sits near plate level"
+    "mount": "Module soldered to J1 with the header's plastic spacer removed; module_gap and the printed OLEDSupport set the height (see case.oled_support)"
   },
   "case": {
     "shell": {
@@ -295,6 +295,11 @@
         }
       ],
       "boss_od": 8.7
+    },
+    "oled_support": {
+      "_about": "Printed OLEDSupport part. The module's black header plastic is removed and the module rests on this part, so module_gap (module board underside above the PCB top) sets the stack: glass 0.55 below the plate top, 1.0 of air under the lip. Printed height = module_gap - 2 x tape. Replaces oled.mount's 2.5 mm header figure.",
+      "module_gap": 1.8,
+      "tape": 0.2
     }
   },
   "firmware": {

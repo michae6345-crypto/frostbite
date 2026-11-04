@@ -21,7 +21,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 0.34,
+      "duration_s": 0.28,
       "stdout_tail": [],
       "stderr_tail": [
         "Fontconfig error: Cannot load default config file: No such file: (null)"
@@ -29,11 +29,11 @@
     }
   ],
   "inputs_sha256": {
-    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
+    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
     "PCB/frostbite.kicad_sch": "4d947106d758fc3405be5d4da340b47f76696e6900322e39446c424f5ea3b0e2"
   },
   "details": {
-    "netlist_sha256": "1bc4059fb47e897ed44cad356c212ec48bdd56a521057865494b9e11d9c8cadc",
+    "netlist_sha256": "46d3da18aa33b25ac467d2068f94fb0d39e99467e1bf060452f44b09e650c4f4",
     "led_chain": [
       "LED1",
       "LED2",
@@ -53,6 +53,9 @@
       "xiao": [
         "U1"
       ],
+      "oled": [
+        "J1"
+      ],
       "switch": [
         "SW1",
         "SW2",
@@ -63,9 +66,6 @@
         "SW7",
         "SW8",
         "SW9"
-      ],
-      "enc": [
-        "ENC1"
       ],
       "led": [
         "LED1",
@@ -82,8 +82,8 @@
         "LED8",
         "LED9"
       ],
-      "oled": [
-        "J1"
+      "enc": [
+        "ENC1"
       ],
       "diode": [
         "D1",
@@ -98,6 +98,6 @@
       ]
     }
   },
-  "timestamp": "2026-11-03T22:16:06+00:00",
-  "duration_s": 0.35
+  "timestamp": "2026-11-04T01:04:08+00:00",
+  "duration_s": 0.28
 }

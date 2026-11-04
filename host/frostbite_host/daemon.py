@@ -2,6 +2,11 @@
 
 Threads: HID I/O (device.DeviceLink), socket server, one per training watcher, all
 feeding one queue consumed by the main loop, which is the only code touching the Board.
+
+Approve sends no keystroke. A PermissionRequest hook stays connected while it waits, and
+Approve answers the request shown on the OLED, on that hook's own connection. A press
+only ever reaches the id last pushed to the OLED, so it cannot answer anything else, and a
+slot with no connected hook has nothing to answer.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ import json
 import logging
 import os
 import queue
+import select
 import socket
 import sys
 import threading
@@ -23,14 +29,27 @@ from .actions import USE_TERMINAL, Actions
 from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS, OLED_COLS,
                      DeviceLink, DryRunTransport, EncoderEvent, FakeDevice, HidTransport,
                      KeyEvent, OledLine, PingReply, SetAll, SetGlow, SetSelected, Status, Unknown)
+from .hook import MAX_WAIT
 from .state import Board
 from .train import TrainWatcher
 
 log = logging.getLogger("frostbite.daemon")
 
 MAX_KEY_AGE = 1.0     # a command key that waited this long in the queue is dropped
-KEY_COOLDOWN = 1.0    # after a keystroke, so a double tap cannot answer the next prompt
+KEY_COOLDOWN = 1.0    # after a keystroke, so a double tap cannot send a second Escape
+MIN_SHOWN = 0.6       # a request must have been on the OLED this long before a press counts
 SELECT_SETTLE = 0.5   # after SET_SELECTED, ignore PING replies that crossed it
+
+
+KEEP_OPEN = object()  # handle_ipc: the reply comes later, from a press
+
+
+class Request:
+    """A PermissionRequest hook waiting on the pad. `reply` reaches that hook and no other."""
+
+    def __init__(self, reply: "queue.Queue", deadline: float):
+        self.reply = reply
+        self.deadline = deadline
 
 
 class Daemon:
@@ -49,6 +68,9 @@ class Daemon:
         self._statuses: tuple[Status, ...] | None = None
         self._select_settle = -1e12
         self._last_keystroke = -1e12
+        self.requests: dict[str, Request] = {}
+        self._shown_id: str | None = None  # the request last pushed to the OLED
+        self._shown_at = 0.0
 
     # ------------------------------------------------------------------ inputs (any thread)
     def on_device(self, ev: object) -> None:
@@ -80,6 +102,9 @@ class Daemon:
             self.send(SetSelected(b.selected))
             self._sent["sel"] = b.selected
             self._select_settle = now + SELECT_SETTLE
+        shown = b.shown_request(now)
+        if shown != self._shown_id:
+            self._shown_id, self._shown_at = shown, now
         glow = b.glow()
         if self._sent.get("glow") != glow:
             self.send(SetGlow(*glow))
@@ -92,20 +117,29 @@ class Daemon:
             if kind == "dev":
                 self.handle_device(item[1], item[2] if len(item) > 2 else None)
             elif kind == "ipc":
-                reply = self.handle_ipc(item[1])
-                if item[2] is not None:
+                reply = self.handle_ipc(item[1], item[2])
+                if item[2] is not None and reply is not KEEP_OPEN:
                     item[2].put(reply)
         except Exception:  # noqa: BLE001  one bad event must not kill the daemon
             log.exception("error handling %r", item[:2])
             if kind == "ipc" and item[2] is not None:
                 item[2].put({"ok": False, "error": "internal error"})
+        self._reap()
         self.push()
 
-    def handle_ipc(self, msg: dict) -> dict | None:
+    def handle_ipc(self, msg: dict, reply: "queue.Queue | None" = None) -> object:
         now = self.clock()
         if not isinstance(msg, dict):
             return {"ok": False, "error": "not an object"}
         op = msg.get("op")
+        if op == "request_gone":     # the hook ended: Claude Code cancelled it, or it timed out
+            self._release(str(msg.get("id")))
+            return None
+        if op == "permission":
+            if reply is not None:
+                self._open_request(msg, reply, now)
+                return KEEP_OPEN
+            msg = {k: v for k, v in msg.items() if k != "id"}  # nobody to answer: display only
         if op == "status":
             return {"ok": True, "connected": self.connected(), **self.board.to_dict(now)}
         if op == "watch":
@@ -126,10 +160,54 @@ class Daemon:
             log.warning("bad message %s: %s", msg, e)
             return {"ok": False, "error": str(e)}
         log.debug("ipc %s -> %s", msg.get("op"), changed)
-        if op == "update" and msg.get("key") in self.board.overflow:
-            self.board.flash("agent waiting, no slot", now)
+        if op in ("update", "permission") and msg.get("key") in self.board.overflow:
+            self.board.flash("agent waits, no slot", now)
             return {"ok": False, "error": "all slots busy"}
         return {"ok": True}
+
+    # ------------------------------------------------------------------ pad decisions
+    def _open_request(self, msg: dict, reply: "queue.Queue", now: float) -> None:
+        rid = msg.get("id")
+        no_answer = {"id": rid, "decision": None}
+        if not isinstance(rid, str) or not rid or rid in self.requests:
+            reply.put(no_answer)
+            return
+        if self.connected() is False or self.actions.dry_run:
+            # No pad means no press can come. A dry run never answers a real session.
+            self.handle_ipc({k: v for k, v in msg.items() if k != "id"})
+            reply.put(no_answer)
+            return
+        try:
+            self.board.apply(msg, now)
+            wait = min(max(float(msg.get("wait", 0)), 0.0), MAX_WAIT)
+        except (ValueError, KeyError, TypeError) as e:
+            log.warning("bad permission request: %s", e)
+            reply.put(no_answer)
+            return
+        found = self.board.find_request(rid)
+        if found is None:               # all slots busy
+            self.board.flash("agent waits, no slot", now)
+            reply.put(no_answer)
+            return
+        self.requests[rid] = Request(reply, now + wait)
+        log.info("request %s waiting on the pad: slot %d %s", rid, found[0] + 1, found[1].text)
+        selected = self.board.selected
+        if selected != found[0] and not self.board.has_live_request(selected):
+            self.board.select(found[0])  # the wait is short, so bring it up by itself
+
+    def _release(self, rid: str, decision: str | None = None) -> None:
+        req = self.requests.pop(rid, None)
+        if req is not None:
+            req.reply.put({"id": rid, "decision": decision})
+        if decision is None:
+            self.board.release_request(rid)
+
+    def _reap(self) -> None:
+        now = self.clock()
+        for rid, req in list(self.requests.items()):
+            if now >= req.deadline or self.board.find_request(rid) is None:
+                log.info("request %s ended with no decision", rid)
+                self._release(rid)
 
     def handle_device(self, ev: object, received: float | None = None) -> None:
         now = self.clock()
@@ -139,6 +217,8 @@ class Daemon:
             self._sent.clear()
             return
         if ev == "disconnected":
+            for rid in list(self.requests):  # no press can come now
+                self._release(rid)
             return
         if isinstance(ev, EncoderEvent):
             sel = ev.selected if 0 <= ev.selected < NUM_SLOTS else b.selected + ev.direction
@@ -162,8 +242,14 @@ class Daemon:
         held = ev.action == HOLD
         log.info("key %s %s", ev.name, "hold" if held else "tap")
         if ev.key < NUM_SLOTS:
-            b.select(ev.key)
             slot = b.slots[ev.key]
+            if (not held and b.selected == ev.key and slot is not None and slot.source != "claude"
+                    and slot.status not in (Status.RUN, Status.NEEDS)):
+                log.info("slot %d cleared from the pad (%s)", ev.key + 1, slot.key)
+                b.clear_slot(ev.key)
+                b.flash("cleared", now)
+                return
+            b.select(ev.key)
             msg = self.actions.open_log(slot) if held else self.actions.focus(slot)
             if msg:
                 b.flash(msg, now)
@@ -179,34 +265,27 @@ class Daemon:
         elif ev.key == KEY_STOP:
             self._stop(now)
 
-    def _keystroke(self, key: str, slot, why: str, now: float) -> bool:
-        if now - self._last_keystroke < KEY_COOLDOWN:
-            log.info("ACTION none: %s within the cooldown", why)
-            return False
-        sent, msg = self.actions.guarded_key(key, slot, why)
-        if sent:
-            self._last_keystroke = now
-        self.board.flash(msg, now)
-        return sent
-
     def _approve(self, held: bool, now: float) -> None:
+        """Answer the request on the OLED, and only that one. Nothing here touches the keyboard."""
         b = self.board
-        i = b.selected
-        slot = b.slots[i]
-        if slot is None or slot.source != "claude" or slot.status != Status.NEEDS:
-            log.info("ACTION none: approve pressed but slot %d is not waiting", i + 1)
-            b.flash("nothing to approve", now)
+        self._reap()
+        rid = self._shown_id
+        if rid is None or rid not in self.requests:
+            slot = b.slots[b.selected]
+            waiting = slot is not None and slot.source == "claude" and slot.status == Status.NEEDS
+            log.info("ACTION none: approve pressed, no request on the OLED")
+            b.flash(USE_TERMINAL if waiting else "nothing to approve", now)
             return
-        if slot.pending and slot.pending[0].kind != "permission":
-            log.info("ACTION none: slot %d is asking a question, not a yes/no", i + 1)
-            b.flash(USE_TERMINAL, now)
+        if now - self._shown_at < MIN_SHOWN:
+            log.info("ACTION none: request %s only just reached the OLED", rid)
             return
-        if held:
-            if self._keystroke("escape", slot, "denied", now):
-                # Escape ends the turn, and no hook reports it.
-                b.answer(i, now, status=Status.DONE, detail="denied", all_prompts=True)
-        elif self._keystroke("return", slot, "approved", now):
-            b.answer(i, now, status=Status.RUN, detail="approved")
+        index, prompt = b.find_request(rid)
+        decision = "deny" if held else "allow"
+        log.info("ACTION %s request %s: slot %d %s", decision, rid, index + 1, prompt.text)
+        self._release(rid, decision)
+        word = "denied" if held else "approved"
+        b.answer(index, now, status=Status.RUN, detail=word, request=rid)
+        b.flash(word, now)
 
     def _stop(self, now: float) -> None:
         b = self.board
@@ -216,13 +295,31 @@ class Daemon:
             log.info("ACTION none: stop pressed but slot %d has no Claude turn to stop", i + 1)
             b.flash("nothing to stop", now)
             return
-        if self._keystroke("escape", slot, "stop sent", now):
+        if slot.status == Status.NEEDS:
+            log.info("ACTION none: stop pressed but slot %d is waiting, not running", i + 1)
+            b.flash(USE_TERMINAL, now)
+            return
+        tty = slot.terminal.get("tty")
+        if any(o is not slot and o and o.source == "claude" and o.terminal.get("tty") == tty and tty
+               for o in b.slots):
+            log.info("ACTION refused escape: two sessions claim %s", tty)
+            b.flash(USE_TERMINAL, now)
+            return
+        if now - self._last_keystroke < KEY_COOLDOWN:
+            log.info("ACTION none: stop within the cooldown")
+            return
+        sent, msg = self.actions.guarded_escape(slot, "stop sent")
+        if sent is not False:           # also when unknown: it must not be sent twice
+            self._last_keystroke = now
+        b.flash(msg, now)
+        if sent:
             # Stop does not fire after an interrupt, so nothing else would end `run`.
             b.answer(i, now, status=Status.DONE, detail="interrupted", all_prompts=True)
 
     def tick(self) -> None:
         now = self.clock()
         self.board.expire(now)
+        self._reap()
         self.push()
 
     # ------------------------------------------------------------------ watchers
@@ -251,6 +348,9 @@ class Daemon:
                 item = None
             if item is not None:
                 self.handle(item)
+            elif self.requests:
+                self._reap()
+                self.push()
             if time.monotonic() - last_tick >= 1.0:
                 self.tick()
                 last_tick = time.monotonic()
@@ -322,6 +422,9 @@ class SocketServer:
                 return
             if not isinstance(msg, dict) or msg.get("op") == "ping":
                 return
+            if msg.get("op") == "permission":
+                self._hold_request(conn, msg)
+                return
             want_reply = msg.get("op") in ("status", "watch", "unwatch") or msg.get("reply")
             reply_q: "queue.Queue | None" = queue.Queue() if want_reply else None
             self.daemon.submit(msg, reply_q)
@@ -331,6 +434,30 @@ class SocketServer:
                     conn.sendall((json.dumps(reply) + "\n").encode())
                 except (queue.Empty, OSError):
                     pass
+
+    def _hold_request(self, conn: socket.socket, msg: dict) -> None:
+        """Keep a waiting hook's connection, so its answer goes down this socket alone and a
+        hook that ended is noticed at once."""
+        reply: "queue.Queue" = queue.Queue()
+        self.daemon.submit(msg, reply)
+        while True:
+            try:
+                answer = reply.get(timeout=0.1)
+            except queue.Empty:
+                try:
+                    readable = select.select([conn], [], [], 0)[0]
+                    if readable and conn.recv(1) == b"":
+                        self.daemon.submit({"op": "request_gone", "id": msg.get("id")})
+                        return
+                except OSError:
+                    self.daemon.submit({"op": "request_gone", "id": msg.get("id")})
+                    return
+                continue
+            try:
+                conn.sendall((json.dumps(answer) + "\n").encode())
+            except OSError:
+                log.info("hook for request %s had already gone", msg.get("id"))
+            return
 
     def stop(self) -> None:
         if self.sock:
@@ -384,9 +511,9 @@ def fake_console(fake: FakeDevice, stop: threading.Event) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="frostbite-daemon", description=__doc__)
     p.add_argument("--dry-run", action="store_true",
-                   help="never write to the pad or press keys; print what would be sent")
+                   help="never write to the pad or press Escape; print what would be sent")
     p.add_argument("--fake", action="store_true",
-                   help="use a simulated pad (type tap/hold/cw/show on stdin); keystrokes are "
+                   help="use a simulated pad (type tap/hold/cw/show on stdin); Stop's Escape is "
                         "printed, never sent")
     p.add_argument("--watch-train", action="append", default=[], metavar="PATH",
                    help="tail a training log or JSONL metrics file (repeatable)")
@@ -394,8 +521,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="slot name for the matching --watch-train (repeatable, same order)")
     p.add_argument("--stale-minutes", type=float, default=10.0,
                    help="flag a run when its log stops growing this long (default 10)")
-    p.add_argument("--stale-status", choices=["done", "needs"], default="needs",
-                   help="status for a stale run (default needs: a killed run also goes quiet)")
+    p.add_argument("--stale-status", choices=["idle", "done"], default="idle",
+                   help="status for a stale run (default idle: dim, and a tap clears it)")
     p.add_argument("--done-pattern", help="extra regex that marks the final log line")
     p.add_argument("--linger-minutes", type=float, default=10.0,
                    help="how long finished slots stay green before they free (default 10)")

@@ -24,3 +24,5 @@ void rgb_matrix_sethsv_noeeprom(uint8_t h,uint8_t s,uint8_t v);
 void tap_code_delay(uint16_t code, uint16_t delay);
 typedef uint16_t matrix_row_t;
 matrix_row_t matrix_get_row(uint8_t row);
+
+void suspend_wakeup_init_user(void);

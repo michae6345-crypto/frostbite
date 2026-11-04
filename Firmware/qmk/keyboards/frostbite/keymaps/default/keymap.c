@@ -26,9 +26,9 @@
 // glow are kept, so when PINGs resume the pad is back in place without a USB
 // reconnect, and a SET_ALL with the same values changes nothing.
 //
-// The OLED sleeps after 10 minutes. Only a key, the encoder or a real status
-// change counts as activity: PING, OLED_LINE ("N ago" text), SET_GLOW,
-// SET_SELECTED and a repeated SET_ALL do not.
+// The OLED sleeps after 10 minutes. Only a key, the encoder, a real status
+// change or a USB resume counts as activity: PING, OLED_LINE ("N ago" text),
+// SET_GLOW, SET_SELECTED and a repeated SET_ALL do not.
 
 #include QMK_KEYBOARD_H
 #include "raw_hid.h"
@@ -150,7 +150,7 @@ static bool host_mode(void) {
     return ever_pinged && timer_elapsed32(last_ping) < HOST_TIMEOUT_MS;
 }
 
-/* OLED activity: key, encoder or a real status change only. */
+/* OLED activity: key, encoder, real status change or USB resume only. */
 static void wake(void) {
     last_activity = timer_read32();
     oled_asleep   = false;
@@ -517,5 +517,11 @@ void keyboard_post_init_user(void) {
     rgb_matrix_enable_noeeprom();
     rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
     rgb_matrix_sethsv_noeeprom(0, 0, 0);
+    wake();
+}
+
+/* The host woke from sleep. Runs once per USB resume, so the pad shows anything
+ * waiting after a long sleep, and the normal 10-minute timer applies from here. */
+void suspend_wakeup_init_user(void) {
     wake();
 }

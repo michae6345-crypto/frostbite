@@ -25,6 +25,7 @@ PIPELINE = [
     ("G3.gnd_thermal", C.g3_gnd_thermal),
     ("G4.check_fit", C.g4_check_fit), ("G4.stl_mesh", C.g4_stl_mesh), ("G4.switch_cutouts", C.g4_switch_cutouts),
     ("G4.encoder_clearance", C.g4_encoder_clearance), ("G4.oled_clearance", C.g4_oled_clearance),
+    ("G4.step_parts", C.g4_step_parts),
     ("G5.bom_kit", C.g5_bom_kit),
     ("G6.qmk_lint", C.g6_qmk_lint), ("G6.compile_default", lambda ctx: C.g6_compile(ctx, "default")),
     ("G6.compile_ledtest", lambda ctx: C.g6_compile(ctx, "ledtest")), ("G6.production_uf2", C.g6_production_uf2),

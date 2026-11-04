@@ -8,8 +8,8 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "24ff1212990609fa6e0c23288e56cdb1db966db388bdcd77e77bb0f1b2faa690",
-    "production/gerbers.zip": "dfeb9ce92a876ea1c5764342da446d0782858d279ba35e1ba50849f2acc0a99d"
+    "design.json": "0663222620823ce1628bcfc3845076f83848a2c8793afb4e22ae8edb269fe05c",
+    "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906"
   },
   "details": {
     "gerbonara_warnings": [
@@ -34,6 +34,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-03T22:16:13+00:00",
-  "duration_s": 0.08
+  "timestamp": "2026-11-04T01:04:16+00:00",
+  "duration_s": 0.09
 }

@@ -15,7 +15,7 @@ KiCad 10 project for the Frostbite 9 Hackpad: 3×3 MX keys, EC11E encoder, 0.91"
 | file | what |
 |---|---|
 | `frostbite.kicad_pro` / `.kicad_sch` / `.kicad_pcb` | the project (open the `.kicad_pro`) |
-| `frostbite.kicad_dru` | JLCPCB 2-layer 1 oz custom rules (copied from `verify/rules/`) |
+| `frostbite.kicad_dru` | JLCPCB 2-layer 1 oz custom rules (from `verify/rules/`, with the PTH annular ring raised from 0.18 to JLCPCB's published 0.20) |
 | `sym-lib-table`, `fp-lib-table` | project libraries (care package, derived footprints, KiCad standard) |
 | `lib/` | Hack Club care package files + `frostbite.pretty` (derived LED footprints) |
 | `tools/` | generators and checks (below) |
@@ -85,12 +85,26 @@ All 13 MINI-Es solder to B.Cu pads around an identical cut-out, but:
 | Key LEDs | LED1–LED9 | Lens **into** the hole, back of the part facing you | Up, into the switch |
 | Glow LEDs | LED10–LED13 | **Flipped: lens out**, facing you, back of the part in the hole | Down, into the glow band |
 
-Both ways, line the chamfered lead up with the board's triangle. The silkscreen shows
-`LENS OUT` and a ring-and-dot mark beside each glow LED, and a two-line legend sits at the middle
-of the underside. Fitted lens-in like the others, VDD and GND still land correctly but the data
-pins swap: LED10's DOUT fights LED9's DOUT on `LED_D9`, the glow chain gets no data and the light goes
-into the board. Key LEDs still work, so the fault shows only at the end of bring-up. Check one
-glow LED against `led-test.uf2` before fitting the rest.
+Both ways, line the chamfered lead up with the board's triangle. The silkscreen shows `LENS OUT`
+and a ring-and-dot mark beside each glow LED, and a two-line legend sits at the middle of the underside.
+
+The triangle is also the check. The four pads form a 5.55 × 1.5 mm rectangle, so a part can only sit
+at 0° or 180°, and a part that is the wrong way up can never put its chamfer on the triangle. If the
+chamfer will not line up, stop and turn the part over.
+
+Soldered lens-in at a glow position anyway, neither VDD nor GND reaches its own pad. At LED10:
+
+| Position | VDD lead on | DOUT lead on | GND lead on | DIN lead on |
+|---|---|---|---|---|
+| Correct, lens out | +5V | `LED_D10` | GND | `LED_D9` |
+| Lens in, 0° | `LED_D9` | GND | `LED_D10` | +5V |
+| Lens in, 180° | `LED_D10` | +5V | `LED_D9` | GND |
+
+The supply leads end up on data nets and the rails on the data pins, so expect the glow chain to
+stay dark, and LED9's DOUT is at risk as well because it feeds `LED_D9`. Light would also go into the
+board. This is worked out from the pad geometry; nothing has been built. Do not leave a suspect glow
+LED powered. Glow LEDs get their data through LED1–LED9, so fit those first, then fit LED10 alone and test it with
+`led-test.uf2` before fitting the rest.
 
 Solder the XIAO to the underside (`XIAO HERE`), with its components facing away from the PCB. Compare
 the kit OLED's pin labels with the `GND VCC SCL SDA` silkscreen beside J1 before soldering it.
@@ -126,14 +140,17 @@ is pad A (46.65, 20.5), not the shaft, and J1's origin is pin 1.
 
 ## Under the XIAO
 
-The XIAO's back sits directly on this board, and that back has bare VIN and GND pads, test pads and USB
-shell tabs. Rule areas on B.Cu (`xiao_back`, x 15.4–26.6, y 0.4–21) keep tracks and vias out, so no
-signal relies on solder mask alone, and `xiao_vin_gnd` (x 18.5–23.3, y 17.5–20.65) also clears the pour
-under the VIN and GND pads, whose positions come from Seeed's render (± 0.3 mm).
+The XIAO's back sits directly on this board, and that back has bare VIN, GND, SWCLK, SWDIO and RST
+pads plus USB shell tabs. The rule area `xiao_back` (x 15.4–26.6, y 0.4–21) keeps B.Cu tracks and vias
+out. Two more clear the pour under the bare pads: `xiao_vin_gnd` (x 18.5–23.3, y 17.5–20.65) and
+`xiao_swd_rst` (x 18.7–23.3, y 0.7–5.5). Pad positions are scaled from Seeed's render (± 0.3 mm). The rest
+of the pour under the XIAO stays, insulated by solder mask only, and it is GND. `xiao_swd_rst` is added
+after routing because it only affects the pour.
 
 ## GND pours
 
-Every pad, SMD and through-hole, has thermal relief (gap 0.3, spoke 0.4), so no joint fights the pour.
+Pours use thermal relief on every pad, SMD and through-hole (gap 0.3, spoke 0.4), so no joint fights
+the pour. LED9 and LED11 pad 3 have no pour contact at all and connect by their 0.5 mm GND tracks.
 `min_resolved_spokes` is 1 because U1 pad 13, the only XIAO GND pin, gets 2 spokes on F.Cu but 1 on
 B.Cu. Those three 0.4 mm spokes comfortably carry the 0.48 A worst case.
 
@@ -173,7 +190,7 @@ the Hackpad guide links (38 × 12 board, pads at x 36.5, GND at y 2.19) is the s
 | ENC_A / ENC_B | XIAO D7 (GP1) / D8 (GP2) to encoder A / B (C and lugs to GND; push switch S1/S2 not connected) |
 | LED_DIN | XIAO D6 (GP0) to LED1 DIN (3.3 V data into a 5 V chain, see VERIFICATION.md) |
 | LED_D1 … LED_D12 | LEDn DOUT → LED(n+1) DIN; LED13 DOUT is not connected |
-| +5V | XIAO 5V (VBUS) to every SK6812 VDD (0.5 mm tracks) |
+| +5V | XIAO 5V (VBUS) to every SK6812 VDD (0.5 mm tracks, 0.375 mm over about 26 mm where Freerouting necked them down) |
 | +3V3 | XIAO 3V3 to J1 pin 2 (OLED VCC) |
 | GND | common; pours on both layers |
 
@@ -182,7 +199,8 @@ the Hackpad guide links (38 × 12 board, pads at x 36.5, GND at y 2.19) is the s
 * Bottom side: XIAO (≈3.5 mm, allow `xiaoDetail.tMax` 4.5 + 0.5). Per-key LED backs protrude ≈0.94 mm
   below B.Cu, glow LED lenses ≈0.84 mm (the lens is the 0.84 side of the part). THT lead ends ≈1.7–2 mm (switches, encoder, diodes, J1).
 * USB-C: receptacle centred at x = 21.0, 9.0 wide, on the underside, overhanging the y = 0 edge by
-  1.42 mm per Seeed's footprint (Seeed's STEP gives 1.0; a real XIAO settles it).
+  1.42 mm per Seeed's footprint (Seeed's STEP gives 1.0; a real XIAO settles it). The XIAO board edge itself is flush with
+  y = 0, and the case fits with either overhang.
 * ENC1 lug pads are 2.1 × 4.0 at (43.55, 13.0) and (54.75, 13.0); parts sit where they did.
 * Top side: only the diodes (Ø 2 mm, under the plate) and J1/ENC1; OLED module outline (x 2.5–40.5, y 7–19) is free of parts apart from flush XIAO pads.
 * No mounting holes: `design.json` puts the M3 inserts in the bezel, outside the PCB.

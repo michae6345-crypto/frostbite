@@ -43,14 +43,15 @@ there is an evidence file for it, written by this harness, with input hashes tha
 | `G2.erc` | `kicad-cli sch erc --severity-error --exit-code-violations` reports 0 errors | warnings; ERC only knows what the symbols declare |
 | `G3.outline_layers` | parsed `.kicad_pcb`: only F.Cu/B.Cu, Edge.Cuts bbox ≤ 100×100 and = design.json w/h ± 0.1, "Frostbite" on silkscreen, "XIAO HERE" on B.Silkscreen | that the outline is a closed shape (DRC covers that) |
 | `G3.positions` | parsed `.kicad_pcb`, origin = Edge.Cuts top-left: SW1–SW9 origins, encoder shaft (midpoint of its two MP pads), OLED header pads (x = 39.0, centre y = 13.0, pitch 2.54, pad 1 at the back), XIAO on B.Cu with its 17.8×21 Fab outline on design.json's rect, glow LEDs at their positions on the bottom, and the PCB LED chain (followed through pad nets from LED_DIN) with chain LED *i* under the key whose `led` is *i*; all within 0.05 mm. Also records `kicad-cli pcb export pos` output | per-key LED offset under the switch, mounting holes, USB overhang depth, courtyard clearances (DRC) |
-| `G3.drc`, `G3.drc_jlcpcb` | `kicad-cli pcb drc --severity-error --exit-code-violations --schematic-parity` has 0 violations, 0 unconnected items, 0 parity errors — once with the project's rules, once with the pinned JLCPCB 2-layer rules added | signal integrity, LED data level shifting, that the board works; JLCPCB's own DFM check may still differ |
+| `G3.drc`, `G3.drc_jlcpcb` | `kicad-cli pcb drc --severity-error --exit-code-violations --schematic-parity` has 0 violations, 0 unconnected items, 0 parity errors — once with the project's rules, once with the pinned JLCPCB rules merged with them bound by bound, so the stricter value of each rule gates whatever the file order. PTH annular must gate at ≥ 0.20 | signal integrity, LED data level shifting, that the board works; JLCPCB's own DFM check may still differ |
 | `G3.gerbers_export` | a fresh `kicad-cli pcb export gerbers` + `drill` parsed by gerbonara has top/bottom copper, mask, silk, outline and drill files, outline (minus stroke width) = design.json ± 0.1 | that the zip you upload is that export (see next) |
 | `G3.gerbers_zip` | the same for `production/gerbers.zip` | that it is current with the `.kicad_pcb` (compare with `G3.gerbers_export`) |
 | `G4.check_fit` | `CAD/check_fit.py --no-build` exits 0 on the shipped files (its own fit checks; see its output in the evidence). Without `--no-build` the script rewrites `production/` and `CAD/`, so a verifier must not run it that way | anything the script does not test |
-| `G4.stl_mesh` | every `production/*.stl` loads, is watertight with consistent winding and positive volume, is newer than design.json and `CAD/frostbite_case.py`; combined bounds ≤ 200×200×100 | printability (overhangs, bridges, wall thickness) |
+| `G4.stl_mesh` | every `production/*.stl` loads, is watertight with consistent winding and positive volume, all five printed parts present (OLEDSupport included); combined bounds ≤ 200×200×100 | printability (overhangs, bridges, wall thickness) |
 | `G4.switch_cutouts` | from the Top mesh, registered into PCB coordinates by its own outline: at every key's design position, down to the PCB, a 13.9 mm housing fits; the narrowest opening is 14.0 ± 0.1 both ways and centred on the design position ± 0.1; the clips engage 1.5 ± 0.15 mm of plate | real clip force, shrink, clip direction on the real switch |
 | `G4.encoder_clearance` | a 12 × 12 body (Alps 11.7 × 12, square for either footprint rotation) swept from the skirt rim to its seat, and the Ø7 bushing above it, stay ≥ 0.2 mm from the Top. Any opening shape passes if it clears; the self-test passes a round Ø17.4 and a 12.98 × 16 rectangle. Measured opening is compared with `CAD/positions.json` ± 0.2 | whether the kit part is this Alps part; lug and pin fit; the knob |
-| `G4.oled_clearance` | the glass (design window) and the 38 × 12 board at their real heights stay ≥ 0.1 mm from the Top. The window is measured from the mesh and must equal `CAD/positions.json` `oled_window.cut` ± 0.1 | flex and tape height on the real module (Needs real parts), retention, active-area centring |
+| `G4.oled_clearance` | window size and shape are free. The stack comes from `design.json` `case.oled_support.module_gap`. The glass (design window) and 38 × 12 board, turned ±1° about J1 and shifted ±0.1 (the module is soldered before the Top goes on), rise from the skirt rim to their seats without touching the Top; the glass does not stand proud; the 22.384 × 5.584 active area, at any likely place on the glass (centred to 3.5 mm toward the header, ±1.5 in y), is clear of the Top from above. `OLEDSupport.stl` height = module_gap − 2 × tape. The measured window must equal `CAD/positions.json` `oled_window.cut` ± 0.1, because a record must describe the file; that sets no size | flex and tape height on the real module (Needs real parts), retention, viewing from an angle |
+| `G4.step_parts` | each of Top, Bottom, GlowBand, Knob, OLEDSupport: STEP reopens in CadQuery, STL volume = STEP volume ± 1 %, and STEP volume = a rebuild from the current `CAD/frostbite_case.py` and design.json ± 0.1 %. Rewording design.json is not stale; a geometry edit is. Writes nothing | a change that keeps the volume exactly (a moved feature; the checks above catch those on the Top) |
 | `G3.gnd_thermal` | parsed `.kicad_pcb`: every GND pour uses thermal relief (no `connect_pads yes` or `thru_hole_only`), no GND pad or footprint has a `zone_connect` override, no `.kicad_dru` rule forces solid, and in the poured copper itself at most 45 % of a ring 0.15 mm outside each GND pad is pour (relief measured 11-30 %, solid 49-100 %) | that the joint solders well |
 | `G5.bom_kit` | counts implied by design.json (and PCB footprint counts when a PCB exists) ≤ the Hackpad kit (16 switches, 16 caps, 20 diodes, 2 EC11, 1 OLED, 16 SK6812 MINI-E, 6 screws, 6 inserts, 1 XIAO), PCB counts = design.json; lists extras to buy | prices, that the kit actually ships those parts |
 | `G6.qmk_lint`, `G6.compile_default`, `G6.compile_ledtest` | `~/qmk_firmware/keyboards/frostbite` resolves to this repo's `Firmware/qmk/keyboards/frostbite`; `qmk lint` and both `qmk compile` runs exit 0; each fresh `.uf2` has valid magic numbers on every block, sequential block numbers, consistent numBlocks, family 0xe48bff56 (RP2040), < 2 MB | that it boots or runs correctly on hardware (G10) |
@@ -82,11 +83,13 @@ coordinates: `{"keys":[{"ref":"SW1","x":..,"y":..},...], "encoder":{"x":..,"y":.
 
 ## Self-test
 
-`--self-test` copies the project into a temp dir and runs 45 cases. Each case first runs the check on a clean copy and requires
+`--self-test` copies the project into a temp dir and runs 57 cases. Each case first runs the check on a clean copy and requires
 PASS, then injects one fault and requires FAIL with a reason that names it. Where a real input can't serve as the clean copy,
 the fixture is generated from design.json (`.kicad_pcb`, netlist, Top mesh, UF2). `fbverify/selftest.py` is the list. Beyond pins,
 positions, UF2 and BOM it proves that opening shape and Top height are free (round Ø17.4 and 12.98 × 16 both clear; a 13 mm tall
-Top measures the same), that a window smaller than the glass, a `positions.json` stating the design window instead of the cut,
+Top measures the same), that OLED window size is free (34 × 16 passes, and a window smaller than the glass passes when the glass
+stays under the lip), that `module_gap` is really read from design.json (3.0 and 2.5 fail, missing fails), that a 0.19 mm annular
+ring fails DRC, and that a window covering the active area, a `positions.json` stating the design window instead of the cut,
 bosses at the old x, the real audited Top, a removed host VID/PID filter, a mismatched ID, a GND pad or zone set to solid, a
 flooded pour, the F1 line put back in `keymap.c`, and a failing host test all FAIL. It also asserts that missing inputs give
 NOT_RUN, that the exit code follows FAIL, that REPORT lists the 5 Needs real parts items, and that the rules file hash matches.
@@ -118,8 +121,11 @@ KiCad project; their parsing was smoke-tested against KiCad 10.0.8's bundled `Ar
 - `rules/JLCPCB-2L-1oz.kicad_dru` from https://github.com/Cimos/kicad-druid, file `JLCPCB/JLCPCB-2L-1oz.kicad_dru`
   at commit `8af046d6a1839320a360a4b6790ac11eb27a78ae`, MIT licence. SHA-256
   `292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2`, checked on every DRC run; a mismatch is a FAIL.
-  For the JLCPCB DRC run the rules are copied next to a temporary copy of the board (merged after the project's own
-  `.kicad_dru` if it has one).
+  **That file says PTH annular ring 0.18 mm; JLCPCB publishes 0.20.** The file stays byte-for-byte pinned. For `G3.drc_jlcpcb`
+  it is merged with `PCB/frostbite.kicad_dru` rule by rule in `strictest_rules()`, into a temporary copy of the board. The stricter
+  bound wins, and the check also fails if PTH annular would gate below 0.20. Plain concatenation is wrong: KiCad lets a later rule
+  override an earlier one, and the old merge put the pinned file last, so 0.18 gated this check. `evidence/G3.drc_jlcpcb.json`
+  lists each tightened rule.
 - XIAO RP2040 pin → GPIO table: Seeed Studio XIAO RP2040 wiki pinout (D0–D3 = GP26–29, D4/D5 = GP6/GP7,
   D6 = GP0, D7 = GP1, D8 = GP2, D9 = GP4, D10 = GP3). Pad numbers 1–7 = D0–D6, 8–11 = D7–D10, 12 = 3V3, 13 = GND,
   14 = 5V (used only when a symbol pin has no D-name).

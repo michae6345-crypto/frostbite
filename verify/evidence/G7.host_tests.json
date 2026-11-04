@@ -24,12 +24,13 @@
       ],
       "cwd": "~/Documents/frostbite/host",
       "exit_code": 0,
-      "duration_s": 4.12,
+      "duration_s": 9.4,
       "stdout_tail": [
-        "........................................................................ [ 38%]",
-        "........................................................................ [ 76%]",
-        "............................................                             [100%]",
-        "188 passed in 3.83s"
+        "........................................................................ [ 30%]",
+        "........................................................................ [ 61%]",
+        "........................................................................ [ 91%]",
+        "....................                                                     [100%]",
+        "236 passed in 9.08s"
       ],
       "stderr_tail": []
     },
@@ -48,31 +49,32 @@
       ],
       "cwd": "~/Documents/frostbite/host",
       "exit_code": 0,
-      "duration_s": 0.76,
+      "duration_s": 1.04,
       "stdout_tail": [
         ".....................                                                    [100%]",
-        "21 passed in 0.48s"
+        "21 passed in 0.75s"
       ],
       "stderr_tail": []
     }
   ],
   "inputs_sha256": {
     "host/frostbite_host/__init__.py": "ecba807dff834af27e23799a497badcdec38889a38b5d041526ed2fa8a580e18",
-    "host/frostbite_host/actions.py": "05d50de8ea9372f44d92a717f2f22e3c4d9169cef833dcd9bfdd8cf4ff817613",
-    "host/frostbite_host/ctl.py": "69bdee1dedddfa15deed7c92cdb409bb0f19e4e1d084f699f22d2ef0ed6148c3",
-    "host/frostbite_host/daemon.py": "aaa902d8cf200e1c0fe388a2750211bd561c660f4315c3ee4d8dc66cd696876b",
-    "host/frostbite_host/device.py": "d4c0e35f19d6f83fd25beb859b9911108b4d6b1bb4c545bb53be17f8395af62d",
-    "host/frostbite_host/hook.py": "b90431d719cf2df2eee061adfbf1595a497ff5fd5368a3dfea47dc6ed6e0810e",
-    "host/frostbite_host/ipc.py": "eda15343ed1765082b2ab1c828394304e92f30eb4d250e7cd22d083e7529947f",
-    "host/frostbite_host/state.py": "630d7bc2dd2436a01e06c997fa9981d0a9d61c4ca2a5842a8e056e0d0b429c13",
-    "host/frostbite_host/train.py": "5b584f03b963f9cf89c95488ae6e9ab1dc8d2bd3759d60417a6f95a2b473663c",
-    "host/tests/conftest.py": "d6cacabb66549dc3cfa90e8730dc7c96e970d751247aa316139efac024ec6716",
-    "host/tests/test_audit_findings.py": "81ad9bf7723c3ba2cf737935dd6263002fc19b8a9a47927c00331fa7bbf06996",
-    "host/tests/test_daemon.py": "e22ff4a23a5226fc55280a0646fa949c4c0686fe27b1522b65839dc7ada751c8",
+    "host/frostbite_host/actions.py": "28c5ef9dd4d2042e907bc2fc280fd0fdd2cf3008612bb96e720fc23b7e970304",
+    "host/frostbite_host/ctl.py": "9f69ffe4e1d28bc559b473e8c105644f66f68acb9cc0819c1fcb961a78281834",
+    "host/frostbite_host/daemon.py": "553649d3d4d161d6299bd824082ed4510870e3ed7adf21324c6d60d82e5926ae",
+    "host/frostbite_host/device.py": "3e7a9dac2a99266caa3c170c457ef47c4b8a590d5c53d473d8634711545b4b94",
+    "host/frostbite_host/hook.py": "ed6545f50a7be8f4dc7b9654bd9575e2f39e6d94ccb2f72fe68f84c25cee4dab",
+    "host/frostbite_host/ipc.py": "d87c132f195e397f7c03ccb4dd6e8772707c0c2a4920cdb6a85919ee33651969",
+    "host/frostbite_host/state.py": "c7144dc00f43a5af3b3a37e2e0096defcefaeec5404e02d8b340b693fe4eecd9",
+    "host/frostbite_host/train.py": "fcaa6e5bcb4dc2c00e2e7524b8f60d9f6f5e2588f608f871745b45ee4632dae8",
+    "host/tests/conftest.py": "d9b84c9c70aa5457e9d23a84bbb0762111d75f69668dc5d906dc8e5e386dbdf9",
+    "host/tests/test_audit_findings.py": "066546bf113e64835bd89a3b07131b6a190c6d2cd3f74961ed1ce82e755b4acc",
+    "host/tests/test_daemon.py": "15e6e71556fe7456f4585cc4a8cdb05d06087f3475aafef1de06765443413fce",
     "host/tests/test_hook.py": "473365a8716a3e72ffca4306e8aab0b4473110a244bd023352183ffd5bd2be93",
     "host/tests/test_protocol.py": "acf1c42397a1c15667d5915e764337c50e8053b1da933034daf992d62a2fb85f",
-    "host/tests/test_state.py": "4feffb9c85b9d08a1e8c019b0aba13ccfa905fed04caf215970706a8ba665f4d",
-    "host/tests/test_train.py": "912713deef8b06339d57a4d240b532b58e3f8ab220e292df866f8b773a9c8965",
+    "host/tests/test_round2.py": "7d1bb85bd9d51648969f1aec3b673df14a3b5c2e50f7e4e417ed23b133ee33ee",
+    "host/tests/test_state.py": "fe7bc370906a1345f62a9a6a257b6633f400f882fff387bc2e0e4f96873562f3",
+    "host/tests/test_train.py": "1f1b01f19493c4f2b76e30c873790bdd1b57651995da8630532dab030c543fc1",
     "host/pyproject.toml": "91b131059e3e35b83642b95fcc15196ab87e722ae3c924090bc2b0541d9c2db7",
     "host/tests/fixtures/hooks/notification_idle.json": "9f17146309f450cf6abcc612e1f47700dc903a3f75037d7a5eca0ba9efea722a",
     "host/tests/fixtures/hooks/notification_permission.json": "f07ddf105ad26329a0a3d571e26c7b4b03b3efe29bde92df48ef3aabf6da3a46",
@@ -96,18 +98,19 @@
     "host/tests/fixtures/train/tqdm.log": "988db0bf62634b66674ea587022a708c782fc7be28497bd3b8855f7ba8dade38"
   },
   "details": {
-    "summary": "188 passed in 3.83s",
+    "summary": "236 passed in 9.08s",
     "xfailed_known_open": [],
     "test_files": [
       "test_audit_findings.py",
       "test_daemon.py",
       "test_hook.py",
       "test_protocol.py",
+      "test_round2.py",
       "test_state.py",
       "test_train.py"
     ],
-    "audit_test_audit_protocol.py": "21 passed in 0.48s"
+    "audit_test_audit_protocol.py": "21 passed in 0.75s"
   },
-  "timestamp": "2026-11-03T22:16:57+00:00",
-  "duration_s": 4.9
+  "timestamp": "2026-11-04T01:05:20+00:00",
+  "duration_s": 10.45
 }
