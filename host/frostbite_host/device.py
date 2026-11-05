@@ -1,22 +1,3 @@
-"""Raw HID link to the Frostbite pad.
-
-Protocol (design.json "protocol"): 32-byte reports, byte 0 = command, unused bytes zero.
-
-host -> device
-  0x01 SET_SLOT      [0x01, slot 0-5, status]
-  0x02 SET_ALL       [0x02, s0..s5]
-  0x03 OLED_LINE     [0x03, line 0-1, len, up to 21 ASCII bytes]
-  0x05 PING          [0x05]
-  0x06 SET_SELECTED  [0x06, slot 0-5]
-device -> host
-  0x05 PING reply    [0x05, protocol_version, selected_slot]
-  0x81 KEY           [0x81, key index 0-8, action 1=tap 2=hold]
-  0x82 ENCODER       [0x82, 1=cw / 0xFF=ccw, selected_slot after the move]
-
-The firmware falls back to plain keycodes after 5 s without a PING, so the link
-pings every 2 s and reconnects on its own after an unplug.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -30,9 +11,8 @@ from typing import Callable, Protocol
 
 log = logging.getLogger("frostbite.device")
 
-# Identity of the pad (Firmware/qmk/keyboards/frostbite/keyboard.json). All four must match.
-# The usage page and usage alone are QMK's defaults: on a VIA keyboard PING (0x05) means
-# "set keycode" and SET_SELECTED (0x06) means "reset keymap", so nothing else is ever opened.
+# 0xFF60/0x61 are just the qmk defaults, on a via board ping means set keycode.
+# so check vid/pid too and never open anything else
 VENDOR_ID = 0xFEED
 PRODUCT_ID = 0x4642
 USAGE_PAGE = 0xFF60
@@ -42,9 +22,9 @@ PROTOCOL_VERSION = 1
 NUM_SLOTS = 6
 OLED_COLS = 21
 PING_INTERVAL = 2.0
-PONG_TIMEOUT = 6.5       # no PING reply for this long: the link is wedged, reopen it
-HANDSHAKE_TIMEOUT = 1.0  # a pad must answer the first PING before it gets anything else
-STALL_SECONDS = 0.5      # a read this late means reports sat in a buffer, so their age is unknown
+PONG_TIMEOUT = 6.5
+HANDSHAKE_TIMEOUT = 1.0
+STALL_SECONDS = 0.5
 
 
 class Status(IntEnum):
@@ -71,6 +51,7 @@ class Status(IntEnum):
         raise ValueError(f"unknown status {word!r}")
 
 
+# 32 byte reports, byte 0 is the command. has to match keymap.c
 class Cmd(IntEnum):
     SET_SLOT = 0x01
     SET_ALL = 0x02
@@ -123,7 +104,7 @@ class PingReply:
 @dataclass(frozen=True)
 class KeyEvent:
     key: int
-    action: int  # TAP or HOLD
+    action: int
 
     @property
     def name(self) -> str:
@@ -132,7 +113,7 @@ class KeyEvent:
 
 @dataclass(frozen=True)
 class EncoderEvent:
-    direction: int  # +1 or -1
+    direction: int
     selected: int
 
 
@@ -161,8 +142,6 @@ def _slot(slot: int) -> int:
 
 
 def to_ascii(text: str) -> str:
-    """Printable ASCII only (0x20-0x7E): accents are stripped, whitespace controls become
-    spaces, anything else becomes '?'. Spaces are preserved (layout padding)."""
     subs = {"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-",
             "—": "-", "…": "...", "→": ">", "×": "x"}
     text = unicodedata.normalize("NFKD", "".join(subs.get(c, c) for c in str(text)))
@@ -233,7 +212,6 @@ def decode_host(report: bytes | list[int]) -> HostMsg | Unknown:
 
 
 def decode_device(report: bytes | list[int]) -> DeviceMsg:
-    """Decode a device->host report. Unknown or malformed reports become Unknown."""
     r = _norm(report)
     cmd = r[0]
     if cmd == Cmd.PING:
@@ -267,7 +245,6 @@ class Transport(Protocol):
 
 
 class HidTransport:
-    """A real pad, found by VID + PID + Raw HID usage page + usage. Nothing else is opened."""
 
     def __init__(self, dev, info: dict):
         self._dev = dev
@@ -300,7 +277,6 @@ class HidTransport:
         return None
 
     def write(self, report: bytes) -> None:
-        # Report ID 0 prefix: QMK's raw HID interface has no report IDs.
         n = self._dev.write(b"\x00" + _norm(report))
         if n < 0:
             raise OSError("hid write failed")
@@ -317,7 +293,6 @@ class HidTransport:
 
 
 class DryRunTransport:
-    """Prints what would be sent; never receives anything."""
 
     def __init__(self, out=print):
         self.out = out
@@ -334,7 +309,7 @@ class DryRunTransport:
             self._pinged = True
             self.out("[dry-run] -> PING (further pings every 2 s not shown)")
             return
-        if isinstance(msg, SetAll):  # repeats with every PING; print changes only
+        if isinstance(msg, SetAll):
             if msg == self._last_all:
                 return
             self._last_all = msg
@@ -352,7 +327,6 @@ class DryRunTransport:
 
 @dataclass
 class FakeDevice:
-    """Simulated firmware: records every report, answers PING, emits KEY and ENCODER on demand."""
 
     version: int = PROTOCOL_VERSION
     plugged: bool = True
@@ -434,14 +408,6 @@ class FakeDevice:
 
 
 class DeviceLink:
-    """Owns the transport on one I/O thread: writes queued reports, pings, reads, reconnects.
-
-    A newly opened device gets nothing but a PING until it answers with our protocol version.
-    A connected device that stops answering is closed and reopened.
-
-    `keepalive()` may return a message to write right after every PING. `on_event(obj)` runs on
-    the I/O thread and gets decoded device messages plus "connected" and "disconnected".
-    """
 
     def __init__(self, opener: Callable[[], Transport | None], on_event: Callable[[object], None],
                  ping_interval: float = PING_INTERVAL, retry_interval: float = 1.0,
@@ -493,7 +459,6 @@ class DeviceLink:
             self.on_event("disconnected")
 
     def _handshake(self, t: Transport) -> bool:
-        """First write to any device. Returns True once it answers with our protocol."""
         t.write(encode(Ping()))
         end = time.monotonic() + self.handshake_timeout
         while time.monotonic() < end and not self._stop.is_set():
@@ -520,7 +485,7 @@ class DeviceLink:
             if self.transport is None:
                 try:
                     t = self.opener()
-                except Exception as e:  # e.g. a broken hidapi install
+                except Exception as e:
                     if str(e) != open_error:
                         open_error = str(e)
                         log.warning("cannot open the pad: %s", e)
@@ -577,11 +542,10 @@ class DeviceLink:
                     if isinstance(msg, PingReply):
                         self.last_pong = now
                     if isinstance(msg, KeyEvent) and now < distrust_until:
-                        # A press from before the stall must not land on what is shown now.
                         log.info("dropped %s press: it may be from before a stall", msg.name)
                         continue
                     self.on_event(msg)
-            except Exception as e:  # OSError on unplug, anything else too: reconnect
+            except Exception as e:
                 log.info("device I/O error: %s", e)
                 self._close()
                 self._stop.wait(self.retry_interval)

@@ -1,6 +1,3 @@
-"""Slot model: six slots, assignment, lingering, selection and OLED text.
-Every mutating call takes `now`, so there is no clock here."""
-
 from __future__ import annotations
 
 import logging
@@ -10,16 +7,17 @@ from .device import NUM_SLOTS, OLED_COLS, Status, to_ascii
 
 log = logging.getLogger("frostbite.state")
 
-LINGER_DONE = 10 * 60.0     # finished slots stay this long, then free
-LINGER_ERROR = 30 * 60.0    # failed slots stay a bit longer
-QUIET_RUN = 60 * 60.0       # silent this long inside one tool call: Stop never fires after an
-                            # interrupt, and cancelling a tool fires nothing either
-QUIET_TURN = 15 * 60.0      # silent this long with no tool in flight
-QUIET_NEEDS = 30 * 60.0     # a waiting slot nobody can answer from the pad stops waiting
-DEAD_AFTER = 24 * 60 * 60.0 # any slot this silent is dead (crash, closed window, no SessionEnd)
-ANSWER_GRACE = 15.0         # Notification arrives ~6 s after the dialog: ignore it once answered
-PAGE_SECONDS = 2.0          # a prompt too long for the OLED pages through at this rate
-OVERFLOW_TTL = 60 * 60.0    # how long a session with no free slot counts as waiting
+LINGER_DONE = 10 * 60.0
+LINGER_ERROR = 30 * 60.0
+# stop doesn't fire after an interrupt so slots can get stuck on run
+QUIET_RUN = 60 * 60.0
+QUIET_TURN = 15 * 60.0
+QUIET_NEEDS = 30 * 60.0
+DEAD_AFTER = 24 * 60 * 60.0
+# the notification shows up a few seconds after the dialog
+ANSWER_GRACE = 15.0
+PAGE_SECONDS = 2.0
+OVERFLOW_TTL = 60 * 60.0
 MAX_PENDING = 16
 FLASH_SECONDS = 3.0
 
@@ -35,14 +33,12 @@ SEVERITY = [Status.ERROR, Status.NEEDS, Status.RUN, Status.DONE, Status.IDLE]
 
 
 def clean(text: object, limit: int = 200) -> str:
-    """ASCII, single-spaced, trimmed."""
     if text is None:
         return ""
     return " ".join(to_ascii(str(text)).split())[:limit]
 
 
 def fit_lr(left: str, right: str) -> str:
-    """Left text truncated so `right` sits flush at the right edge."""
     left, right = clean(left), clean(right)
     if not right:
         return left[:OLED_COLS]
@@ -57,7 +53,6 @@ def fit(text: str) -> str:
 
 
 def fit_middle(text: str, width: int) -> str:
-    """Too long: keep both ends, since project names tend to share a start or an end."""
     if len(text) <= width:
         return text
     tail = (width - 1) // 2
@@ -75,34 +70,33 @@ def ago(seconds: float) -> str:
 
 @dataclass
 class Prompt:
-    """One open question from Claude Code. Dialogs queue, so a slot can hold several."""
-    text: str                 # what the OLED shows, e.g. "Bash(npm test)?"
-    tool: str = ""            # matched against PostToolUse to close it
-    agent: str | None = ""    # subagent id, "" for the main thread, None if unknown
-    kind: str = "permission"  # "permission", or "question" (only the terminal can answer it)
-    request: str | None = None  # id of the hook waiting on the pad; None once nothing is waiting
+    text: str
+    tool: str = ""
+    agent: str | None = ""
+    kind: str = "permission"
+    request: str | None = None
 
 
 @dataclass
 class Slot:
-    key: str                 # stable source id, e.g. "claude:<session_id>", "train:<name>", "slot:3"
-    source: str              # "claude" | "train" | "ctl"
+    key: str
+    source: str
     name: str
     status: Status = Status.IDLE
     detail: str = ""
-    updated: float = 0.0     # last event of any kind
-    since: float = 0.0       # when `status` last changed
+    updated: float = 0.0
+    since: float = 0.0
     cwd: str | None = None
     log_path: str | None = None
-    terminal: dict = field(default_factory=dict)  # {"bundle": ..., "app": ..., "tty": ...}
-    tool: str = ""           # last tool description (Claude), used for "needs" detail
-    pending: list[Prompt] = field(default_factory=list)  # oldest first
-    answered: float = -1e12  # when a prompt was last closed
-    tool_open: bool = False  # a PreToolUse has had no PostToolUse yet
+    terminal: dict = field(default_factory=dict)
+    tool: str = ""
+    pending: list[Prompt] = field(default_factory=list)
+    answered: float = -1e12
+    tool_open: bool = False
 
     def title(self, index: int) -> str:
         n = index + 1
-        room = OLED_COLS - 5  # what is left next to a 4-letter status word
+        room = OLED_COLS - 5
         if self.source == "claude":
             full, short = f"claude#{n} {self.name}", f"c#{n} {self.name}"
         elif self.source == "train":
@@ -125,7 +119,7 @@ class Board:
         self.slots: list[Slot | None] = [None] * NUM_SLOTS
         self.selected = 0
         self.linger_done = linger_done
-        self.overflow: dict[str, float] = {}  # sessions waiting on you with no slot to show it
+        self.overflow: dict[str, float] = {}
         self._flash: tuple[str, float] | None = None
 
     def find(self, key: str) -> int | None:
@@ -137,8 +131,6 @@ class Board:
     def _claim(self, key: str) -> int | None:
         if None in self.slots:
             return self.slots.index(None)
-        # Full: reuse a finished slot, then an idle one. A failed slot may not have been seen
-        # yet, so it goes last. Running and waiting slots are never pushed out.
         for wanted in (Status.DONE, Status.IDLE, Status.ERROR):
             cands = [(s.since, i) for i, s in enumerate(self.slots)
                      if s.status == wanted and not s.tool_open]
@@ -156,8 +148,6 @@ class Board:
                status: Status | None = None, detail: str | None = None, cwd: str | None = None,
                log_path: str | None = None, terminal: dict | None = None, tool: str | None = None,
                slot: int | None = None) -> int | None:
-        """Create or update the slot for `key`. Returns the slot index or None if no room.
-        Arguments left as None keep their previous value."""
         i = self.find(key)
         if slot is not None:
             if not 0 <= slot < NUM_SLOTS:
@@ -179,7 +169,7 @@ class Board:
                      status=status if status is not None else Status.IDLE)
             self.slots[i] = s
             log.info("slot %d <- %s (%s)", i + 1, key, s.name)
-        sticky = s.source == "claude"  # a session stays its project after `cd packages/ui`
+        sticky = s.source == "claude"
         if name and not sticky:
             s.name = clean(name, 40)
         if status is not None and status != s.status:
@@ -194,7 +184,7 @@ class Board:
         if terminal:
             s.terminal.update({k: v for k, v in terminal.items() if v})
             if "tty" in terminal and not terminal["tty"]:
-                s.terminal.pop("tty", None)  # a failed lookup must not keep proving the old tab
+                s.terminal.pop("tty", None)
             self._drop_same_tty(i, s)
         if tool is not None:
             s.tool = clean(tool)
@@ -202,8 +192,6 @@ class Board:
         return i
 
     def _drop_same_tty(self, index: int, s: Slot) -> None:
-        """A finished slot on a tty a new session now uses is dead. A running or waiting one
-        might be a nested `claude -p`, so it stays."""
         tty = s.terminal.get("tty")
         if not tty or s.source != "claude":
             return
@@ -215,7 +203,6 @@ class Board:
 
     @staticmethod
     def _showing(s: Slot) -> Prompt | None:
-        """The prompt a slot shows: the oldest the pad can answer, else the oldest open."""
         return next((p for p in s.pending if p.request), s.pending[0] if s.pending else None)
 
     def find_request(self, request: str) -> tuple[int, Prompt] | None:
@@ -227,7 +214,6 @@ class Board:
         return None
 
     def shown_request(self, now: float) -> str | None:
-        """The request on the OLED right now, if any. A flash hides it."""
         s = self.slots[self.selected]
         if s is None or not s.pending or self.flash_active(now):
             return None
@@ -238,7 +224,6 @@ class Board:
         return s is not None and any(p.request for p in s.pending)
 
     def release_request(self, request: str) -> None:
-        """Nothing is waiting on the pad any more. The prompt itself may still be on screen."""
         found = self.find_request(request)
         if found:
             found[1].request = None
@@ -247,8 +232,6 @@ class Board:
 
     def answer(self, index: int, now: float, *, status: Status, detail: str,
                request: str | None = None, all_prompts: bool = False) -> None:
-        """A press answered a request, or Stop ended the turn. No hook fires at that moment,
-        so close it here."""
         s = self.slots[index]
         if s is None:
             return
@@ -269,7 +252,6 @@ class Board:
     def _close_prompt(self, s: Slot, resolve: dict, now: float) -> bool:
         tool, agent = resolve.get("tool") or "", resolve.get("agent") or ""
         for p in s.pending:
-            # A prompt raised by a Notification may know neither, so any finished tool closes it.
             if (not p.tool or p.tool == clean(tool)) and (p.agent is None or p.agent == agent):
                 s.pending.remove(p)
                 s.answered = now
@@ -300,10 +282,10 @@ class Board:
         for i, s in enumerate(self.slots):
             if s is None:
                 continue
-            s.since, s.updated = min(s.since, now), min(s.updated, now)  # clock stepped back
+            s.since, s.updated = min(s.since, now), min(s.updated, now)
             limits = {Status.DONE: self.linger_done, Status.ERROR: LINGER_ERROR}
             if s.source == "train":
-                limits[Status.IDLE] = self.linger_done  # a run that went quiet
+                limits[Status.IDLE] = self.linger_done
             limit = limits.get(s.status)
             quiet = now - s.updated
             if (limit is not None and now - s.since >= limit) or quiet >= DEAD_AFTER:
@@ -331,8 +313,6 @@ class Board:
         return self._flash is not None and 0 <= now - self._flash[1] < FLASH_SECONDS
 
     def apply(self, msg: dict, now: float) -> bool:
-        """Apply one IPC message (from frostbite-hook, frostbite-ctl or a watcher).
-        Returns True if anything visible may have changed."""
         op = msg.get("op")
         if op in ("update", "permission"):
             return self._apply_update(msg, now)
@@ -357,7 +337,6 @@ class Board:
         terminal = msg.get("terminal")
         if not key or not isinstance(key, str):
             return False
-        # Check everything first: a bad message must not leave half a slot behind.
         if terminal is not None and not isinstance(terminal, dict):
             raise ValueError("terminal must be an object")
         status = msg.get("status")
@@ -374,8 +353,6 @@ class Board:
             closed = bool(prev and isinstance(resolve, dict) and self._close_prompt(prev, resolve, now))
             if st == Status.NEEDS:
                 if msg.get("notification") and prev:
-                    # A Notification names no tool, so it adds nothing to an open prompt,
-                    # and one arriving just after an answer is about the closed dialog.
                     if prev.pending or now - prev.answered < ANSWER_GRACE:
                         prev.updated = now
                         return False
@@ -395,7 +372,6 @@ class Board:
                 prompt = Prompt(clean(detail), tool, agent, msg.get("kind") or "permission",
                                 msg.get("id") if msg.get("op") == "permission" else None)
             elif prev and prev.pending:
-                # Something else in this session moved on; the open prompt is still open.
                 st, detail = None, None
             elif closed:
                 detail = msg.get("detail", prev.tool or "working")
@@ -410,7 +386,7 @@ class Board:
             if st == Status.NEEDS:
                 self.overflow[key] = now
             else:
-                self.overflow.pop(key, None)  # answered: no longer waiting on you
+                self.overflow.pop(key, None)
             return False
         self.overflow.pop(key, None)
         s = self.slots[i]
@@ -447,7 +423,6 @@ class Board:
 
     @staticmethod
     def _paged(text: str, now: float) -> str:
-        """A long prompt pages through, so the tail of a command can be read before answering."""
         if len(text) <= OLED_COLS:
             return text
         size = OLED_COLS - 1

@@ -1,29 +1,3 @@
-"""frostbite-hook: called by Claude Code hooks, forwards a status event to the daemon.
-
-Reads the hook JSON on stdin, maps it to a slot update, sends it over the local socket.
-Every event but one returns at once: 2 s hard deadline, 0.2 s to connect, nothing on stdout
-(UserPromptSubmit stdout would be added to Claude's context), exit 0.
-
-The exception is PermissionRequest. The hook stays connected and waits a bounded time for a
-press on the pad, then prints Claude Code's decision JSON for that one request. Timeout,
-no daemon, no pad, or any error: it exits 0 with no output, which leaves the normal terminal
-prompt in charge. Only a press can produce a decision. Nothing here allows anything itself.
-
-Mapping (hook_event_name -> slot status). `needs` is tracked per prompt in the daemon, so
-events from sibling tools and subagents do not clear a prompt that is still open:
-  SessionStart           register the session (idle if new)
-  UserPromptSubmit       run, closes any open prompt (detail: the prompt)
-  PreToolUse             run (detail: "Bash(npm test)"); AskUserQuestion / ExitPlanMode: needs
-  PermissionRequest      needs (detail: "Bash(npm test)?"), waits for the pad
-  PostToolUse(+Failure)  run, closes the prompt for that tool; an interrupted tool: done
-  Notification           needs for permission prompts / questions; done for "waiting for input"
-  PreCompact             run (detail: compacting)
-  Stop                   done, closes open prompts
-  StopFailure            error (API error ended the turn), closes open prompts
-  SubagentStop           ignored (folded into the parent session)
-  SessionEnd             free the slot
-"""
-
 from __future__ import annotations
 
 import json
@@ -33,12 +7,12 @@ import select
 import sys
 from urllib.parse import urlparse
 
-MAX_STDIN = 16 * 1024 * 1024  # PostToolUse carries tool output; dropping it leaves a prompt open
+MAX_STDIN = 16 * 1024 * 1024
 
-# Their dialogs have several options and the answer is the content, so the pad only shows them.
+# these have several options so the pad just shows them, answer in the terminal
 QUESTION_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 
-DEFAULT_WAIT = 30.0   # seconds a PermissionRequest waits for the pad (see README for why)
+DEFAULT_WAIT = 30.0
 MAX_WAIT = 120.0
 DENY_MESSAGE = "Denied from the Frostbite pad."
 
@@ -94,14 +68,12 @@ def terminal_info(env: dict, want_tty: bool = False) -> dict:
         info["tmux"] = "1"
     info = {k: v for k, v in info.items() if v}
     if want_tty:
-        info["tty"] = controlling_tty()  # kept when empty: it says the old tty no longer holds
+        info["tty"] = controlling_tty()
     return info
 
 
+# hooks have no terminal of their own so walk up to a parent that does
 def controlling_tty() -> str:
-    """Best effort: the terminal Claude Code runs in, used only to focus its tab and to prove
-    Stop. Hooks run in their own session with no controlling terminal, so /dev/tty cannot work:
-    walk up to the nearest ancestor that has one. A wrapper in between adds a step, nothing else."""
     try:
         import subprocess
 
@@ -134,7 +106,6 @@ IDLE_RE = re.compile(r"waiting for (your )?input", re.I)
 
 
 def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
-    """Map one Claude Code hook payload to a daemon message, or None to ignore it."""
     env = os.environ if env is None else env
     if not isinstance(payload, dict):
         return None
@@ -174,10 +145,10 @@ def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
                   agent=agent, kind=question)
         wait = approve_wait(env)
         if question or wait <= 0:
-            return ask  # shown on the pad, answered in the terminal
+            return ask
         return {**ask, "op": "permission", "id": os.urandom(8).hex(), "wait": wait}
     if event in ("PostToolUse", "PostToolUseFailure"):
-        if payload.get("is_interrupt") is True:  # Stop does not fire after an interrupt
+        if payload.get("is_interrupt") is True:
             return msg(status="done", detail="interrupted", clears=True)
         return msg(status="run", resolve={"tool": tool, "agent": agent})
     if event == "PreCompact":
@@ -203,7 +174,6 @@ def hook_to_message(payload: dict, env: dict | None = None) -> dict | None:
         return msg(status="error", detail=_one_line(reason, 80), clears=True)
     if event == "SessionEnd":
         return {"op": "free", "key": base["key"]}
-    # SubagentStop and anything unknown: no change.
     return None
 
 
@@ -219,10 +189,8 @@ def read_stdin(timeout: float = 1.0) -> str:
     return sys.stdin.read(MAX_STDIN)
 
 
+# one press answers one call, no saved rules
 def decision_for(reply: object, request_id: str) -> dict | None:
-    """Claude Code's decision JSON for this request, or None to leave the terminal prompt alone.
-    Only an exact answer to this id counts. Never updatedInput or updatedPermissions: a press
-    answers this one call and changes nothing else."""
     if not isinstance(reply, dict) or reply.get("id") != request_id:
         return None
     if reply.get("decision") == "allow":
@@ -234,6 +202,8 @@ def decision_for(reply: object, request_id: str) -> dict | None:
     return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
 
 
+# claude code adds hook stdout to context, so print nothing unless it's a decision.
+# no output means the normal terminal prompt stays in charge
 def main(argv: list[str] | None = None) -> int:
     try:
         import signal
@@ -259,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
                     sys.stdout.flush()
             else:
                 ipc.send(message, timeout=0.2)
-    except BaseException:  # never fail the hook: no output means no decision
+    except BaseException:
         pass
     return 0
 

@@ -2,7 +2,7 @@
 
 [![View PCB on KiCanvas](https://hack.club/pcb-badge)](https://kicanvas.org/?repo=https://github.com/michae6345-crypto/frostbite/tree/main/PCB)
 
-<img src="docs/images/hackpad.png" alt="Frostbite, an all-black macropad with nine keys, an OLED and a dial" width="500"/>
+<img src="assets/hackpad.png" alt="Frostbite, an all-black macropad with nine keys, an OLED and a dial" width="500"/>
 
 Frostbite is a 9-key macropad with an OLED and a dial. It shows what my Claude Code sessions and ML training runs are
 doing, and lets me answer them without switching windows.
@@ -17,16 +17,16 @@ row is Approve, Talk and Stop. A small Python script in `host/` connects the pad
 Everything is printed in black: a flat Top plate, a Bottom tray, a small OLEDSupport and the Knob. Four M3 screws go
 through the plate into heat-set inserts in the Bottom. The case is 75.15 × 97.15 × 17.4 mm, modelled in CadQuery.
 
-<img src="docs/images/exploded.png" alt="Exploded CAD view of the case and PCB" width="500"/>
+<img src="assets/exploded.png" alt="Exploded CAD view of the case and PCB" width="500"/>
 
 ## PCB
 
 A 2-layer board, 61.15 × 83.15 mm, with the XIAO RP2040 on the underside.
 
-<img src="PCB/images/schematic.png" alt="Frostbite schematic" width="600"/>
+<img src="assets/schematic.png" alt="Frostbite schematic" width="600"/>
 
-<img src="PCB/images/pcb_render_top.png" alt="PCB render, top" width="300"/>
-<img src="PCB/images/pcb_render_bottom.png" alt="PCB render, bottom" width="300"/>
+<img src="assets/pcb_render_top.png" alt="PCB render, top" width="300"/>
+<img src="assets/pcb_render_bottom.png" alt="PCB render, bottom" width="300"/>
 
 ## Firmware Overview
 
@@ -37,7 +37,7 @@ The firmware is [QMK](https://qmk.fm/).
 - The dial changes volume on its own, and picks a session when the script is running.
 - The OLED shows the selected session and the status of all six.
 
-Pin map and flashing steps are in [Firmware/README.md](Firmware/README.md).
+Pin map and flashing steps are in [Firmware/readme.md](Firmware/readme.md).
 
 ## BOM
 

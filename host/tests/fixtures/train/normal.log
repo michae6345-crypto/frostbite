@@ -1,7 +1,0 @@
-2026-11-02 21:14:03 INFO Using device: mps
-2026-11-02 21:14:03 INFO Loaded 18,402 samples (dataset v3)
-Epoch 1/5 | step 100 | loss: 0.6931 | lr 3.0e-04
-Epoch 1/5 | step 200 | loss: 0.6012 | lr 3.0e-04
-Epoch 1/5 | val_loss: 0.5800 | auc 0.71
-Epoch 2/5 | step 300 | loss: 0.5233 | lr 2.7e-04
-Epoch 2/5 | step 400 | loss: 0.4871 | lr 2.7e-04

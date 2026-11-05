@@ -1,8 +1,7 @@
 [project]
 name = "frostbite-host"
 version = "0.1.0"
-description = "Laptop-side companion for the Frostbite macropad: agent and training-run status over Raw HID"
-readme = "README.md"
+description = "Laptop side of the Frostbite macropad"
 requires-python = ">=3.12"
 dependencies = ["hidapi>=0.14"]
 
@@ -11,15 +10,9 @@ frostbite-daemon = "frostbite_host.daemon:main"
 frostbite-hook = "frostbite_host.hook:main"
 frostbite-ctl = "frostbite_host.ctl:main"
 
-[dependency-groups]
-dev = ["pytest>=8"]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["frostbite_host"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]

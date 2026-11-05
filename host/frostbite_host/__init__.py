@@ -1,1 +1,0 @@
-"""Frostbite host companion."""

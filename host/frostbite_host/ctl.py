@@ -1,4 +1,4 @@
-"""frostbite-ctl: drive slots by hand or from scripts.
+"""drive the slots by hand
 
   frostbite-ctl set 3 run "CI build" [--detail "deploy #42"] [--log PATH]
   frostbite-ctl clear 3
@@ -6,9 +6,7 @@
   frostbite-ctl status [--json]
   frostbite-ctl watch PATH [--name my-model] [--stale-minutes 10]
   frostbite-ctl unwatch NAME
-  frostbite-ctl hooks [--hook PATH]     print a Claude Code hooks snippet
-
-Slots are 1-6, matching the agent keys.
+  frostbite-ctl hooks [--hook PATH]
 """
 
 from __future__ import annotations
@@ -30,12 +28,10 @@ HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequ
                "StopFailure", "SessionEnd"]
 TOOL_EVENTS = {"PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure"}
 HOOK_TIMEOUT = 5
-# Longer than the hook's own wait, so the hook always ends first and exits cleanly.
 PERMISSION_TIMEOUT = int(DEFAULT_WAIT) + 10
 
 
 def hooks_snippet(hook_path: str) -> dict:
-    # Claude Code runs this through a shell, so a path with spaces has to be quoted.
     entry = {"type": "command", "command": shlex.quote(hook_path)}
     hooks = {}
     for ev in HOOK_EVENTS:

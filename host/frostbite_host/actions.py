@@ -1,21 +1,3 @@
-"""macOS actions behind the keys. Approve never appears here: it sends no keystroke, it
-answers the exact PermissionRequest hook that is waiting (see daemon.py).
-
-The one keystroke left is Stop's Escape, and the rule is fail closed. It goes only to the
-selected slot's own session, which must be provably the thing in front. Proof means all of
-this, checked immediately before the key and again inside the script that presses it:
-  - the session runs in an app whose focused tab can be read (Terminal or iTerm2),
-  - that app is frontmost,
-  - the focused tab or pane has the same tty as the session.
-
-Everything else gets no keystroke: VS Code (nothing says what has focus), Ghostty, WezTerm,
-Cursor, the desktop app, SSH and tmux panes.
-
-Keystrokes go through `osascript` / System Events, which needs Accessibility permission
-for whatever runs the daemon, and Automation permission for Terminal / iTerm2 to read the
-tty (see README).
-"""
-
 from __future__ import annotations
 
 import logging
@@ -40,8 +22,8 @@ VSCODE_BUNDLES = ("com.microsoft.VSCode", "com.microsoft.VSCodeInsiders")
 ESCAPE_KEY_CODE = 53
 TTY_RE = re.compile(r"^/dev/tty[a-z]?\d+$")
 
-TAP_FIRST = "tap slot first"      # a tap brings the right tab forward, then it can work
-USE_TERMINAL = "answer in terminal"  # the pad cannot do this for this session
+TAP_FIRST = "tap slot first"
+USE_TERMINAL = "answer in terminal"
 
 FOCUS_TERMINAL = """
 on run argv
@@ -86,8 +68,6 @@ on run argv
 end run
 """
 
-# Each app has its own scripts: osascript compiles the whole text, and naming an app's
-# terminology fails on a Mac that does not have that app.
 READ_TTY = {
     "com.apple.Terminal": 'tell application "Terminal" to get tty of selected tab of front window',
     "com.googlecode.iterm2": 'tell application "iTerm2" to get tty of current session of current window',
@@ -117,6 +97,7 @@ FRONTMOST_SCRIPT = ('tell application "System Events" to get bundle identifier o
 
 
 class Actions:
+    # escape is the only real keystroke. it only goes out if the session is provably in front
     def __init__(self, dry_run: bool = False,
                  runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                  out: Callable[[str], None] = print):
@@ -132,7 +113,6 @@ class Actions:
             return None
 
     def _act(self, what: str, args: list[str]) -> subprocess.CompletedProcess | None:
-        """Run a side-effecting command, or print it in dry-run mode. Always logged."""
         if self.dry_run:
             self.out(f"[dry-run] ACTION {what}: {' '.join(args)}")
             log.info("ACTION (dry-run) %s", what)
@@ -144,7 +124,6 @@ class Actions:
         return r
 
     def frontmost(self) -> str:
-        """Bundle id of the frontmost app ('' if unknown). Read-only, runs in dry-run too."""
         r = self._run(["lsappinfo", "front"], timeout=1.0)
         asn = r.stdout.strip() if r and r.returncode == 0 else ""
         if asn:
@@ -156,13 +135,10 @@ class Actions:
         return r.stdout.strip() if r and r.returncode == 0 else ""
 
     def front_tty(self, bundle: str) -> str:
-        """tty of the focused tab or pane in `bundle` ('' if unknown). Read-only."""
         r = self._run(["osascript", "-e", READ_TTY[bundle]], timeout=2.0)
         return r.stdout.strip() if r and r.returncode == 0 else ""
 
     def guarded_escape(self, slot: Slot | None, why: str) -> tuple[bool | None, str]:
-        """Send Escape only to the slot's own session. Returns (sent, oled message); sent is
-        None when it is unknown whether the key went out."""
         terminal = slot.terminal if slot else {}
         bundle = terminal.get("bundle", "")
         tty = terminal.get("tty", "")
@@ -180,7 +156,7 @@ class Actions:
             log.info("ACTION refused escape (%s): focused tab is %r, session is on %s",
                      why, front_tty or "unknown", tty)
             return False, TAP_FIRST
-        if self.frontmost() != bundle:  # focus moved while the tab was being read
+        if self.frontmost() != bundle:
             log.info("ACTION refused escape (%s): focus moved during the check", why)
             return False, TAP_FIRST
         what = f"{why}: key escape -> {APP_NAMES[bundle]} {tty}"
@@ -189,7 +165,7 @@ class Actions:
             log.info("ACTION (dry-run) %s", what)
             return True, why
         r = self._act(what, ["osascript", "-e", PRESS_ESCAPE[bundle], bundle, tty])
-        if r is None:   # timed out or failed to start: the key may or may not have gone out
+        if r is None:
             return None, "keystroke unknown"
         if r.returncode != 0:
             return False, "keystroke failed"
@@ -199,8 +175,6 @@ class Actions:
         return False, TAP_FIRST
 
     def focus(self, slot: Slot | None) -> str | None:
-        """Bring the slot's terminal to the front when we know enough; else do nothing.
-        Returns an OLED message or None."""
         if slot is None or slot.source != "claude" or not slot.cwd:
             return None
         bundle = slot.terminal.get("bundle", "")
@@ -214,7 +188,7 @@ class Actions:
         elif bundle == "com.googlecode.iterm2":
             script = FOCUS_ITERM
         else:
-            return None  # Ghostty / WezTerm / unknown: selecting the slot is enough
+            return None
         if tty and TTY_RE.match(tty):
             r = self._act(f"focus {APP_NAMES[bundle]} tab {tty}", ["osascript", "-e", script, tty])
             if r is not None and r.stdout.strip() == "notfound":
@@ -233,7 +207,6 @@ class Actions:
         self.out(f"log: {path}")
         if not os.path.exists(path):
             return "log missing"
-        # Transcripts can be huge: reveal them in Finder; open text logs in the editor.
         args = ["open", "-R", path] if path.endswith(".jsonl") else ["open", "-t", path]
         self._act(f"open log {path}", args)
         return os.path.basename(path)

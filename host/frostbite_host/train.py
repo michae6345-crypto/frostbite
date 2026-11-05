@@ -1,13 +1,3 @@
-"""Training-run watcher: tails a text log or a JSONL metrics file.
-
-  run    once lines arrive (detail: "e3 s812 loss 0.4213")
-  done   on a final line ("training complete", {"event": "end"}, --done-pattern ...)
-  idle   when the file stops growing for `stale_minutes`, and back to run if lines resume. A
-         killed run also goes quiet, so silence is never shown as success, and nothing is
-         waiting on you, so it is not WAIT. --stale-status done shows DONE instead
-  error  on a nan/inf loss, a Python traceback or an "...Error:" line
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -24,37 +14,33 @@ from typing import Callable
 
 log = logging.getLogger("frostbite.train")
 
-CHUNK = 1 << 20           # bytes read at a time
-MAX_BACKLOG = 16 << 20    # a file bigger than this is read from its last 16 MiB
-MAX_PARTIAL = 1 << 20     # longest line kept while waiting for its newline
-HEAD_BYTES = 256          # start of the file, compared to notice copytruncate
-HEARTBEAT = 600.0         # a growing log refreshes its slot this often, even with no new text
+CHUNK = 1 << 20
+MAX_BACKLOG = 16 << 20
+MAX_PARTIAL = 1 << 20
+HEAD_BYTES = 256
+HEARTBEAT = 600.0
 
+# tails a log or jsonl file and pulls out epoch, step and loss
 NUM = r"[-+]?(?:nan|inf(?:inity)?|\d+(?:\.\d*)?(?:e[-+]?\d+)?|\.\d+(?:e[-+]?\d+)?)"
 BAD = r"(?:nan|[-+]?inf(?:inity)?)"
-NUM_END = r"(?![\w-]|\.\d)"                 # "info", "nan-safe" and "0.5.1" are not numbers
-WRAP = r"(?:tensor\(|array\()?\[?"          # loss: tensor(0.42, grad_fn=...)
+NUM_END = r"(?![\w-]|\.\d)"
+WRAP = r"(?:tensor\(|array\()?\[?"
 QUOTE = r"[\x27\x22]?"
 
 STEP_RE = re.compile(r"\b(?:global[_ ]?step|step|iter(?:ation)?|it|batch)\b" + QUOTE
                      + r"\s*[:=#]?\s*\[?\s*(\d+)(?:\s*/\s*(\d+))?", re.I)
 EPOCH_RE = re.compile(r"\bepoch\b" + QUOTE + r"\s*[:=#]?\s*\[?\s*(\d+(?:\.\d+)?)(?:\s*/\s*(\d+))?", re.I)
-# "loss" as its own word (train_loss / train loss allowed); val_loss and paths are skipped.
 LOSS_RE = re.compile(r"(?<![-\w./])(?:train(?:ing)?[_/ ])?loss\b" + QUOTE + r"\s*(?:[:=]|\bis\b)?\s*"
                      + QUOTE + r"\s*" + WRAP + "(" + NUM + ")" + NUM_END, re.I)
-# Any loss metric (val_loss, loss_ce, ...) that went non-finite. Not loss_scale (AMP) and
-# not file names such as best-loss-nan.pt or val_loss_inf.pt.
 BAD_LOSS_RE = re.compile(
     r"(?<![-\w./])(?P<name>(?:[a-z0-9]+[_/])*loss(?:[_/](?!scal)[a-z0-9]+)*)\b" + QUOTE
     + r"\s*(?:[:=]|=>|->|\bis\b|\bwas\b|\bbecame\b|\bbecomes\b|\bwent to\b)?\s*" + QUOTE + r"\s*"
     + WRAP + BAD + r"(?![-\w])", re.I)
 BAD_FIRST_RE = re.compile(r"(?<![-\w./])(?:nan|inf)\s+(?:value\s+)?(?:(?:in|for|on)\s+(?:the\s+)?)?"
                           r"(?P<name>loss)\b", re.I)
-# "best_loss: inf" is the usual starting value, not a failure.
 TRACKER_RE = re.compile(r"\b(?:best|min|minimum|lowest|prev\w*)[_ /]", re.I)
 
 TRACEBACK_RE = re.compile(r"Traceback \(most recent call last\):")
-# What loggers and launchers put in front of an exception line.
 LOG_PREFIX = (r"^\s*(?:\[[^\]]*\]:?\s*|[\d:,.TZ/-]+\s+|(?:ERROR|CRITICAL|FATAL)\b[:\s-]*)*")
 EXC_RE = re.compile(LOG_PREFIX + r"((?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?:Error|Exception)|KeyboardInterrupt)"
                     r"\b(?::\s*(.*))?$")
@@ -66,7 +52,6 @@ DONE_RE = re.compile(
     r"\b(training (?:is )?(?:complete|completed|finished|done)|finished training|done training|"
     r"run (?:complete|completed|finished)|saved final model|saving final model|"
     r"training ended|Trainer\.fit.{0,2} stopped|FROSTBITE_DONE)\b", re.I)
-# "Stage 1 training complete, starting stage 2" and "warmup training finished" are not the end.
 NOT_FINAL_RE = re.compile(r"\b(?:warm-?up|stage|phase|pre-?train\w*)\b|,\s*(?:now\s+)?"
                           r"(?:starting|start|moving|next|beginning|begin|proceeding)\b", re.I)
 START_RE = re.compile(r"\b(?:starting|beginning|resuming|start)\s+(?:a\s+new\s+)?(?:training|run|experiment)\b|"
@@ -143,9 +128,6 @@ def parse_json_line(obj: dict) -> LineInfo:
             info.error = f"{k}={v}"
             info.bad_loss = True
             break
-    # Only whole marker values count. {"event": "validation complete"} and
-    # {"message": "error rate 0.02"} are not the end of a run, and a line that still
-    # carries a loss is a metrics row.
     for k in MARKER_KEYS:
         value = str(obj.get(k, "")).strip().lower()
         if value in ERROR_VALUES:
@@ -218,31 +200,27 @@ def _fmt_epoch(e: float) -> str:
 
 @dataclass
 class RunState:
-    """Folds parsed lines into a status + detail string."""
-    status: str = "idle"          # idle | run | done | error
+    status: str = "idle"
     step: int | None = None
     epoch: float | None = None
     loss: float | None = None
     error: str | None = None
     bad_loss: bool = False
     in_traceback: bool = False
-    finished: bool = False        # a real final line was seen, not just silence
+    finished: bool = False
     lines: int = 0
 
     def feed(self, info: LineInfo, raw: str = "") -> None:
         self.lines += 1
         if info.start and not info.error:
-            # A new run appended to the same log.
             self.__dict__.update(RunState(status="run", lines=self.lines).__dict__)
         if self.status == "error":
-            # Errors stay until a new run starts; only refine a traceback's message with
-            # the exception line that ends it.
             if self.in_traceback and self.error == "Traceback" and info.error:
                 self.error = info.error
             return
         moved_on = info.step is not None and (self.step is None or info.step > self.step)
         if self.finished and not moved_on and not info.error:
-            return                        # trailing lines after the end (wandb summary etc.)
+            return
         if info.step is not None:
             self.step = info.step
         if info.epoch is not None:
@@ -290,7 +268,6 @@ class RunState:
 
 
 def done_pattern(text: str) -> str:
-    """argparse type: reject a bad regex with a usage error before anything starts."""
     try:
         re.compile(text)
     except re.error as e:
@@ -299,10 +276,6 @@ def done_pattern(text: str) -> str:
 
 
 class TrainWatcher:
-    """Tails one file in a background thread and calls `emit(message)` with daemon
-    "update" messages whenever the status or detail changes. A file that is rotated or
-    truncated, even if it regrows past the old offset, is treated as a new run. The old
-    run's status stays on the slot until the new file has content."""
 
     def __init__(self, path: str, name: str | None, emit: Callable[[dict], None], *,
                  stale_minutes: float = 10.0, stale_status: str = "idle",
@@ -331,7 +304,7 @@ class TrainWatcher:
         self._partial = ""
         self._partial_flushed = False
         self._discard_first = False
-        self._fresh = False          # next content belongs to a new run
+        self._fresh = False
 
     def feed_text(self, text: str) -> None:
         if self._fresh and text:
@@ -339,10 +312,10 @@ class TrainWatcher:
             self.state = RunState()
             self._last_sent = None
         parts = re.split(r"\r\n|\r|\n", self._partial + text)
-        self._partial = parts.pop()  # incomplete last line
+        self._partial = parts.pop()
         self._partial_flushed = False
         if self._discard_first and parts:
-            parts.pop(0)             # started mid-file: the first line is cut
+            parts.pop(0)
             self._discard_first = False
         if len(self._partial) > MAX_PARTIAL:
             self._partial = self._partial[-MAX_PARTIAL:]
@@ -352,7 +325,6 @@ class TrainWatcher:
         self._publish(heartbeat=True)
 
     def _flush_partial(self) -> None:
-        """A final line with no newline still counts if it ends or fails the run."""
         if self._partial_flushed or not self._partial.strip():
             return
         self._partial_flushed = True
@@ -433,7 +405,6 @@ class TrainWatcher:
         except OSError:
             st = None
         if st is None or st.st_ino != self._ino:
-            # Rotated or deleted. Lines written just before that are only on the old fd.
             log.info("%s was replaced", self.path)
             self._read_available()
             self._close()
@@ -447,7 +418,6 @@ class TrainWatcher:
             self._seek(0)
             self._fresh = True
         if self._read_available():
-            # The file's own age, so a restart does not make a month-old log look live.
             self._last_growth = self.clock() - max(0.0, time.time() - st.st_mtime)
         else:
             self._flush_partial()

@@ -1,3 +1,0 @@
-{"step": 10, "epoch": 0, "train/loss": 1.234, "lr": 0.0003}
-{"step": 20, "epoch": 0, "train/loss": 1.101, "lr": 0.0003}
-{"step": 30, "epoch": 1, "train/loss": 0.987, "val_loss": 1.02}

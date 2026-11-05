@@ -1,11 +1,3 @@
-"""Local Unix-socket IPC between frostbite-hook / frostbite-ctl and frostbite-daemon.
-
-One newline-terminated JSON object per connection, a dict with an "op" key (see
-state.Board.apply). Ops that want a reply get one JSON line back.
-
-Stdlib only and import-light: frostbite-hook runs on every Claude Code hook.
-"""
-
 from __future__ import annotations
 
 import json
@@ -50,7 +42,6 @@ def _read_reply(s: socket.socket) -> dict | None:
 
 def send(msg: dict, timeout: float = 0.25, want_reply: bool = False,
          path: Path | None = None) -> dict | None:
-    """Send one message. Raises OSError if the daemon is not reachable."""
     data = _encode(msg)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
@@ -62,10 +53,8 @@ def send(msg: dict, timeout: float = 0.25, want_reply: bool = False,
         return _read_reply(s)
 
 
+# the open connection is how the daemon knows the request is still alive
 def ask(msg: dict, wait: float, connect_timeout: float = 0.2, path: Path | None = None) -> dict | None:
-    """Send one message and hold the connection until the daemon answers or `wait` runs out.
-    The open connection is what tells the daemon this request is still alive, so this side
-    never half-closes it. Raises OSError if the daemon is not reachable or does not answer."""
     data = _encode(msg)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(connect_timeout)

@@ -1,14 +1,3 @@
-"""frostbite-daemon: owns the pad, the slot board and the local socket.
-
-Threads: HID I/O (device.DeviceLink), socket server, one per training watcher, all
-feeding one queue consumed by the main loop, which is the only code touching the Board.
-
-Approve sends no keystroke. A PermissionRequest hook stays connected while it waits, and
-Approve answers the request shown on the OLED, on that hook's own connection. A press
-only ever reaches the id last pushed to the OLED, so it cannot answer anything else, and a
-slot with no connected hook has nothing to answer.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -38,18 +27,18 @@ from .train import TrainWatcher, done_pattern
 
 log = logging.getLogger("frostbite.daemon")
 
-MAX_KEY_AGE = 1.0     # a command key that waited this long in the queue is dropped
-KEY_COOLDOWN = 1.0    # after a keystroke, so a double tap cannot send a second Escape
-MIN_SHOWN = 0.6       # a request must have been on the OLED this long before a press counts
-SELECT_SETTLE = 0.5   # after SET_SELECTED, ignore PING replies that crossed it
+# approve sends no keystroke, it answers the waiting hook over the hook's own socket
+MAX_KEY_AGE = 1.0
+KEY_COOLDOWN = 1.0
+MIN_SHOWN = 0.6
+SELECT_SETTLE = 0.5
 
 
-KEEP_OPEN = object()  # handle_ipc: the reply comes later, from a press
+KEEP_OPEN = object()
 
 
 @dataclass
 class Request:
-    """A PermissionRequest hook waiting on the pad. `reply` reaches that hook and no other."""
     reply: queue.Queue
     deadline: float
 
@@ -72,7 +61,7 @@ class Daemon:
         self._select_settle = -1e12
         self._last_keystroke = -1e12
         self.requests: dict[str, Request] = {}
-        self._shown_id: str | None = None  # the request last pushed to the OLED
+        self._shown_id: str | None = None
         self._shown_at = 0.0
 
     def on_device(self, ev: object) -> None:
@@ -82,11 +71,9 @@ class Daemon:
         self.q.put(("ipc", msg, reply))
 
     def keepalive(self) -> SetAll | None:
-        """Sent with every PING (from the I/O thread), so the pad recovers from a PING gap."""
         return SetAll(self._statuses) if self._statuses is not None else None
 
     def push(self) -> None:
-        """Send whatever differs from what the pad last got."""
         now = self.clock()
         b = self.board
         sts = tuple(b.statuses())
@@ -95,7 +82,7 @@ class Daemon:
             self.send(SetAll(sts))
             self._sent["all"] = sts
         for i, text in enumerate(b.oled_lines(now)):
-            padded = text.ljust(OLED_COLS)  # full width so stale characters are overwritten
+            padded = text.ljust(OLED_COLS)
             if self._sent.get(f"line{i}") != padded:
                 self.send(OledLine(i, padded))
                 self._sent[f"line{i}"] = padded
@@ -116,7 +103,7 @@ class Daemon:
                 reply = self.handle_ipc(item[1], item[2])
                 if item[2] is not None and reply is not KEEP_OPEN:
                     item[2].put(reply)
-        except Exception:  # one bad event must not kill the daemon
+        except Exception:
             log.exception("error handling %r", item[:2])
             if kind == "ipc" and item[2] is not None:
                 item[2].put({"ok": False, "error": "internal error"})
@@ -126,14 +113,14 @@ class Daemon:
     def handle_ipc(self, msg: dict, reply: queue.Queue | None = None) -> object:
         now = self.clock()
         op = msg.get("op")
-        if op == "request_gone":     # the hook ended: Claude Code cancelled it, or it timed out
+        if op == "request_gone":
             self._release(str(msg.get("id")))
             return None
         if op == "permission":
             if reply is not None:
                 self._open_request(msg, reply, now)
                 return KEEP_OPEN
-            msg = {k: v for k, v in msg.items() if k != "id"}  # nobody to answer: display only
+            msg = {k: v for k, v in msg.items() if k != "id"}
         if op == "status":
             return {"ok": True, "connected": self.connected(), **self.board.to_dict(now)}
         if op == "watch":
@@ -153,7 +140,7 @@ class Daemon:
                 self.board.free(key)
             return {"ok": bool(w)}
         if msg.get("source") == "train" and msg.get("key") in self.unwatched:
-            return None              # queued before unwatch: must not bring the freed slot back
+            return None
         try:
             changed = self.board.apply(msg, now)
         except (ValueError, KeyError, TypeError) as e:
@@ -172,7 +159,6 @@ class Daemon:
             reply.put(no_answer)
             return
         if self.connected() is False or self.actions.dry_run:
-            # No pad means no press can come. A dry run never answers a real session.
             self.handle_ipc({k: v for k, v in msg.items() if k != "id"})
             reply.put(no_answer)
             return
@@ -184,7 +170,7 @@ class Daemon:
             reply.put(no_answer)
             return
         found = self.board.find_request(rid)
-        if found is None:               # all slots busy
+        if found is None:
             self.board.flash("agent waits, no slot", now)
             reply.put(no_answer)
             return
@@ -192,7 +178,7 @@ class Daemon:
         log.info("request %s waiting on the pad: slot %d %s", rid, found[0] + 1, found[1].text)
         selected = self.board.selected
         if selected != found[0] and not self.board.has_live_request(selected):
-            self.board.select(found[0])  # the wait is short, so bring it up by itself
+            self.board.select(found[0])
 
     def _release(self, rid: str, decision: str | None = None) -> None:
         req = self.requests.pop(rid, None)
@@ -216,18 +202,16 @@ class Daemon:
             self._sent.clear()
             return
         if ev == "disconnected":
-            for rid in list(self.requests):  # no press can come now
+            for rid in list(self.requests):
                 self._release(rid)
             return
         if isinstance(ev, EncoderEvent):
             sel = ev.selected if 0 <= ev.selected < NUM_SLOTS else b.selected + ev.direction
             b.select(sel)
-            self._sent["sel"] = b.selected  # the pad already shows this selection
+            self._sent["sel"] = b.selected
             self._select_settle = -1e12
             return
         if isinstance(ev, PingReply):
-            # The pad's selection is what the strip shows. A crossing ENCODER and SET_SELECTED
-            # can leave the two apart, so follow it unless our own change is still in flight.
             if now >= self._select_settle and 0 <= ev.selected < NUM_SLOTS and ev.selected != b.selected:
                 log.info("selection follows the pad: slot %d", ev.selected + 1)
                 b.select(ev.selected)
@@ -265,7 +249,6 @@ class Daemon:
             self._stop(now)
 
     def _approve(self, held: bool, now: float) -> None:
-        """Answer the request on the OLED, and only that one. Nothing here touches the keyboard."""
         b = self.board
         self._reap()
         rid = self._shown_id
@@ -308,11 +291,10 @@ class Daemon:
             log.info("ACTION none: stop within the cooldown")
             return
         sent, msg = self.actions.guarded_escape(slot, "stop sent")
-        if sent is not False:           # also when unknown: it must not be sent twice
+        if sent is not False:
             self._last_keystroke = now
         b.flash(msg, now)
         if sent:
-            # Stop does not fire after an interrupt, so nothing else would end `run`.
             b.answer(i, now, status=Status.DONE, detail="interrupted", all_prompts=True)
 
     def tick(self) -> None:
@@ -330,7 +312,6 @@ class Daemon:
             if old.path != w.path:
                 log.warning("%s now watches %s instead of %s", w.key, w.path, old.path)
         if any(other.name == w.name for other in self.watchers.values()):
-            # runs/A/train.log and runs/B/train.log: tell them apart on the OLED
             parent = os.path.basename(os.path.dirname(w.path))
             w.name = f"{parent}/{w.name}"
         self.unwatched.discard(w.key)
@@ -359,7 +340,6 @@ class Daemon:
 
 
 class SocketServer:
-    """Accepts one JSON line per connection and hands it to the daemon queue."""
 
     def __init__(self, path: Path, daemon: Daemon):
         self.path = path
@@ -370,20 +350,20 @@ class SocketServer:
     def start(self) -> None:
         parent = self.path.parent
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if parent == ipc.state_dir():  # a directory the user picked keeps its own permissions
+        if parent == ipc.state_dir():
             os.chmod(parent, 0o700)
         if self.path.exists():
             try:
                 ipc.send({"op": "ping"}, timeout=0.3, path=self.path)
             except OSError:
-                self.path.unlink(missing_ok=True)  # stale socket from a crashed daemon
+                self.path.unlink(missing_ok=True)
             else:
                 raise SystemExit(f"another frostbite-daemon is listening on {self.path}")
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         old = os.umask(0o177)
         try:
             s.bind(str(self.path))
-        except OSError as e:  # lost a race with another daemon starting at the same moment
+        except OSError as e:
             s.close()
             raise SystemExit(f"cannot listen on {self.path}: {e}") from None
         finally:
@@ -436,8 +416,6 @@ class SocketServer:
                     pass
 
     def _hold_request(self, conn: socket.socket, msg: dict) -> None:
-        """Keep a waiting hook's connection, so its answer goes down this socket alone and a
-        hook that ended is noticed at once."""
         reply = queue.Queue()
         self.daemon.submit(msg, reply)
         while True:
