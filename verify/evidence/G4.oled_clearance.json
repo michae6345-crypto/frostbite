@@ -1,27 +1,27 @@
 {
   "check": "G4.oled_clearance",
   "gate": "G4",
-  "title": "OLED glass and board clear the Top along the PCB's path; active area fully visible; window size is free",
+  "title": "OLED glass and board clear the Top as it comes down over them; active area fully visible; window size is free",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e",
-    "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
-    "CAD/positions.json": "826016317b191de9e05f1d37088d8696a9d24c2708e06ff0cd2d3fa377a16e00"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "production/Top.stl": "5e9c771e4283061e1ea169735118a935092f4452d4b641e70426cb1831190dc7",
+    "production/OLEDSupport.stl": "81c9be3e7ea168a295192d9af888562386cd21ff916bef076543f7a190816727",
+    "CAD/positions.json": "e2746619e7a863e1bf3c46849d3762b914e2367f368fb825d72f69d20d36c321"
   },
   "details": {
     "registration": {
       "plate_normal": [
-        0.0,
+        -0.0,
         -0.0,
         -1.0
       ],
       "outline_mm": [
-        79.15,
+        75.15,
         97.15
       ],
       "rotation_sign": 1,
@@ -36,14 +36,10 @@
         2.5,
         3.2,
         5.0,
-        5.43,
-        6.6,
-        12.0,
-        13.23,
-        16.0
+        5.43
       ],
-      "section_volume_mm3": 43176.4,
-      "mesh_volume_mm3": 43176.4
+      "section_volume_mm3": 11901.9,
+      "mesh_volume_mm3": 11901.9
     },
     "stack_depth_below_plate_top": {
       "oled_board_under": 3.2,
@@ -54,7 +50,7 @@
     "glass_gap_mm": 0.065,
     "board_gap_mm": 0.064,
     "active_area_gap_mm": 0.633,
-    "support_height_mm": 1.4,
+    "support_height_mm": 1.8,
     "measured_window": {
       "x": 5.5,
       "y": 6.51,
@@ -62,6 +58,6 @@
       "h": 12.98
     }
   },
-  "timestamp": "2026-11-04T04:54:36+00:00",
+  "timestamp": "2026-11-05T05:05:59+00:00",
   "duration_s": 0.0
 }

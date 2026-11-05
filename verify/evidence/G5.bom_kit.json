@@ -8,8 +8,8 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "PCB/frostbite.kicad_pcb": "e95bba0e3e450e687101d9c415e8e531a943faa9c496329514fdc72703861f9a"
   },
   "details": {
     "kit": {
@@ -18,7 +18,6 @@
       "diodes": 20,
       "encoders": 2,
       "oled": 1,
-      "leds": 16,
       "screws": 6,
       "inserts": 6,
       "mcu_xiao_rp2040": 1
@@ -29,7 +28,6 @@
       "diodes": 9,
       "encoders": 1,
       "oled": 1,
-      "leds": 13,
       "screws": 4,
       "inserts": 4,
       "mcu_xiao_rp2040": 1
@@ -39,12 +37,12 @@
       "diodes": 9,
       "encoders": 1,
       "oled": 1,
-      "leds": 13,
-      "mcu_xiao_rp2040": 1
+      "mcu_xiao_rp2040": 1,
+      "leds": 0
     },
     "extras_to_buy": [
       {
-        "item": "knob: 18 mm knurled aluminium, 6 mm D-shaft",
+        "item": "knob: 18 mm knob printed in black, 6 mm D-shaft",
         "qty": 1,
         "why": "kit has no knob"
       }
@@ -55,12 +53,11 @@
       "diodes": 11,
       "encoders": 1,
       "oled": 0,
-      "leds": 3,
       "screws": 2,
       "inserts": 2,
       "mcu_xiao_rp2040": 0
     }
   },
-  "timestamp": "2026-11-04T04:55:10+00:00",
-  "duration_s": 0.46
+  "timestamp": "2026-11-05T05:06:01+00:00",
+  "duration_s": 0.02
 }

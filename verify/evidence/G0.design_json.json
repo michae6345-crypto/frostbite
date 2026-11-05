@@ -1,21 +1,20 @@
 {
   "check": "G0.design_json",
   "gate": "G0",
-  "title": "design.json internal consistency (pins, matrix, LED indices, PCB size)",
+  "title": "design.json internal consistency (pins, matrix, no LEDs, flat case, PCB size)",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8"
   },
   "details": {
-    "pins": 11,
+    "pins": 10,
     "keys": 9,
-    "leds": 13,
     "inputs": 10
   },
-  "timestamp": "2026-11-04T04:52:06+00:00",
-  "duration_s": 0.26
+  "timestamp": "2026-11-05T05:05:43+00:00",
+  "duration_s": 0.04
 }

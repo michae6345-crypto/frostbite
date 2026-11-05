@@ -14,7 +14,7 @@
       ],
       "cwd": "~/Documents/frostbite/verify/.cache/work/studio_copy",
       "exit_code": 0,
-      "duration_s": 0.18,
+      "duration_s": 0.05,
       "stdout_tail": [
         "presets: 37; preset warning codes seen: clear-caps, few-commands, graphite-not-kit, icon-caps, insert-boss, led-count, smoke-glow, xda-not-kit",
         "rules: bad-value, not-printed, pins, pcb-size, shell-size, shell-height, oled-count, glow-gap-plate, screws-top-bezel, deep-dish-bezel, corner-clip, switches-extra, encoders-extra, smoke-glow, clear-caps, led-count, xda-not-kit, graphite-not-kit, icon-caps, thin-tilt, side-screws-thin, insert-boss, few-commands, wordmark-empty, wordmark-long",
@@ -39,6 +39,6 @@
     "studio/verify/run.js": "e90e0bac89b37f9782f631989990974db6ec7e22e6fbdf441ccc7f94716e55b8"
   },
   "details": {},
-  "timestamp": "2026-11-04T04:52:06+00:00",
-  "duration_s": 0.2
+  "timestamp": "2026-11-05T05:05:43+00:00",
+  "duration_s": 0.05
 }

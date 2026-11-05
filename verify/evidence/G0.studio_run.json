@@ -14,7 +14,7 @@
       ],
       "cwd": "~/Documents/frostbite/verify/.cache/work/studio_copy",
       "exit_code": 0,
-      "duration_s": 12.0,
+      "duration_s": 3.91,
       "stdout_tail": [
         "frostbite verify: 1889 specs, 0 hard, 13 soft -> verify/report.md",
         "  pass modules                checks=6 hard=0 soft=0",
@@ -49,11 +49,11 @@
     "studio/verify/run.js": "e90e0bac89b37f9782f631989990974db6ec7e22e6fbdf441ccc7f94716e55b8"
   },
   "details": {
-    "report_md_sha256": "6c988ff60532b6450391e6723ec4ad6a80ad98bb54ac7a4b5f32f592bc220826",
+    "report_md_sha256": "161dfcfa65f69d07682ac8f22c318df0394aa7920450e40fa5ab0200dd561fb2",
     "report_md_head": [
       "# Frostbite Studio verification report",
       "",
-      "Generated 2026-11-04T04:52:05.906Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).",
+      "Generated 2026-11-05T05:05:42.966Z by `node verify/run.js` (seed 20261103, 500 random specs, Node v24.22.1).",
       "",
       "**Result: PASS**: 0 hard failures, 13 warnings.",
       "",
@@ -93,6 +93,6 @@
       ""
     ]
   },
-  "timestamp": "2026-11-04T04:52:06+00:00",
-  "duration_s": 12.01
+  "timestamp": "2026-11-05T05:05:42+00:00",
+  "duration_s": 3.91
 }

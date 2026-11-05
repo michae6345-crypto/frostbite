@@ -294,7 +294,8 @@ def test_seventh_waiting_session_is_visible_somewhere():
     for i in range(6):
         feed(b, {"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"})
     reply = d.handle_ipc({"op": "update", "source": "claude", "key": "c6", "name": "n", "status": "needs"})
-    assert reply["ok"] is False or b.glow()[:3] == (0xFF, 0xB0, 0x20)
+    assert reply["ok"] is False and "c6" in b.overflow
+    assert b.oled_lines(d.clock())[1] == "agent waits, no slot"
 
 
 def test_idle_evicted_before_unseen_error():

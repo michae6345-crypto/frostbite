@@ -1,9 +1,11 @@
 item,qty,source,link,price_usd,shipping_usd,notes
-"Hackpad kit (XIAO RP2040, 9 of 16 switches, 3 of 16 DSA caps, 9 diodes, EC11E, OLED, 13 SK6812 MINI-E, 4 M3x16, 4 inserts)",1,Hack Club kit,https://hackpad.hackclub.com/parts,0,0,Provided
-"PCB, 2-layer, 61.15 x 83.15 mm (production/gerbers.zip)",1,JLCPCB,https://jlcpcb.com,,,Covered by the Hackpad PCB grant; fill in the real quote
-"3D-printed case (Top, Bottom, OLEDSupport in matte black PETG; GlowBand in clear PETG)",1,Printing Legion,,,,Covered by the case grant; ask whether black and clear PETG are available
-Frosted translucent DSA keycaps,6,Buy yourself,,,,"Fill in the real listing, price and shipping"
-"Knob for 6 mm D-shaft, 18 mm (or print production/Knob.stl)",1,Buy or print,,,,Optional if printed
-Thin double-sided tape about 0.2 mm,1,Buy yourself,,,,For the OLEDSupport
-Stick-on feet,4,Buy yourself,,,,"Fill in the real listing, price and shipping"
-USB-C data cable,1,Buy yourself,,,,If you do not already have one
+Seeed XIAO RP2040,1,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+MX-style switches,9,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+White blank DSA keycaps,9,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+1N4148 through-hole diodes,9,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+EC11E rotary encoder,1,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+0.91 inch OLED,1,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+M3x16 screws,4,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+M3x5x4 heat-set inserts,4,Hackpad kit,https://hackpad.hackclub.com/parts,0,0,Free with the kit
+"PCB, 2-layer, 61.15 x 83.15 mm",1,JLCPCB,https://jlcpcb.com,10,0,Paid by the $10 Hackpad PCB grant; price is the grant limit and includes shipping
+"Printed case: Top, Bottom, OLEDSupport, Knob in black",1,Printing Legion,https://hackpad.hackclub.com/submitting,5,0,Paid by the $5 Hackpad case grant; price is the grant limit and includes shipping

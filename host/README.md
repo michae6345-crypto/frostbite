@@ -1,7 +1,7 @@
 # Frostbite host
 
 The laptop side of Frostbite. A daemon talks Raw HID to the pad and shows the status of Claude Code sessions,
-training runs and your own scripts on the six agent keys and the OLED. Approve answers Claude Code's permission
+training runs and your own scripts on the OLED. Approve answers Claude Code's permission
 request through a hook and sends no keystroke. Stop sends Escape, and only to a session it can prove is in front.
 The HID protocol is at the top of `frostbite_host/device.py` and under `"protocol"` in `../design.json`.
 
@@ -30,14 +30,13 @@ Bash(npm test)?           <- what it is doing or waiting on, or "e3 s812 loss 0.
 ```
 
 A new source takes the first free slot and keeps it. Turn the encoder or tap an agent key to select a slot. An empty
-slot shows a summary such as `1 wait 2 run`. The light gap glows red if anything failed, amber if anything waits on you,
-and ice blue otherwise. A seventh session asking for you turns it amber too, and the OLED says so.
+slot shows a summary such as `1 wait 2 run`. A seventh session asking for you shows `agent waits, no slot` for 3 s.
 
 `done` slots free after 10 minutes (`--linger-minutes`) and `error` slots after 30. When all six are taken the oldest
 finished slot is reused; running and waiting slots are never pushed out. A silent Claude session drops to idle after 15
-minutes (1 hour inside one tool call), an amber slot the pad cannot answer after 30, and any slot silent for 24 hours
-is freed. No hook fires when you answer in the terminal or cancel a tool with Esc, so the slot keeps its colour
-until the next event. That amber is harmless: with no hook waiting, the pad has nothing to answer.
+minutes (1 hour inside one tool call), a `WAIT` slot the pad cannot answer after 30, and any slot silent for 24 hours
+is freed. No hook fires when you answer in the terminal or cancel a tool with Esc, so the slot keeps its status
+word until the next event. That `WAIT` is harmless: with no hook waiting, the pad has nothing to answer.
 
 ## Keys
 
@@ -54,11 +53,11 @@ Actions and refusals are logged as `ACTION ...`. A command key over 1 s old, or 
 ### Approve
 
 When Claude Code is about to ask for permission it runs `frostbite-hook`, which gives the request a random id, stays
-connected to the daemon and waits. The slot goes amber and the OLED shows the tool and input, paging every 2 s if long.
+connected to the daemon and waits. The slot goes to `WAIT` and the OLED shows the tool and input, paging every 2 s if long.
 Approve prints an allow for that id, and holding Approve prints a deny. Each press answers one call and saves no rule.
 
 A press reaches only the id last sent to the OLED, down that hook's own connection, and the request must have been on
-the OLED for 0.6 s. A slot with no connected hook shows `answer in terminal`, however amber it is. If the wait ends, the
+the OLED for 0.6 s. A slot with no connected hook shows `answer in terminal`, even on `WAIT`. If the wait ends, the
 daemon is down, no pad is plugged in, `--dry-run` or `--fake` is on, or anything fails, the hook exits 0 with no output
 and the normal terminal prompt handles it. Nothing but a press produces a decision.
 
@@ -99,7 +98,7 @@ frostbite-ctl watch ~/code/my-model/metrics.jsonl --name my-model               
 |---|---|
 | `error` | A nan/inf in any loss, a traceback, an `...Error:` line, or GPU out of memory. Stays until a new run starts or the file is replaced |
 | `done` | `Training complete`, `Saving final model`, `FROSTBITE_DONE`, `{"event": "end"}`, or your `--done-pattern REGEX` |
-| idle (`quiet 10m`) | No growth for `--stale-minutes`. A killed run also goes quiet, so silence never shows green. Frees after 10 minutes; `--stale-status done` shows green instead |
+| idle (`quiet 10m`) | No growth for `--stale-minutes`. A killed run also goes quiet, so silence never shows `DONE`. Frees after 10 minutes; `--stale-status done` shows `DONE` instead |
 
 ## Scripts, login, tests
 

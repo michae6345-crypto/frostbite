@@ -158,7 +158,7 @@ def load_pcb(text: str) -> dict:
             pf = child(pad, "pinfunction")
             sz = child(pad, "size")
             w, h = (num(sz[1]), num(sz[2])) if sz is not None and len(sz) > 2 else (0.0, 0.0)
-            pa = num(pat[3]) if len(pat) > 3 and not isinstance(pat[3], list) else rot
+            pa = num(pat[3]) if len(pat) > 3 and not isinstance(pat[3], list) else 0.0   # absolute: no angle written means 0, not the footprint's
             lay = child(pad, "layers")
             a = 0.0 if (len(pad) > 3 and str(pad[3]) == "circle") else math.radians(pa)
             hw = (abs(w * math.cos(a)) + abs(h * math.sin(a))) / 2

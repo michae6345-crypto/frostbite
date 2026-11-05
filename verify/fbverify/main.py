@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 from . import checks as C
-from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli
+from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli, scrub
 
 VERIFY = Path(__file__).resolve().parents[1]
 ROOT = VERIFY.parent
@@ -27,7 +27,7 @@ PIPELINE = [
     ("G4.step_parts", C.g4_step_parts),
     ("G5.bom_kit", C.g5_bom_kit),
     ("G6.qmk_lint", C.g6_qmk_lint), ("G6.compile_default", lambda ctx: C.g6_compile(ctx, "default")),
-    ("G6.compile_ledtest", lambda ctx: C.g6_compile(ctx, "ledtest")), ("G6.production_uf2", C.g6_production_uf2),
+    ("G6.compile_bringup", lambda ctx: C.g6_compile(ctx, "bringup")), ("G6.production_uf2", C.g6_production_uf2),
     ("G6.firmware_harness", C.g6_firmware_harness), ("G6.oled_strip_panel", C.g6_oled_strip_panel),
     ("G7.host_tests", C.g7_host_tests),
     ("G8.package", C.g8_package),
@@ -37,10 +37,8 @@ PIPELINE = [
 
 # Audit items no tool here can settle. A green report does not cover them.
 NEEDS_REAL_PARTS = [
-    ("OLED flip", "docs/audit/firmware.md F2", "FROSTBITE_OLED_FLIP is set from reference boards. Flash ledtest with the OLED fitted and read the text."),
-    ("EC11 resolution", "docs/audit/firmware.md F6, electrical.md E9", "Resolution 4 may need two clicks per step on a 30/15 part. Turn the kit encoder in ledtest; direction is open too."),
-    ("Glow brightness", "docs/audit/case.md M2", "The light reaching the band is a model and an estimate. Print one corner with one SK6812 and look at it."),
-    ("LED data level", "docs/audit/electrical.md E3", "3.3 V data is below the datasheet VIH of 3.5 V at 5 V. Run the LED test in docs/BUILD.md on the real board."),
+    ("OLED flip", "docs/audit/firmware.md F2", "FROSTBITE_OLED_FLIP is set from reference boards. Flash bringup with the OLED fitted and read the text."),
+    ("EC11 resolution", "docs/audit/firmware.md F6, electrical.md E9", "Resolution 4 may need two clicks per step on a 30/15 part. Turn the kit encoder in bringup; direction is open too."),
     ("OLED flex clearance", "docs/audit/case.md M3", "The module's flex and tape height at the far end is unknown. Caliper the kit module against the lip gap."),
 ]
 
@@ -94,7 +92,7 @@ def write_report(records, path: Path, ctx: Ctx):
         L += ["", "## Not run", ""] + [f"- `{r['check']}`: {r['not_run_reason']}" for r in nr]
     L += ["", "## Fix loop", "", "Fix the cause, then rerun `verify/run.sh`. "
           "After 3 rounds on the same failure, a human decides (see verify/README.md).", ""]
-    path.write_text("\n".join(L).replace(str(Path.home()), "~"))
+    path.write_text(scrub("\n".join(L)))
 
 
 def main(argv=None):

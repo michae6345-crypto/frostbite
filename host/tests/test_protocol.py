@@ -4,7 +4,7 @@ import types
 import pytest
 
 from frostbite_host.device import (CCW, CW, HOLD, REPORT_LEN, TAP, EncoderEvent, HidTransport, KeyEvent,
-                                   OledLine, Ping, PingReply, SetAll, SetGlow, SetSelected,
+                                   OledLine, Ping, PingReply, SetAll, SetSelected,
                                    SetSlot, Status, Unknown, decode_device, decode_host, encode,
                                    encode_device, to_ascii)
 
@@ -14,7 +14,6 @@ HOST_MSGS = [
     SetAll((Status.RUN, Status.DONE, Status.NEEDS, Status.ERROR, Status.IDLE, Status.RUN)),
     OledLine(0, "claude#2 my-app  WAIT"),
     OledLine(1, ""),
-    SetGlow(0xFF, 0xB0, 0x20, 160),
     Ping(),
     SetSelected(3),
 ]
@@ -40,13 +39,13 @@ def test_exact_bytes_match_design_json():
     assert encode(SetSlot(2, Status.NEEDS)) == z([0x01, 2, 3]) + z(29)
     assert encode(SetAll((1, 0, 2, 3, 4, 0))) == z([0x02, 1, 0, 2, 3, 4, 0]) + z(25)
     assert encode(OledLine(1, "Bash(npm test)?")) == z([0x03, 1, 15]) + b"Bash(npm test)?" + z(14)
-    assert encode(SetGlow(1, 2, 3, 4)) == z([0x04, 1, 2, 3, 4]) + z(27)
     assert encode(Ping()) == z([0x05]) + z(31)
     assert encode(SetSelected(5)) == z([0x06, 5]) + z(30)
     assert decode_device(z([0x81, 6, 2])) == KeyEvent(6, HOLD)
     assert decode_device(z([0x82, CW, 1])) == EncoderEvent(1, 1)
     assert decode_device(z([0x82, CCW, 0])) == EncoderEvent(-1, 0)
     assert decode_device(z([0x05, 1, 3])) == PingReply(1, 3)
+    assert isinstance(decode_host(z([0x04, 1, 2, 3, 4])), Unknown)   # 0x04 is not assigned
 
 
 def test_oled_line_truncates_to_21_ascii():
@@ -71,7 +70,7 @@ def test_validation():
     with pytest.raises(ValueError):
         encode(OledLine(2, "x"))
     with pytest.raises(ValueError):
-        encode(SetGlow(256, 0, 0, 0))
+        encode_device(PingReply(256, 0))
 
 
 def test_unknown_and_malformed_device_reports():

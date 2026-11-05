@@ -26,25 +26,27 @@ The process exits 1 on any FAIL. NOT_RUN alone exits 0, so read the NOT_RUN list
 calling anything done. Tolerances are constants at the top of `fbverify/checks.py`: PCB positions
 0.05 mm, outline 0.1 mm, cutouts 14.0 ± 0.1 mm, CAD positions 0.1 mm.
 
-## How the Top is measured
+## How the Top and Bottom are measured
 
-`fbverify/topmodel.py` assumes no section height or opening shape. The plate axis is the largest flat
-face, and the frame comes from the outline, which must match `case.shell` ± 0.2 mm. The rotation is
-the one that leaves the design's key, encoder and OLED points open. Sections are taken at every mesh
-vertex height and wherever a real part starts or stops. They must integrate back to the mesh volume
-± 0.5 %, so the slicer cannot lose material unnoticed.
+`fbverify/topmodel.py` assumes no section height or opening shape. The axis is the largest flat face,
+and the frame comes from the outline, which must match `case.shell` ± 0.2 mm. The Top's rotation is
+the one that leaves the design's key, encoder and OLED points open. The Bottom's is the one that puts
+the USB notch on the back wall. Depth is measured from the plate top on the Top and from the rim on
+the Bottom. Sections are taken at every mesh vertex height and wherever a real part starts or stops.
+They must integrate back to the mesh volume ± 0.5 %, so the slicer cannot lose material unnoticed.
 
 `CAD/positions.json` is optional and is compared with `design.json` and the Top mesh if present.
 
 ## Self-test
 
-`--self-test` runs 57 fault cases and 14 harness assertions, listed in `fbverify/selftest.py`. Each
-case requires PASS on a clean copy, then FAIL with a reason naming the injected fault. A skipped case
-is listed in `selftest.json` and is not a pass.
+`--self-test` runs 102 fault cases and 13 harness assertions, listed in `fbverify/selftest.py`.
+Each case requires PASS on a clean copy, then FAIL with a reason naming the injected fault. A skipped
+case is listed in `selftest.json` and is not a pass. `fbverify/probe_fault.py` makes the cases that
+damage the real Top and Bottom, on a copy, with CadQuery.
 
-`fixtures/old_b1_Top.stl` is the audited blocked Top, tessellated from `Top.step` (SHA-256
-`94e8d2e54376959ea3a7be846a5e88537d7fa13eb7b8c0a7cf2d25036615ec39`). Swept with the bare PCB it gives
-194.8 mm³; the case audit got 193.86.
+`fixtures/old_b1_Top.stl` is the audited blocked part from the old case, where the inserts sat in a
+skirted Top (`Top.step` SHA-256 `94e8d2e54376959ea3a7be846a5e88537d7fa13eb7b8c0a7cf2d25036615ec39`).
+It stands in for the Bottom as a real tray that blocks the PCB: the PCB envelope alone meets 162.4 mm³ of it.
 
 ## Fix loop
 
@@ -56,4 +58,3 @@ decides: change the spec, accept a documented deviation, or change the check wit
 
 - `rules/JLCPCB-2L-1oz.kicad_dru`: `JLCPCB/JLCPCB-2L-1oz.kicad_dru` from https://github.com/Cimos/kicad-druid at commit `8af046d6a1839320a360a4b6790ac11eb27a78ae`, MIT licence. `G3.drc_jlcpcb` checks its SHA-256 on every run. The file says PTH annular ring 0.18 mm and JLCPCB publishes 0.20, so the check merges it with `PCB/frostbite.kicad_dru` rule by rule in `strictest_rules()`. The stricter bound wins. Plain concatenation fails because KiCad lets a later rule override an earlier one.
 - XIAO pin to GPIO table: Seeed Studio XIAO RP2040 wiki. Pads 1-7 are D0-D6, 8-11 are D7-D10, 12 is 3V3, 13 GND, 14 5V.
-- SK6812 MINI-E pins: datasheet, 1 VDD, 2 DOUT, 3 GND, 4 DIN. Used only when the symbol has no pin names.

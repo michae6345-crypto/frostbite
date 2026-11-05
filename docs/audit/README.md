@@ -1,5 +1,7 @@
 # Design audits
 
+Note: These audits describe the earlier lit design. The final design has no LEDs and is defined by [`design.json`](../../design.json).
+
 Independent reviews of Frostbite, written before the fix round. Each report records the state of the
 design at the time, so it is a record, not current status. `verify/REPORT.md` is current status.
 

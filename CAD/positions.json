@@ -100,46 +100,46 @@
   },
   "screws": [
     {
-      "x": -4.65,
-      "y": 9.0,
-      "insert": "Top",
-      "head": "Bottom underside",
-      "boss_od": 8.7
+      "x": -3.0,
+      "y": -3.0,
+      "insert": "Bottom",
+      "head": "plate top",
+      "boss_od": 7.6
     },
     {
-      "x": 65.8,
-      "y": 9.0,
-      "insert": "Top",
-      "head": "Bottom underside",
-      "boss_od": 8.7
+      "x": 64.15,
+      "y": -3.0,
+      "insert": "Bottom",
+      "head": "plate top",
+      "boss_od": 7.6
     },
     {
-      "x": -4.65,
-      "y": 62.1,
-      "insert": "Top",
-      "head": "Bottom underside",
-      "boss_od": 8.7
+      "x": -3.0,
+      "y": 86.15,
+      "insert": "Bottom",
+      "head": "plate top",
+      "boss_od": 7.6
     },
     {
-      "x": 65.8,
-      "y": 62.1,
-      "insert": "Top",
-      "head": "Bottom underside",
-      "boss_od": 8.7
+      "x": 64.15,
+      "y": 86.15,
+      "insert": "Bottom",
+      "head": "plate top",
+      "boss_od": 7.6
     }
   ],
   "shell": {
-    "w": 79.15,
+    "w": 75.15,
     "h": 97.15
   },
   "heights": {
-    "front_mm": 21.12,
-    "back_mm": 27.83,
-    "_note": "Top face above the desk at the front / back skin, centre line; keycaps add ~13.6 above the plate",
+    "case_mm": 17.4,
+    "head_top_mm": 20.4,
+    "_note": "Plate top above the desk, and screw head top; keycaps add ~13.6 above the plate",
     "case_bbox_desk_mm": [
-      79.15,
-      98.86,
-      27.86
+      75.15,
+      97.15,
+      17.4
     ]
   }
 }

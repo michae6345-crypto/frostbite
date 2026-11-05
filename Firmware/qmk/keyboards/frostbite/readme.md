@@ -1,8 +1,8 @@
 # Frostbite 9
 
 A 3x3 Hack Club Hackpad macropad for supervising coding agents: six agent-slot
-keys with status LEDs, Approve / Talk / Stop, an EC11 encoder, a 128x32 OLED and
-four underglow LEDs. Seeed XIAO RP2040.
+keys, Approve / Talk / Stop, an EC11 encoder and a 128x32 OLED that shows all
+status. Seeed XIAO RP2040.
 
 * Keyboard Maintainer: Frostbite contributors
 * Hardware Supported: Frostbite 9 PCB (Seeed XIAO RP2040)

@@ -22,6 +22,7 @@ D = fc.D
 EPS_VOL = 0.01      # mm^3, "no interference"
 RESULTS: list[tuple[str, bool, str]] = []
 WARN: list[str] = []
+OLED_HIGH = 0.2     # stack error the glass must survive: OLEDSupport printed tall, or the module not pressed down
 
 
 def rec(name, ok, detail):
@@ -98,8 +99,8 @@ def check_pocket(m):
     cx, cy = fc.PCB_W / 2, fc.PCB_H / 2
     rows = []
     ok = True
-    for name, z in (("Top", -5.0), ("Bottom", -12.0)):
-        r = Ray(m["parts"][name])
+    r = Ray(m["parts"]["Bottom"])
+    for name, z in (("at the PCB", 0.8), ("below it", -5.0)):
         w = r.first(P(cx, cy, z), (1, 0, 0)) + r.first(P(cx, cy, z), (-1, 0, 0))
         h = r.first(P(cx, cy, z), (0, -1, 0)) + r.first(P(cx, cy, z), (0, 1, 0))
         ok &= abs(w - want_w) < 0.01 and abs(h - want_h) < 0.01
@@ -130,7 +131,7 @@ def check_interference(m):
     v = sum(inter_vol(parts[p], c) for p in parts for c in down)
     rec("Interference: keycaps bottomed out (-4 mm)", v < EPS_VOL, f"overlap {v:.4f} mm^3")
     # PCB clearance to every printed part
-    dd = {p: dist(parts[p], ph["PCB"]) for p in ("Top", "GlowBand", "Bottom")}
+    dd = {p: dist(parts[p], ph["PCB"]) for p in ("Top", "Bottom")}
     rec("Printed parts clear the PCB by >= tolerance", min(dd.values()) >= fc.TOL - 1e-3,
         ", ".join(f"{k} {v:.2f}" for k, v in dd.items()) + " mm")
 
@@ -171,36 +172,47 @@ def check_keycaps(m):
     cap_minx = min(k["x"] for k in D["keys"]) - 9.1
     edge = -(fc.SHELL_W - fc.PCB_W) / 2
     rec("Keycaps inside the shell outline", cap_minx - edge >= 1.0, f"cap to outer skin {cap_minx - edge:.2f} mm in plan")
+    heads = [fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT, fc.SEAT + fc.HEAD_H)) for sx, sy in fc.SCREWS]
+    dh = min(dist(h, c.translate(cq.Vector(0, 0, dz))) for h in heads for c in caps for dz in (0.0, -4.0))
+    dk = min(dist(h, knob) for h in heads)
+    rec("Keycaps and knob clear the screw heads by >= 1 mm", min(dh, dk) >= 1.0, f"keycaps {dh:.2f}, knob {dk:.2f} mm")
 
 
 def check_inserts(m):
-    top, bot, band = m["parts"]["Top"], m["parts"]["Bottom"], m["parts"]["GlowBand"]
-    rt, rb = Ray(top), Ray(bot)
-    depth, dia, walls, rows = [], [], [], []
+    top, bot = m["parts"]["Top"], m["parts"]["Bottom"]
+    rb = Ray(bot)
+    depth, dia, walls = [], [], []
     for sx, sy in fc.SCREWS:
-        o = P(sx, sy + 2.0, fc.SKIRT_BOT - 1.0)            # inside the 4.7 bore, outside the 3.4 hole
-        depth.append(rt.first(o, (0, 0, 1)) - 1.0)          # mouth -> step to 3.4
-        z = fc.SKIRT_BOT + 2.0
+        o = P(sx, sy + 2.0, fc.RIM + 1.0)                   # inside the 4.7 bore, outside the 3.4 hole
+        depth.append(rb.first(o, (0, 0, -1)) - 1.0)         # mouth -> step to 3.4
+        z = fc.RIM - 2.0
         rr = []
         for a in range(0, 360, 15):
             d = (math.cos(math.radians(a)), math.sin(math.radians(a)), 0)
-            t0 = rt.first(P(sx, sy, z), d)
+            t0 = rb.first(P(sx, sy, z), d)
             rr.append(t0)
-            hs = [t for t in rt.hits(P(sx, sy, z), d) if t > t0 + 1e-4]
+            hs = [t for t in rb.hits(P(sx, sy, z), d) if t > t0 + 1e-4]
             walls.append(hs[0] - t0 if hs else math.inf)
         dia.append(2 * min(rr))
-    rec("Insert holes 4.7 x 4 deep (Top)", all(abs(d - 4.7) < 0.02 for d in dia) and all(abs(x - 4.0) < 0.02 for x in depth),
+    rec("Insert holes 4.7 x 4 deep (Bottom)", all(abs(d - 4.7) < 0.02 for d in dia) and all(abs(x - 4.0) < 0.02 for x in depth),
         f"dia {min(dia):.2f}, depth {min(depth):.2f}-{max(depth):.2f} mm")
-    rec("Wall around inserts >= 1.3 (ruthex min)", min(walls) >= 1.3, f"min wall {min(walls):.2f} mm")
-    # the insert boss is a circle of the side wall: it must stay outside the PCB insertion envelope
-    env_edge = [max(-fc.TOL - sx, sx - (fc.PCB_W + fc.TOL)) for sx, _ in fc.SCREWS]
-    gap = min(e - fc.BOSS_OD / 2 for e in env_edge)
-    hole_wall = min(e - fc.INSERT_HOLE / 2 for e in env_edge)
-    rec("Boss OD clear of the PCB insertion envelope", gap >= -1e-6,
-        f"boss OD {fc.BOSS_OD} edge to envelope {gap:.2f} mm, insert hole to envelope {hole_wall:.2f} mm")
-    env = fc.solid(fc.pocket_prism(fc.SKIRT_BOT, fc.PLATE_UNDER))
-    v_env = inter_vol(top, env)
-    rec("No Top material inside the PCB envelope below the plate", v_env < EPS_VOL, f"{v_env:.4f} mm^3")
+    env_gap = []                                            # plan distance, axis to the PCB insertion envelope
+    for sx, sy in fc.SCREWS:
+        dx = max(-fc.TOL - sx, sx - (fc.PCB_W + fc.TOL), 0)
+        dy = max(-fc.TOL - sy, sy - (fc.PCB_H + fc.TOL), 0)
+        env_gap.append(math.hypot(dx, dy))
+    skin = [min(sx + fc.SHELL_W / 2 - fc.PCB_W / 2, fc.PCB_W / 2 + fc.SHELL_W / 2 - sx,
+                sy + (fc.SHELL_H - fc.PCB_H) / 2, fc.PCB_H + (fc.SHELL_H - fc.PCB_H) / 2 - sy) for sx, sy in fc.SCREWS]
+    rec("Wall around inserts >= 1.3 (ruthex min)", min(walls) >= 1.3 and min(env_gap) - fc.INSERT_HOLE / 2 >= 1.3,
+        f"min wall {min(walls):.2f} mm by ray, {min(env_gap) - fc.INSERT_HOLE / 2:.2f} to the pocket corner, "
+        f"{min(skin) - fc.INSERT_HOLE / 2:.2f} to the skin")
+    # the insert boss is a circle of the tray corner: it must stay outside the PCB insertion envelope and inside the skin
+    gap = min(env_gap) - fc.BOSS_OD / 2
+    rec("Boss OD clear of the PCB insertion envelope", gap >= -1e-6 and min(skin) >= fc.BOSS_OD / 2 - 1e-6,
+        f"boss OD {fc.BOSS_OD} edge to envelope {gap:.2f} mm, to the skin {min(skin) - fc.BOSS_OD / 2:.2f} mm")
+    env = fc.solid(fc.pocket_prism(0.0, fc.RIM))
+    v_env = inter_vol(bot, env) + inter_vol(top, env)
+    rec("No printed material inside the PCB envelope", v_env < EPS_VOL, f"{v_env:.4f} mm^3 from the PCB underside to the rim")
     # distance from each feature's cutter to the insert cylinders
     feats = {f"{k['ref']} cutout": fc.cbox(k["x"], k["y"], fc.CLIP_POCKET, fc.CLIP_POCKET, fc.PLATE_UNDER, fc.PLATE_TOP)
              for k in D["keys"]}
@@ -208,25 +220,28 @@ def check_inserts(m):
     feats["encoder opening"] = fc.rrect(fc.EN["x"], fc.EN["y"], *fc.EC_OPEN, fc.PLATE_UNDER, fc.PLATE_TOP)
     feats["USB window"] = fc.box(fc.USB_CX - fc.UC["w"] / 2, fc.USB_CX + fc.UC["w"] / 2, -9, 1,
                                  fc.USB_CZ - fc.UC["h"] / 2, fc.USB_CZ + fc.UC["h"] / 2)
-    holes = [fc.solid(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.SKIRT_BOT, fc.SCREW_TIP + 0.4)) for sx, sy in fc.SCREWS]
+    holes = [fc.solid(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.SCREW_TIP - fc.BLIND_CLR, fc.PLATE_TOP)) for sx, sy in fc.SCREWS]
     near = min((dist(fc.solid(f), h), n) for n, f in feats.items() for h in holes)
     rec("Cutouts/OLED/encoder/USB clear of screw bosses", near[0] >= 1.2, f"closest: {near[1]} {near[0]:.2f} mm")
-    v, recess = 0.0, []
+    v, skins, ends, seat = 0.0, [], [], []
     for sx, sy in fc.SCREWS:
-        shank = fc.solid(fc.cyl(sx, sy, 1.5, fc.SEAT, fc.SCREW_TIP))
-        head = fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT - fc.HEAD_H, fc.SEAT))
-        for p in (top, band, bot):
+        shank = fc.solid(fc.cyl(sx, sy, 1.5, fc.SCREW_TIP, fc.SEAT))
+        head = fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT, fc.SEAT + fc.HEAD_H))
+        for p in (top, bot):
             v += inter_vol(p, shank) + inter_vol(p, head)
-        under = rb.first(P(sx, sy + 3.0, -100), (0, 0, 1)) - 100   # underside next to the counterbore
-        recess.append((fc.SEAT - fc.HEAD_H) - under)
-    eng = min(fc.SCREW_TIP, fc.SKIRT_BOT + fc.INSERT_DEPTH) - max(fc.SEAT, fc.SKIRT_BOT)
-    rec("M3x16: no clash, head hidden, full insert engagement",
-        v < EPS_VOL and min(recess) >= 0.15 and eng >= fc.INSERT_DEPTH - 1e-6,
-        f"overlap {v:.4f}, head recess {min(recess):.2f}-{max(recess):.2f} mm, thread in insert {eng:.1f} mm")
+        seat.append(dist(head, top))
+        h = rb.hits(P(sx, sy, -100), (0, 0, 1))             # underside, then the end of the blind hole
+        skins.append(h[1] - h[0])
+        ends.append(fc.SCREW_TIP - (h[1] - 100))
+    eng = min(fc.SEAT, fc.RIM) - max(fc.SCREW_TIP, fc.RIM - fc.INSERT_DEPTH)
+    rec("M3x16: no clash, head on the plate, full insert engagement, tip inside the case",
+        v < EPS_VOL and max(seat) < 1e-6 and eng >= fc.INSERT_DEPTH - 1e-6 and min(skins) >= 0.8 and min(ends) >= 0.3,
+        f"overlap {v:.4f}, head gap {max(seat):.2f}, thread in insert {eng:.1f} mm, tip {min(ends):.2f} above the hole end, "
+        f"{min(skins):.2f} of floor under the hole")
 
 
 def check_usb(m):
-    top = cq.Compound.makeCompound([m["parts"]["Top"], m["parts"]["GlowBand"]])
+    top = cq.Compound.makeCompound([m["parts"]["Top"], m["parts"]["Bottom"]])
     r = Ray(top)
     yw = -(fc.SHELL_H - fc.PCB_H) / 4          # mid back wall
     o = P(fc.USB_CX, yw, fc.USB_CZ)
@@ -236,11 +251,11 @@ def check_usb(m):
     cx, cz = fc.USB_CX + (xp - xm) / 2, fc.USB_CZ + (zp - zm) / 2
     rec_c = (fc.USB_CX, fc.USB_CZ)
     ok = abs(cx - rec_c[0]) <= 0.5 and abs(cz - rec_c[1]) <= 0.5 and w >= fc.UC["w"] - 0.01 and h >= fc.UC["h"] - 0.01
-    rec("USB-C opening (Top + band tongue) centred on receptacle (<=0.5)", ok,
+    rec("USB-C opening (Bottom notch + Top tongue) centred on receptacle (<=0.5)", ok,
         f"{w:.2f}x{h:.2f} at x {cx:.2f}, z {cz:.2f}; receptacle x {rec_c[0]:.2f}, z {rec_c[1]:.2f}")
     om = fc.solid(fc.usb_overmold())
-    v = sum(inter_vol(m["parts"][p], om) for p in ("Top", "GlowBand", "Bottom"))
-    c = min(dist(m["parts"][p], om) for p in ("Top", "GlowBand", "Bottom"))
+    v = sum(inter_vol(m["parts"][p], om) for p in ("Top", "Bottom"))
+    c = min(dist(m["parts"][p], om) for p in ("Top", "Bottom"))
     rec("12.5x7 cable overmold passes the wall", v < EPS_VOL, f"overlap {v:.4f} mm^3, clearance {c:.2f} mm per side")
 
 
@@ -274,11 +289,11 @@ def check_oled(m):
     ok = abs(mw - want_w) < 0.01 and abs(mh - want_h) < 0.01 and v < EPS_VOL
     rec("OLED window around the design window, module recess", ok,
         f"window {mw:.2f}x{mh:.2f} (design {w['w']}x{w['h']}), overlap {v:.4f}")
-    # the glass must stay below the plate top, also with thicker tape than planned
+    # the glass must stay below the plate top, also with the module sitting high
     below = fc.PLATE_TOP - fc.OLED_GLASS_Z1
-    worst = below - 2 * 0.1                     # 0.3 tape instead of 0.2, both layers
+    worst = below - OLED_HIGH
     rec("OLED glass not proud of the plate", below > 0 and worst > 0,
-        f"glass top {below:.2f} below the plate top, {worst:.2f} with 0.3 tape on both faces")
+        f"glass top {below:.2f} below the plate top, {worst:.2f} with the module {OLED_HIGH} high")
     # lip gap measured on the real Top, over the far end and over the header pins
     mo = fc.OL["module"]
     gaps = {}
@@ -316,9 +331,10 @@ def check_oled_support(m):
         f"closest {worst[0]:.2f} mm in plan: {worst[1]} ({len(rects)} pads and vias)")
     gaps = {n: dist(sup, m["ph"][n]) for n in ("PCB", "OLED_board", "OLED_pins", "OLED_glass")}
     dtop = dist(sup, m["parts"]["Top"])
-    ok = abs(gaps["PCB"] - fc.OLED_TAPE) < 1e-6 and abs(gaps["OLED_board"] - fc.OLED_TAPE) < 1e-6 and gaps["OLED_pins"] >= 0.5
+    h = sup.BoundingBox().zlen
+    ok = abs(h - fc.OLED_GAP) < 1e-6 and gaps["PCB"] < 1e-6 and gaps["OLED_board"] < 1e-6 and gaps["OLED_pins"] >= 0.5
     rec("OLEDSupport fills the gap under the module", ok and dtop >= 0.3,
-        f"printed height {sup.BoundingBox().zlen:.1f}, tape {gaps['PCB']:.1f} above and below, pins {gaps['OLED_pins']:.2f}, Top {dtop:.2f} mm")
+        f"printed height {h:.1f} = module gap {fc.OLED_GAP:.1f}, touches PCB and module board, pins {gaps['OLED_pins']:.2f}, Top {dtop:.2f} mm")
     mo = fc.OL["module"]
     inside = all(mo["x"] <= f[0] and f[1] <= mo["x"] + mo["w"] for f in (fc.SUPPORT_FAR, fc.SUPPORT_NEAR))
     far, near = fc.SUPPORT_FAR, fc.SUPPORT_NEAR
@@ -329,26 +345,19 @@ def check_oled_support(m):
         f"a press past x {near[1]} is over the pins, no lever on one pin row")
 
 
-def check_glow(m):
-    band, ph = m["parts"]["GlowBand"], m["ph"]
-    r = Ray(band)
-    gaps, cover = [], []
-    for g in fc.GLOW:
-        led = ph[f"glow{g['led']}_led"]
-        gaps.append(dist(band, led))
-        t = r.first(P(g["x"], g["y"], -fc.LED_T), (0, 0, -1))
-        cover.append(t)
-    rec("GlowBand: 2.0 tall light gap, pads under each glow LED",
-        fc.BAND_H >= 2.0 and all(c < 1.0 for c in cover) and min(gaps) >= fc.TOL - 1e-3,
-        f"band {fc.BAND_H:.1f} mm; LED-to-pad air {min(cover):.2f}-{max(cover):.2f} mm")
-    # everything of the band that stands inside the Top needs real clearance
-    top = m["parts"]["Top"]
-    inside = fc.solid(fc.box(-1, fc.PCB_W + 1, -0.05, fc.PCB_H + 1, fc.BAND_TOP + 0.01, 1))
-    riser = band.intersect(inside)
-    tongue = band.intersect(fc.solid(fc.box(0, fc.PCB_W, -9, -0.1, fc.BAND_TOP + 0.01, 1)))
-    dr, dt = dist(riser, top), dist(tongue, top)
-    rec("GlowBand risers clear the Top pocket", dr >= fc.TOL - 1e-3 and dt >= 0.2 - 1e-3,
-        f"pads and riser {dr:.2f} mm to the pocket wall, USB tongue {dt:.2f} mm to the notch")
+def check_seam(m):
+    top, bot = m["parts"]["Top"], m["parts"]["Bottom"]
+    touch = dist(top, bot)
+    h = Ray(cq.Compound.makeCompound([top, bot])).hits(P(fc.PCB_W / 2, -3.5, -50), (0, 0, 1))
+    tall = h[-1] - h[0] if h else 0.0
+    rec("Top sits on the Bottom rim, no gap, case height", touch < 1e-6 and abs(tall - fc.CASE_H) < 1e-3,
+        f"gap {touch:.2f} mm, {tall:.2f} mm tall")
+    # the tongue stands in the notch with real clearance on both sides
+    tongue = top.intersect(fc.solid(fc.box(0, fc.PCB_W, -9, -0.1, fc.USB_CZ, fc.RIM - 0.01)))
+    dt = dist(tongue, bot)
+    dp = dist(tongue, m["ph"]["PCB"])
+    rec("USB tongue clears the notch and the PCB", dt >= 0.2 - 1e-3 and dp >= fc.TOL - 1e-3,
+        f"{dt:.2f} mm to the notch, {dp:.2f} mm to the PCB")
 
 
 def check_bottom_pads(m):
@@ -364,7 +373,7 @@ def check_bottom_pads(m):
     plan_c, tail_c = cq.Compound.makeCompound(plan), cq.Compound.makeCompound(tails)
     under = fc.solid(fc.box(0, fc.PCB_W, 0, fc.PCB_H, -zone, 0))
     rows, ok = [], True
-    for name in ("Top", "GlowBand", "Bottom"):
+    for name in ("Top", "Bottom"):
         part = m["parts"][name]
         piece = part.intersect(under)
         if piece.Volume() > 1e-6:                # printed feature within 2.5 mm under the PCB
@@ -426,8 +435,7 @@ def path_groups(m):
     ph = m["ph"]
     rigid = {f"{k['ref']}_rigid": fc.solid(fc.switch_rigid(k["x"], k["y"])) for k in D["keys"]}
     # everything fixed to the PCB before it meets the switches, plus the OLED's ribbon and joint room
-    board = {k: v for k, v in ph.items()
-             if k == "PCB" or k.startswith(("XIAO", "EC11", "OLED", "glow")) or k.endswith("_led")}
+    board = {k: v for k, v in ph.items() if k == "PCB" or k.startswith(("XIAO", "EC11", "OLED"))}
     board["OLEDSupport"] = m["parts"]["OLEDSupport"]
     board.update({k: fc.solid(v) for k, v in fc.oled_envelopes().items()})
     pins = {k: v for k, v in ph.items() if k.endswith("_pins")}
@@ -471,48 +479,55 @@ def stage(name, moving, fixed, start):
         + ("clear" if not off else f"BLOCKED ({w:.2f} mm^3): {txt}"))
 
 
-# Negative control for the sweep: insert bosses 1.35 mm inside the PCB envelope, which block assembly
-LEGACY_X = (-3.0, 64.15)
-LEGACY_Y = (9.0, 62.1)
-
-
-def legacy_top(top):
-    out = top
-    for x in LEGACY_X:
-        for y in LEGACY_Y:
-            boss = fc.solid(fc.cyl(x, y, 8.7 / 2, fc.SKIRT_BOT, -fc.TOL))
-            out = out.fuse(boss)
+# Negative controls for the sweep, which must block assembly: bosses inside the PCB envelope, and a
+# USB window with no notch, which stops the XIAO receptacle
+def bad_bottom_bosses(bot):
+    out = bot
+    for sx, sy in fc.SCREWS:
+        x, y = sx + (1.5 if sx < 0 else -1.5), sy + (1.5 if sy < 0 else -1.5)
+        out = out.fuse(fc.solid(fc.cyl(x, y, fc.BOSS_OD / 2, 0.0, fc.RIM)))
     return out.clean()
+
+
+def bad_bottom_closed(bot):
+    plug = fc.box(fc.USB_CX - fc.UC["w"] / 2, fc.USB_CX + fc.UC["w"] / 2, -fc.MARGIN_Y, -fc.TOL,
+                  fc.USB_CZ + fc.UC["h"] / 2, fc.RIM)
+    return bot.fuse(fc.solid(plug)).clean()
 
 
 def check_assembly_path(m):
     """Assembly order from CAD/README.md, each step along its straight path."""
     parts, ph = m["parts"], m["ph"]
-    top = parts["Top"]
+    top, bot = parts["Top"], parts["Bottom"]
     rigid, board, pins, tails, caps = path_groups(m)
-    # this must report a blockage or the sweep proves nothing
-    w, off = sweep({"PCB": ph["PCB"]}, {"Top": legacy_top(top)}, -40.0, 1.0)
-    rec("Self-test: sweep FAILS on the old tuck bosses", w > 1.0,
-        f"old bosses block the PCB, {w:.1f} mm^3 overlap at the worst step (must be > 0)")
+    # these must report a blockage or the sweep proves nothing
+    w, _ = sweep({"PCB": ph["PCB"]}, {"Bottom": bad_bottom_bosses(bot)}, 40.0, 1.0)
+    rec("Self-test: sweep FAILS on bosses inside the PCB envelope", w > 1.0,
+        f"they block the PCB, {w:.1f} mm^3 overlap at the worst step (must be > 0)")
+    w, _ = sweep({"XIAO_usb": ph["XIAO_usb"]}, {"Bottom": bad_bottom_closed(bot)}, 20.0, 0.5)
+    rec("Self-test: sweep FAILS on a USB window with no notch", w > 1.0,
+        f"it stops the receptacle, {w:.1f} mm^3 overlap at the worst step (must be > 0)")
 
-    inserts = {f"insert{i}": fc.solid(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.SKIRT_BOT, fc.SKIRT_BOT + fc.INSERT_DEPTH))
+    inserts = {f"insert{i}": fc.solid(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.RIM - fc.INSERT_DEPTH, fc.RIM))
                for i, (sx, sy) in enumerate(fc.SCREWS)}
-    stage("1 inserts into Top", inserts, {"Top": top}, -30.0)
+    stage("1 inserts into Bottom", inserts, {"Bottom": bot}, +30.0)
     stage("2 switches into plate (no clips)", rigid, {"Top": top}, +30.0)
-    stage("3 PCB + soldered parts + OLED on J1 into Top", board, {"Top": top, **rigid}, -45.0)
+    stage("3 PCB + soldered parts + OLED on J1 onto the switches", board, {"Top": top, **rigid}, -45.0)
     check_oled_misalignment(m)
-    seated = {"Top": top, **rigid, **board, **pins, **tails}
-    stage("4 GlowBand onto Top", {"GlowBand": parts["GlowBand"]}, seated, -45.0)
-    stage("5 Bottom onto stack", {"Bottom": parts["Bottom"]}, {**seated, "GlowBand": parts["GlowBand"]}, -45.0)
-    screws = {}
-    for i, (sx, sy) in enumerate(fc.SCREWS):
-        screws[f"shank{i}"] = fc.solid(fc.cyl(sx, sy, 1.5, fc.SEAT, fc.SCREW_TIP))
-        screws[f"head{i}"] = fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT - fc.HEAD_H, fc.SEAT))
-    case = {k: parts[k] for k in ("Top", "GlowBand", "Bottom")}
-    stage("6 screws from underneath", screws, case, -40.0)
+    stage("4 Top + PCB into Bottom", {"Top": top, **rigid, **board, **pins, **tails}, {"Bottom": bot}, +20.0)
+    stage("5 screws from the plate top", screw_solids(), {"Top": top, "Bottom": bot}, +40.0)
     enc = {k: v for k, v in ph.items() if k.startswith("EC11")}
-    stage("7 keycaps onto stems", caps, {"Top": top, **enc, "OLED_glass": ph["OLED_glass"]}, +30.0)
-    stage("8 knob onto shaft", {"Knob": parts["Knob"]}, {"Top": top, **enc, **caps}, +30.0)
+    heads = {k: v for k, v in screw_solids().items() if k.startswith("head")}
+    stage("6 keycaps onto stems", caps, {"Top": top, **enc, "OLED_glass": ph["OLED_glass"], **heads}, +30.0)
+    stage("7 knob onto shaft", {"Knob": parts["Knob"]}, {"Top": top, **enc, **caps, **heads}, +30.0)
+
+
+def screw_solids():
+    out = {}
+    for i, (sx, sy) in enumerate(fc.SCREWS):
+        out[f"shank{i}"] = fc.solid(fc.cyl(sx, sy, 1.5, fc.SCREW_TIP, fc.SEAT))
+        out[f"head{i}"] = fc.solid(fc.cyl(sx, sy, fc.HEAD_D / 2, fc.SEAT, fc.SEAT + fc.HEAD_H))
+    return out
 
 
 def tri_normals(face: cq.Face, tol=0.05):
@@ -579,7 +594,7 @@ def check_printability(printed, m):
                     + (f" (max span {max(b[0] for b in br):.1f} mm)" if br else ""))
     rec("Printable without supports (no >45 deg overhang, bridges <= 10 mm)", ok_all, "; ".join(rows))
     mins, walls_ok = [], True
-    for name in ("Top", "GlowBand", "Bottom", "OLEDSupport"):
+    for name in ("Top", "Bottom", "OLEDSupport"):
         sp = thin_walls(m["parts"][name])
         walls_ok &= not any(x[0] < 0.8 for x in sp)
         mins.append(f"{name} {sp[0][0]:.2f}" if sp else f"{name} ok")
@@ -630,7 +645,7 @@ def main():
     check_encoder(m)
     check_oled(m)
     check_oled_support(m)
-    check_glow(m)
+    check_seam(m)
     check_bottom_pads(m)
     check_assembly_path(m)
     check_printability(printed, m)

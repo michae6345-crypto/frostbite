@@ -47,12 +47,6 @@
       "note": "I2C1 SCL"
     },
     {
-      "xiao": "D6",
-      "gpio": "GP0",
-      "net": "LED_DIN",
-      "note": "SK6812 data via PIO"
-    },
-    {
       "xiao": "D7",
       "gpio": "GP1",
       "net": "ENC_A"
@@ -74,17 +68,15 @@
     }
   ],
   "power": {
-    "5V": "XIAO 5V (VBUS) -> SK6812 VDD",
     "3V3": "XIAO 3V3 -> OLED VCC",
-    "GND": "common",
-    "note": "LED data is 3.3 V into 5 V SK6812s; common on Hackpad builds and usually fine, flagged in docs/VERIFICATION.md. No decoupling caps in the kit."
+    "GND": "common"
   },
   "matrix": {
     "rows": 3,
     "cols": 3,
     "diode_direction": "COL2ROW",
     "diode": "1N4148 through-hole, cathode toward the row",
-    "encoder_push": "not wired (no free GPIO)"
+    "encoder_push": "not wired"
   },
   "pcb": {
     "w": 61.15,
@@ -104,8 +96,7 @@
       "row": 0,
       "col": 0,
       "x": 11.525,
-      "y": 33.525,
-      "led": 0
+      "y": 33.525
     },
     {
       "ref": "SW2",
@@ -114,8 +105,7 @@
       "row": 0,
       "col": 1,
       "x": 30.575,
-      "y": 33.525,
-      "led": 1
+      "y": 33.525
     },
     {
       "ref": "SW3",
@@ -124,8 +114,7 @@
       "row": 0,
       "col": 2,
       "x": 49.625,
-      "y": 33.525,
-      "led": 2
+      "y": 33.525
     },
     {
       "ref": "SW4",
@@ -134,8 +123,7 @@
       "row": 1,
       "col": 0,
       "x": 11.525,
-      "y": 52.575,
-      "led": 5
+      "y": 52.575
     },
     {
       "ref": "SW5",
@@ -144,8 +132,7 @@
       "row": 1,
       "col": 1,
       "x": 30.575,
-      "y": 52.575,
-      "led": 4
+      "y": 52.575
     },
     {
       "ref": "SW6",
@@ -154,8 +141,7 @@
       "row": 1,
       "col": 2,
       "x": 49.625,
-      "y": 52.575,
-      "led": 3
+      "y": 52.575
     },
     {
       "ref": "SW7",
@@ -164,8 +150,7 @@
       "row": 2,
       "col": 0,
       "x": 11.525,
-      "y": 71.625,
-      "led": 6
+      "y": 71.625
     },
     {
       "ref": "SW8",
@@ -174,8 +159,7 @@
       "row": 2,
       "col": 1,
       "x": 30.575,
-      "y": 71.625,
-      "led": 7
+      "y": 71.625
     },
     {
       "ref": "SW9",
@@ -184,49 +168,15 @@
       "row": 2,
       "col": 2,
       "x": 49.625,
-      "y": 71.625,
-      "led": 8
+      "y": 71.625
     }
   ],
-  "key_led_offset": "SK6812 MINI-E reverse-mounted under each switch's LED window, at the position the MX footprint defines (typically switch centre + (0, +5.08))",
-  "leds": {
-    "type": "SK6812 MINI-E",
-    "count": 13,
-    "chain_order": "per-key 0-8 (serpentine, see keys[].led), then glow 9-12",
-    "glow": [
-      {
-        "led": 9,
-        "x": 5.0,
-        "y": 25.4,
-        "side": "bottom",
-        "note": "shines down into the clear PETG light-gap band"
-      },
-      {
-        "led": 10,
-        "x": 56.15,
-        "y": 25.4,
-        "side": "bottom"
-      },
-      {
-        "led": 11,
-        "x": 56.15,
-        "y": 80.6,
-        "side": "bottom"
-      },
-      {
-        "led": 12,
-        "x": 5.0,
-        "y": 80.6,
-        "side": "bottom"
-      }
-    ]
-  },
   "encoder": {
     "type": "Alps EC11E with switch",
     "x": 49.15,
     "y": 13.0,
     "push": "unconnected",
-    "knob": "18 mm knurled aluminium, 6 mm D-shaft",
+    "knob": "18 mm knob printed in black, 6 mm D-shaft",
     "note": "Footprint rotated 90 deg (shaft position unchanged) so the A/C/B pins sit at y 20.5, clear of J1."
   },
   "oled": {
@@ -256,18 +206,19 @@
       "pitch": 2.54,
       "centre_y": 13.0
     },
-    "mount": "Module soldered to J1 with the header's plastic spacer removed; module_gap and the printed OLEDSupport set the height (see case.oled_support)"
+    "mount": "Module soldered to J1 with the header's plastic spacer removed; it rests on the printed OLEDSupport, which sets its height (see case.oled_support)"
   },
   "case": {
     "shell": {
-      "w": 79.15,
+      "w": 75.15,
       "h": 97.15,
-      "corner": 12,
-      "bezel": 9,
-      "tilt_deg": 4
+      "height": 17.4,
+      "corner": 3,
+      "bezel": 7.0,
+      "tilt_deg": 0
     },
-    "style": "matte black PETG Top and Bottom, floating top plate over a ~2 mm ice-blue light gap (clear PETG band), screws hidden underneath",
-    "inserts": "4 x M3 heat-set (OD 5, L 4, hole 4.7) in the Top part; M3x16 screws from underneath through Bottom and GlowBand",
+    "style": "all black flat sandwich: flat Top plate on a plain Bottom tray, no tilt and no gap. Top, Bottom, OLEDSupport and Knob printed in black. Four M3 screw heads show at the corners of the plate",
+    "inserts": "4 x M3 heat-set (OD 5, L 4, hole 4.7) in the Bottom corners, flush with the rim; M3x16 screws from the plate top through the Top into the inserts",
     "usb_cutout": {
       "w": 13.5,
       "h": 8.0,
@@ -275,31 +226,30 @@
     },
     "tolerance": 0.3,
     "screws": {
-      "_about": "M3 heat-set inserts in the Top, screws up from underneath; each boss (OD 8.7 = hole 4.7 + 2 x 2.0 wall) is a circle of the side wall, fully outside the PCB insertion envelope (PCB + tolerance) because the PCB enters the Top from the skirt side. Side bezel = tolerance 0.3 + boss 8.7 = 9.0 from the PCB edge, so x = -(0.3 + 4.35) and 61.15 + 4.65",
+      "_about": "Screw heads sit on the plate top. M3 heat-set inserts in the Bottom corners; each boss (OD 7.6 = hole 4.7 + 2 x 1.45 wall) is a circle of the tray corner, fully outside the PCB insertion envelope (PCB + tolerance) because the PCB drops into the Bottom from above. Axes are 3.0 outside the PCB corner in x and y, 4.0 from the outer skin, so the border is 7.0.",
       "positions": [
         {
-          "x": -4.65,
-          "y": 9.0
+          "x": -3.0,
+          "y": -3.0
         },
         {
-          "x": 65.8,
-          "y": 9.0
+          "x": 64.15,
+          "y": -3.0
         },
         {
-          "x": -4.65,
-          "y": 62.1
+          "x": -3.0,
+          "y": 86.15
         },
         {
-          "x": 65.8,
-          "y": 62.1
+          "x": 64.15,
+          "y": 86.15
         }
       ],
-      "boss_od": 8.7
+      "boss_od": 7.6
     },
     "oled_support": {
-      "_about": "Printed OLEDSupport part. The module's black header plastic is removed and the module rests on this part, so module_gap (module board underside above the PCB top) sets the stack: glass 0.55 below the plate top, 1.0 of air under the lip. Printed height = module_gap - 2 x tape. Replaces oled.mount's 2.5 mm header figure.",
-      "module_gap": 1.8,
-      "tape": 0.2
+      "_about": "Printed OLEDSupport part. The module's black header plastic is removed and the module rests on this part, so module_gap (module board underside above the PCB top) sets the stack: glass 0.55 below the plate top, 1.0 of air under the lip. Printed height = module_gap.",
+      "module_gap": 1.8
     }
   },
   "firmware": {
@@ -326,18 +276,10 @@
       "needs": 3,
       "error": 4
     },
-    "status_colours": {
-      "idle": "#eef2f5 dim",
-      "run": "#3d8bff",
-      "done": "#2fbf5b",
-      "needs": "#ffb020 slow pulse",
-      "error": "#ff4d4f blink"
-    },
     "host_to_device": {
       "0x01 SET_SLOT": "[0x01, slot 0-5, status]",
       "0x02 SET_ALL": "[0x02, s0, s1, s2, s3, s4, s5]",
       "0x03 OLED_LINE": "[0x03, line 0-1, len, up to 21 ASCII bytes]",
-      "0x04 SET_GLOW": "[0x04, r, g, b, brightness 0-255]",
       "0x05 PING": "[0x05] -> device answers [0x05, protocol_version=1, selected_slot]",
       "0x06 SET_SELECTED": "[0x06, slot 0-5]"
     },
@@ -345,6 +287,13 @@
       "0x81 KEY": "[0x81, key index 0-8 (keys[] order), action 1=tap 2=hold]",
       "0x82 ENCODER": "[0x82, 1=clockwise 0xFF=counter-clockwise, selected_slot after the move]"
     },
-    "fallback_without_host": "If no PING for 5 s, keys send keycodes instead: agent1-6 = F13-F18, approve = F19, talk = F20 (held while held), stop = Escape; encoder = volume. Status LEDs fade to idle."
+    "fallback_without_host": "If no PING for 5 s, keys send keycodes instead: agent1-6 = F13-F18, approve = F19, talk = F20 (held while held), stop = Escape; encoder = volume.",
+    "status_words": {
+      "idle": "IDLE",
+      "run": "RUN",
+      "done": "DONE",
+      "needs": "WAIT",
+      "error": "ERR"
+    }
   }
 }

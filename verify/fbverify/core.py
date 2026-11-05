@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import datetime as _dt
+import getpass
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -21,6 +23,12 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def scrub(text: str) -> str:
+    """Evidence goes into a public repo: the home folder becomes ~, and the username goes wherever else a tool
+    printed it, such as pytest's /tmp/pytest-of-<user>/."""
+    return re.sub(rf"\b{re.escape(getpass.getuser())}\b", "user", text.replace(str(Path.home()), "~"))
 
 
 def tail(text: str, n: int = TAIL_LINES) -> list[str]:
@@ -125,8 +133,7 @@ class Check:
     def write(self) -> dict:
         rec = self.record()
         self.ctx.evidence_dir.mkdir(parents=True, exist_ok=True)
-        # Evidence is committed to a public repo: show the home folder as ~ instead of the local username.
-        text = json.dumps(rec, indent=2).replace(str(Path.home()), "~")
+        text = scrub(json.dumps(rec, indent=2))
         (self.ctx.evidence_dir / f"{self.id}.json").write_text(text + "\n")
         return rec
 

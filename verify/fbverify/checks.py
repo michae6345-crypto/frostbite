@@ -4,6 +4,8 @@ A status comes only from a tool exit code, or a value parsed from a file and com
 design.json. A missing input or tool is NOT_RUN, never PASS."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 import re
@@ -21,13 +23,14 @@ XIAO_RP2040_GPIO = {"D0": "GP26", "D1": "GP27", "D2": "GP28", "D3": "GP29", "D4"
 # XIAO castellated pad numbering: 1..7 = D0..D6 down the left, 8..11 = D7..D10, 12 3V3, 13 GND, 14 5V.
 XIAO_PADNUM = {**{str(i + 1): f"D{i}" for i in range(7)}, "8": "D7", "9": "D8", "10": "D9", "11": "D10",
                "12": "3V3", "13": "GND", "14": "5V"}
-# Hackpad kit contents, from the Hackpad parts page (docs/VERIFICATION.md).
-KIT = {"switches": 16, "keycaps": 16, "diodes": 20, "encoders": 2, "oled": 1, "leds": 16,
+# Hackpad kit contents this design draws on, from the Hackpad parts page (docs/VERIFICATION.md).
+KIT = {"switches": 16, "keycaps": 16, "diodes": 20, "encoders": 2, "oled": 1,
        "screws": 6, "inserts": 6, "mcu_xiao_rp2040": 1}
 JLC_DRU = "verify/rules/JLCPCB-2L-1oz.kicad_dru"
 JLC_DRU_SHA256 = "292b812a764c76785446b9de5e00c9e76bc58bd4019071f1f99294e81f3874d2"
 JLC_PTH_ANNULAR_MIN = 0.20   # jlcpcb.com/capabilities/pcb-capabilities; the pinned third-party file says 0.18
-PARTS = ("Top", "Bottom", "GlowBand", "Knob", "OLEDSupport")
+PARTS = ("Top", "Bottom", "Knob", "OLEDSupport")
+LED_WORDS = re.compile(r"ws2812|rgb_?matrix|rgb_?light", re.I)   # no firmware file may mention these: the design has no LEDs
 POS_TOL = 0.05
 OUTLINE_TOL = 0.1
 CUTOUT_TOL = 0.1
@@ -49,8 +52,18 @@ OLED_ACTIVE_DX, OLED_ACTIVE_DY = (0.0, 3.5), 1.5
 OLED_YAW, OLED_SHIFT = 1.0, 0.1             # soldered to J1 before the Top: pin play about the header, CAD/README.md
 SHELL_TOL = 0.2
 INSERT_HOLE, INSERT_HOLE_TOL = 4.7, 0.1
+SCREW_HOLE, SCREW_HOLE_TOL = 3.4, 0.1      # clearance for the M3 through the Top and below the insert, CAD/README.md
+M3_SHANK = 3.0
+INSERT_WALL_MIN = 1.3       # heat-set insert maker's minimum, CAD/README.md
+FLOOR_SKIN_MIN = 0.8        # printed floor left under a blind hole
 USB_WALL_Y = (-0.5, -3.5, -6.5)
-SWEEP_LIMIT = 0.01          # mm3 of material inside the PCB envelope, over the whole path
+# XIAO RP2040 underside, from the PCB underside down. Receptacle overhangs the PCB edge, docs/DIMENSIONS.md.
+XIAO_T = 1.2
+XIAO_SHIELD = (12.0, 11.0, 1.0)             # w, h, height; centred 13.5 from the back edge, on the USB axis
+USB_W, USB_H, USB_LEN, USB_OVERHANG = 8.94, 3.26, 7.35, 1.4
+USB_Z = -(XIAO_T + USB_H / 2)               # receptacle centre below the PCB underside
+THT_TAIL, SMD_JOINT = 2.0, 0.3              # trimmed lead and solder joint below the PCB, docs/BUILD.md
+SWEEP_LIMIT = 0.01          # mm3 of Bottom met by one moving part, over the whole path
 KB_DIR = "Firmware/qmk/keyboards/frostbite"
 
 
@@ -189,26 +202,32 @@ def g0_studio_constraints(ctx: Ctx) -> Check:
 
 
 def g0_design_json(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G0.design_json", "G0", "design.json internal consistency (pins, matrix, LED indices, PCB size)")
+    chk = Check(ctx, "G0.design_json", "G0", "design.json internal consistency (pins, matrix, no LEDs, flat case, PCB size)")
     d = design(chk)
     if d is None:
         return chk
     import jsonschema
     schema = {
         "type": "object",
-        "required": ["pins", "matrix", "pcb", "keys", "leds", "encoder", "oled", "case", "mcu", "firmware"],
+        "required": ["pins", "matrix", "pcb", "keys", "power", "encoder", "oled", "case", "mcu", "firmware"],
         "properties": {
             "pins": {"type": "array", "items": {"type": "object", "required": ["xiao", "gpio", "net"]}},
-            "keys": {"type": "array", "items": {"type": "object", "required": ["ref", "row", "col", "x", "y", "led"]}},
+            "keys": {"type": "array", "items": {"type": "object", "required": ["ref", "row", "col", "x", "y"]}},
             "pcb": {"type": "object", "required": ["w", "h", "layers"]},
             "matrix": {"type": "object", "required": ["rows", "cols", "diode_direction"]},
-            "leds": {"type": "object", "required": ["count", "glow"]},
         }}
     errs = sorted(jsonschema.Draft202012Validator(schema).iter_errors(d), key=lambda e: list(e.path))
     for e in errs:
         chk.fail(f"schema: {'/'.join(map(str, e.path))}: {e.message}")
     if errs:
         return chk
+    if "leds" in d:
+        chk.fail("leds: block is back in design.json, the design has no LEDs")
+    stray = [k["ref"] for k in d["keys"] if "led" in k]
+    if stray:
+        chk.fail(f"keys: {stray} carry an led index, the design has no LEDs")
+    if set(d["power"]) != {"3V3", "GND"}:
+        chk.fail(f"power: rails {sorted(d['power'])} != ['3V3', 'GND']")
     pins = d["pins"]
     for k in ("xiao", "gpio", "net"):
         vals = [p[k] for p in pins]
@@ -223,10 +242,12 @@ def g0_design_json(ctx: Ctx) -> Check:
             chk.fail(f"pins: {p['xiao']} is {ref} on the XIAO RP2040, design.json says {p['gpio']}")
     m = d["matrix"]
     need = [f"ROW{i}" for i in range(m["rows"])] + [f"COL{i}" for i in range(m["cols"])] + \
-        ["SDA", "SCL", "LED_DIN", "ENC_A", "ENC_B"]
+        ["SDA", "SCL", "ENC_A", "ENC_B"]
     for n in need:
         if net_of(d, n) is None:
             chk.fail(f"pins: net {n} not assigned to any XIAO pin")
+    for n in sorted({p["net"] for p in pins} - set(need)):
+        chk.fail(f"pins: net {n} is not a net of this design")
     keys = d["keys"]
     if len(keys) != m["rows"] * m["cols"]:
         chk.fail(f"keys: {len(keys)} keys but matrix is {m['rows']}x{m['cols']}")
@@ -243,9 +264,6 @@ def g0_design_json(ctx: Ctx) -> Check:
             dist = math.dist((keys[a]["x"], keys[a]["y"]), (keys[b]["x"], keys[b]["y"]))
             if dist < 19.0:
                 chk.fail(f"keys: {keys[a]['ref']}-{keys[b]['ref']} {dist:.3f} mm apart < 19.0 (MX pitch 19.05)")
-    leds = [k["led"] for k in keys] + [g["led"] for g in d["leds"]["glow"]]
-    if sorted(leds) != list(range(d["leds"]["count"])):
-        chk.fail(f"leds: indices {sorted(leds)} are not exactly 0..{d['leds']['count'] - 1}")
     if d["pcb"]["w"] > 100 or d["pcb"]["h"] > 100:
         chk.fail(f"pcb: {d['pcb']['w']} x {d['pcb']['h']} exceeds 100 x 100")
     if d["pcb"]["layers"] != 2:
@@ -255,7 +273,14 @@ def g0_design_json(ctx: Ctx) -> Check:
     inputs_count = len(keys) + 1  # + encoder
     if len(keys) > 16:  # kit limit; the "< 16 inputs" rule is not on the live pages (docs/audit/hackpad-rules.md)
         chk.fail(f"{len(keys)} switches > 16 in the kit")
-    chk.details = {"pins": len(pins), "keys": len(keys), "leds": d["leds"]["count"], "inputs": inputs_count}
+    tilt = d["case"]["shell"].get("tilt_deg")
+    if tilt != 0:
+        chk.fail(f"case.shell.tilt_deg {tilt} != 0: the case is flat")
+    if "tape" in d["case"].get("oled_support", {}):
+        chk.fail("case.oled_support.tape: the OLEDSupport height is module_gap, with no tape")
+    if any("GLOW" in k.upper() for k in d["protocol"]["host_to_device"]):
+        chk.fail("protocol: SET_GLOW is back, the design has no LEDs")
+    chk.details = {"pins": len(pins), "keys": len(keys), "inputs": inputs_count}
     return chk
 
 
@@ -311,25 +336,10 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
     else:
         if enc[0].get("pin_a") != G("ENC_A") or enc[0].get("pin_b") != G("ENC_B"):
             chk.fail(f"encoder pins A/B {enc[0].get('pin_a')}/{enc[0].get('pin_b')} != design {G('ENC_A')}/{G('ENC_B')}")
-    ws = kb.get("ws2812") or {}
-    if ws.get("pin") != G("LED_DIN"):
-        chk.fail(f"ws2812.pin {ws.get('pin')} != design LED_DIN {G('LED_DIN')}")
-    if ws.get("driver") != "vendor":
-        chk.fail(f"ws2812.driver {ws.get('driver')!r} != 'vendor' (RP2040 PIO, design.json pins note)")
-    rgbm = kb.get("rgb_matrix") or {}
-    layout = rgbm.get("layout")
-    led_count = len(layout) if layout is not None else (kb.get("rgblight") or {}).get("led_count")
-    if led_count != d["leds"]["count"]:
-        chk.fail(f"LED count {led_count} != design {d['leds']['count']}")
-    if layout:
-        by_led = {k["led"]: k for k in d["keys"]}
-        for i, e in enumerate(layout):
-            k = by_led.get(i)
-            mtx = e.get("matrix")
-            if k is not None and mtx != [k["row"], k["col"]]:
-                chk.fail(f"rgb_matrix.layout[{i}].matrix {mtx} != design {k['ref']} [{k['row']}, {k['col']}] (led {i})")
-            if k is None and mtx is not None:
-                chk.fail(f"rgb_matrix.layout[{i}] has matrix {mtx} but design led {i} is a glow LED")
+    for f in fw_sources(ctx):                   # keyboard.json first of all: no ws2812, rgb_matrix or rgblight anywhere
+        hits = sorted({m.group(0).lower() for m in LED_WORDS.finditer(chk.read(f))})
+        if hits:
+            chk.fail(f"{f.name} mentions {hits}: the design has no LEDs")
     lays = kb.get("layouts") or {}
     if len(lays) != 1:
         chk.fail(f"{len(lays)} layouts defined, expected 1")
@@ -369,7 +379,7 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
                 chk.fail(f"{key} {have} != design {want}")
     if not (kb.get("features") or {}).get("raw"):
         chk.fail("features.raw is not true (Raw HID protocol needs RAW_ENABLE)")
-    for km in ("default", "ledtest"):
+    for km in ("default", "bringup"):
         kp = ctx.p(KB_DIR) / "keymaps" / km / "keymap.c"
         if not kp.is_file():
             chk.fail(f"keymaps/{km}/keymap.c missing")
@@ -380,8 +390,8 @@ def g2_firmware_pins(ctx: Ctx) -> Check:
         if n is None:
             chk.fail(f"keymaps/{km}: no LAYOUT(...) call found")
     chk.details = {"expected": {"rows": exp_rows, "cols": exp_cols, "enc": [G("ENC_A"), G("ENC_B")],
-                                "ws2812": G("LED_DIN"), "sda_scl": [G("SDA"), G("SCL")]},
-                   "found": {"rows": rows, "cols": cols, "enc": enc, "ws2812": ws, "led_count": led_count}}
+                                "sda_scl": [G("SDA"), G("SCL")]},
+                   "found": {"rows": rows, "cols": cols, "enc": enc}}
     return chk
 
 
@@ -397,11 +407,6 @@ def _pin_role(node, comp_kind):
             if k in pf.replace(".", "").replace("+", ""):
                 return {"VBUS": "5V"}.get(k, k)
         return XIAO_PADNUM.get(pin)
-    if comp_kind == "led":
-        for k in ("DIN", "DOUT", "VDD", "GND", "VSS"):
-            if k in pf:
-                return {"VSS": "GND"}.get(k, k)
-        return {"1": "VDD", "2": "DOUT", "3": "GND", "4": "DIN"}.get(pin)  # SK6812 MINI-E datasheet
     if comp_kind == "diode":
         if pf in ("K", "A"):
             return pf
@@ -419,7 +424,7 @@ def classify(comp):
     ref = comp["ref"].upper()
     if "XIAO" in s:
         return "xiao"
-    if re.search(r"SK6812|WS2812|NEOPIXEL", s):
+    if re.search(r"SK6812|WS2812|NEOPIXEL|(?<![A-Z])LED", s) or ref.startswith("LED"):   # (?<!...): not OLED
         return "led"
     if re.search(r"ROTARY|EC11|ENCODER", s):
         return "enc"
@@ -435,7 +440,7 @@ def classify(comp):
 
 
 def g2_netlist(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G2.netlist", "G2", "Schematic netlist vs design.json (XIAO nets, matrix, OLED order, LED chain, power)")
+    chk = Check(ctx, "G2.netlist", "G2", "Schematic netlist vs design.json (XIAO nets, matrix, OLED order, 3V3 and GND rails, no 5V, no LEDs)")
     d = design(chk)
     kf = kicad_files(ctx)
     if d is None:
@@ -476,11 +481,19 @@ def check_netlist(chk: Check, d: dict, nl: dict):
         got = pin_net.get((X, p["xiao"]))
         if not is_net(got, p["net"]):
             chk.fail(f"XIAO {p['xiao']} net {got!r} != design {p['net']!r}")
-    for rail in ("5V", "3V3", "GND"):
+    for rail in ("3V3", "GND"):
         got = pin_net.get((X, rail))
         if got is None or not is_net(got, *POWER_ALIASES[rail]):
             chk.fail(f"XIAO {rail} pin net {got!r} is not a {rail} net")
-    netname = {r: pin_net.get((X, r)) for r in ("5V", "3V3", "GND")}
+    netname = {r: pin_net.get((X, r)) for r in ("3V3", "GND")}
+    five = sorted(n for n in nets if is_net(n, *POWER_ALIASES["5V"]))
+    if five:
+        chk.fail(f"schematic has a 5 V net {five}, the only rails are 3V3 and GND")
+    used = {p["xiao"] for p in d["pins"]}
+    for pin in ["5V"] + sorted(set(XIAO_RP2040_GPIO) - used):      # free pins stay free
+        got = pin_net.get((X, pin))
+        if got is not None and len(nets.get(got, [])) > 1:
+            chk.fail(f"XIAO {pin} is on net {got!r} with other parts, design leaves it free")
     # Matrix path: COLc, switch, diode A->K, ROWr, or the diode first.
     by_ref = {k["ref"]: k for k in d["keys"]}
     diodes = [r for r, k in kinds.items() if k == "diode"]
@@ -516,24 +529,9 @@ def check_netlist(chk: Check, d: dict, nl: dict):
             got = pin_net.get((O, f"#{i}"))
             if not is_net(got, *alias[role]):
                 chk.fail(f"OLED {O} pin {i} net {got!r}, expected {role} ({'/'.join(alias[role])})")
-    leds = [r for r, k in kinds.items() if k == "led"]
-    if len(leds) != d["leds"]["count"]:
-        chk.fail(f"{len(leds)} SK6812 LEDs in schematic != design {d['leds']['count']}")
-    for L in leds:
-        if pin_net.get((L, "VDD")) != netname["5V"] or netname["5V"] is None:
-            chk.fail(f"{L} VDD on {pin_net.get((L, 'VDD'))!r}, not the XIAO 5V net {netname['5V']!r}")
-        if pin_net.get((L, "GND")) != netname["GND"]:
-            chk.fail(f"{L} GND on {pin_net.get((L, 'GND'))!r}")
-    chain, cur, seen = [], pin_net.get((X, "D6")), set()
-    din_of = {pin_net.get((L, "DIN")): L for L in leds}
-    while cur in din_of and din_of[cur] not in seen:
-        L = din_of[cur]
-        chain.append(L)
-        seen.add(L)
-        cur = pin_net.get((L, "DOUT"))
-    chk.details["led_chain"] = chain
-    if len(chain) != d["leds"]["count"]:
-        chk.fail(f"LED chain from XIAO D6 (LED_DIN) reaches {len(chain)} LEDs ({chain}), design needs {d['leds']['count']}")
+    leds = sorted(r for r, k in kinds.items() if k == "led")
+    if leds:
+        chk.fail(f"LED parts in the schematic {leds}, the design has none")
     encs = [r for r, k in kinds.items() if k == "enc"]
     if len(encs) != 1:
         chk.fail(f"expected 1 encoder, found {encs}")
@@ -849,42 +847,12 @@ def pcb_positions(chk: Check, d: dict, pcb: dict):
         want = (r["x"] + r["w"] / 2, r["y"] + r["h"] / 2)
         if abs(meas["xiao"][0] - want[0]) > POS_TOL or abs(meas["xiao"][1] - want[1]) > POS_TOL:
             chk.fail(f"XIAO centre ({meas['xiao'][0]:.3f}, {meas['xiao'][1]:.3f}) [{rules['xiao']}], design ({want[0]}, {want[1]})")
-    leds = fp_by(pcb, "led")
-    if len(leds) != d["leds"]["count"]:
-        chk.fail(f"{len(leds)} LED footprints != design {d['leds']['count']}")
-    for g in d["leds"]["glow"]:
-        hit = [f for f in leds if abs(X(f["x"]) - g["x"]) <= POS_TOL and abs(Y(f["y"]) - g["y"]) <= POS_TOL]
-        if not hit:
-            chk.fail(f"no LED footprint at glow led {g['led']} ({g['x']}, {g['y']})")
-        elif g.get("side") == "bottom" and hit[0]["layer"] != "B.Cu":
-            chk.fail(f"glow LED {hit[0]['ref']} on {hit[0]['layer']}, design says bottom")
-    din = {}
-    for f in leds:
-        roles = {(_pin_role({"pin": p["num"], "pinfunction": p["pinfunction"]}, "led")): p["net"] for p in f["pads"]}
-        din[roles.get("DIN")] = (f, roles.get("DOUT"))
-    start = next((n for n in din if n is not None and is_net(n, "LED_DIN")), None)
-    chain, cur = [], start
-    while cur in din and din[cur][0]["ref"] not in [c["ref"] for c in chain] and cur is not None:
-        f, cur = din[cur]
-        chain.append(f)
-    chk.details["pcb_led_chain"] = [f["ref"] for f in chain]
-    if start is None:
-        chk.note("LED pads carry no LED_DIN net (netlist not imported?); chain-to-key mapping not checked")
-        if leds:
-            chk.fail("LED chain order cannot be derived from PCB pad nets (no pad on net LED_DIN)")
-    else:
-        by_led = {k["led"]: k for k in d["keys"]}
-        glow = {g["led"]: g for g in d["leds"]["glow"]}
-        if len(chain) != d["leds"]["count"]:
-            chk.fail(f"PCB LED chain from LED_DIN has {len(chain)} LEDs, design {d['leds']['count']}")
-        for i, f in enumerate(chain):
-            p = (X(f["x"]), Y(f["y"]))
-            if i in by_led:
-                near = min(d["keys"], key=lambda k: math.dist(p, (k["x"], k["y"])))
-                if near["ref"] != by_led[i]["ref"]:
-                    chk.fail(f"chain LED {i} ({f['ref']}) sits under {near['ref']}, design says {by_led[i]['ref']}")
-            elif i in glow and math.dist(p, (glow[i]["x"], glow[i]["y"])) > POS_TOL:
-                chk.fail(f"chain LED {i} ({f['ref']}) at ({p[0]:.2f}, {p[1]:.2f}), design glow ({glow[i]['x']}, {glow[i]['y']})")
+    leds = sorted(f["ref"] or "?" for f in fp_by(pcb, "led"))
+    if leds:
+        chk.fail(f"LED footprints on the PCB {leds}, the design has none")
+    five = sorted({p["net"] for f in pcb["footprints"] for p in f["pads"] if p["net"] and is_net(p["net"], *POWER_ALIASES["5V"])})
+    if five:
+        chk.fail(f"PCB pads on a 5 V net {five}, the only rails are 3V3 and GND")
     chk.details["measured"] = {k: [round(v[0], 4), round(v[1], 4)] for k, v in meas.items()}
     chk.details["centre_rules"] = rules
     return meas
@@ -1023,6 +991,8 @@ def g4_stl_mesh(ctx: Ctx) -> Check:
     for n in PARTS:
         if n not in names:
             chk.fail(f"production/{n}.stl missing")
+    for n in sorted(names - set(PARTS)):
+        chk.fail(f"production/{n}.stl is not a part of this design")
     lo, hi, parts = None, None, {}
     for p in stls:
         try:
@@ -1098,6 +1068,33 @@ def top_model(chk: Check, d: dict):
     return M
 
 
+def bottom_model(chk: Check, d: dict):
+    """The Bottom part, registered into PCB coordinates from its own outline. None -> status already set."""
+    from . import topmodel
+    p = chk.ctx.p("production/Bottom.stl")
+    if not p.is_file():
+        chk.not_run("production/Bottom.stl missing")
+        return None
+    key = ("bottom", str(p), p.stat().st_mtime_ns)
+    if key not in chk.ctx.cache:
+        H = heights(d)
+        under = H["pcb_under"]
+        below = [under, under + XIAO_T, under + XIAO_T + XIAO_SHIELD[2], under + XIAO_T + USB_H,
+                 under - USB_Z + d["case"]["usb_cutout"]["h"] / 2, under + THT_TAIL, under + SMD_JOINT]
+        chk.ctx.cache[key] = topmodel.register_tray(load_mesh(chk, p), d, below_plate=below)
+    chk.hash(p)
+    M, info = chk.ctx.cache[key]
+    chk.details["registration_bottom"] = info
+    sh = d["case"]["shell"]
+    wu, wv = info["outline_mm"]
+    if abs(wu - sh["w"]) > SHELL_TOL or abs(wv - sh["h"]) > SHELL_TOL:
+        chk.fail(f"Bottom.stl outline {wu:.2f} x {wv:.2f} != design.json case.shell {sh['w']} x {sh['h']} (tol {SHELL_TOL})")
+    if abs(M.section_volume - M.mesh_volume) > 0.005 * abs(M.mesh_volume):
+        chk.fail(f"Bottom.stl cross-sections integrate to {M.section_volume:.1f} mm3, mesh volume is {M.mesh_volume:.1f}: "
+                 "the slicer lost material, no measurement here can be trusted")
+    return M
+
+
 def g4_switch_cutouts(ctx: Ctx) -> Check:
     chk = Check(ctx, "G4.switch_cutouts", "G4", "Top: a real switch fits, clips in, and sits on its design.json position")
     d = design(chk)
@@ -1138,7 +1135,7 @@ def g4_switch_cutouts(ctx: Ctx) -> Check:
 
 
 def g4_encoder_clearance(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G4.encoder_clearance", "G4", "Top clears the real EC11 body and bushing along the PCB's path, any opening shape")
+    chk = Check(ctx, "G4.encoder_clearance", "G4", "Top clears the real EC11 body and bushing as it comes down over them, any opening shape")
     d = design(chk)
     if d is None:
         return chk
@@ -1179,7 +1176,7 @@ def _pose_envelope(rect, pivot):
 
 
 def g4_oled_clearance(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G4.oled_clearance", "G4", "OLED glass and board clear the Top along the PCB's path; active area fully visible; window size is free")
+    chk = Check(ctx, "G4.oled_clearance", "G4", "OLED glass and board clear the Top as it comes down over them; active area fully visible; window size is free")
     d = design(chk)
     if d is None:
         return chk
@@ -1218,14 +1215,12 @@ def g4_oled_clearance(ctx: Ctx) -> Check:
         if ga < 0:
             chk.fail(f"active area not fully visible: {-ga:.2f} mm2 covered by the Top at depth {a3} mm")
     support = ctx.p("production/OLEDSupport.stl")
-    tape = (d["case"]["oled_support"] or {}).get("tape", 0.0)
     if support.is_file():
         import numpy as np
         ext = float(np.min(load_mesh(chk, support).extents))
-        want = gap - 2 * tape
         chk.details["support_height_mm"] = round(ext, 3)
-        if abs(ext - want) > 0.05:
-            chk.fail(f"OLEDSupport is {ext:.3f} mm tall, module_gap {gap} - 2 x tape {tape} needs {want:.3f}")
+        if abs(ext - gap) > 0.05:
+            chk.fail(f"OLEDSupport is {ext:.3f} mm tall, module_gap is {gap}")
     else:
         chk.fail("production/OLEDSupport.stl missing: nothing sets the module height")
     op = M.opening_at(cx, cy, 0.05)
@@ -1287,8 +1282,10 @@ def g5_bom_kit(ctx: Ctx) -> Check:
     m = re.match(r"\s*(\d+)\s*x", d["case"]["inserts"])
     inserts = int(m.group(1)) if m else None
     need = {"switches": len(d["keys"]), "keycaps": len(d["keys"]), "diodes": len(d["keys"]),
-            "encoders": 1, "oled": 1, "leds": d["leds"]["count"], "screws": inserts, "inserts": inserts,
-            "mcu_xiao_rp2040": 1}
+            "encoders": 1, "oled": 1, "screws": inserts, "inserts": inserts, "mcu_xiao_rp2040": 1}
+    n_screws = len(((d["case"].get("screws") or {}).get("positions")) or [])
+    if inserts != n_screws:
+        chk.fail(f"design.json: {inserts} inserts but {n_screws} screw positions")
     for k, v in need.items():
         if v is None:
             chk.fail(f"design.json: cannot read a count for {k}")
@@ -1301,13 +1298,17 @@ def g5_bom_kit(ctx: Ctx) -> Check:
         pcb = sexpr.load_pcb(chk.read(kf["pcb"]))
         pcb_counts = {"switches": len(fp_by(pcb, "switch")), "diodes": len(fp_by(pcb, "diode")),
                       "encoders": len(fp_by(pcb, "enc")), "oled": len(fp_by(pcb, "oled")),
-                      "leds": len(fp_by(pcb, "led")), "mcu_xiao_rp2040": len(fp_by(pcb, "xiao"))}
+                      "mcu_xiao_rp2040": len(fp_by(pcb, "xiao"))}
         others = [f["ref"] for f in fp_by(pcb, "other")]
         for k, v in pcb_counts.items():
             if v > KIT[k]:
                 chk.fail(f"PCB has {v} {k} footprints, kit has {KIT[k]}")
             if v != need[k]:
                 chk.fail(f"PCB has {v} {k} footprints, design.json implies {need[k]}")
+        leds = sorted(f["ref"] or "?" for f in fp_by(pcb, "led"))
+        pcb_counts["leds"] = len(leds)
+        if leds:
+            chk.fail(f"PCB has LED footprints {leds}, the design has none")
         if others:
             chk.details["pcb_unclassified_footprints"] = others
             extras.append({"item": "unclassified PCB footprints (not in kit)", "qty": len(others), "why": ", ".join(others[:20])})
@@ -1392,30 +1393,38 @@ def g6_compile(ctx: Ctx, km: str) -> Check:
 
 
 def g6_production_uf2(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G6.production_uf2", "G6", "production/firmware.uf2 valid and current (identical to fresh build or newer than sources)")
-    p = ctx.p("production/firmware.uf2")
-    if not p.is_file():
-        return chk.not_run("production/firmware.uf2 missing")
-    data = chk.read(p, "b")
-    check_uf2_bytes(chk, data, "production/firmware.uf2")
-    for other in sorted(ctx.p("production").glob("*.uf2")):
-        if other.name != "firmware.uf2":
-            check_uf2_bytes(chk, chk.read(other, "b"), f"production/{other.name}")
-    fresh = ctx.cache.get("uf2_default")
+    chk = Check(ctx, "G6.production_uf2", "G6", "production/firmware.uf2 and bringup.uf2 valid and current (identical to a fresh build or newer than the sources)")
+    files = {"firmware.uf2": "default", "bringup.uf2": "bringup"}
+    if not any(ctx.p(f"production/{n}").is_file() for n in files):
+        return chk.not_run("production/firmware.uf2 and bringup.uf2 missing")
     srcs = fw_sources(ctx)
     newest = max((s.stat().st_mtime for s in srcs), default=0)
-    identical = bool(fresh and fresh.read_bytes() == data)
-    newer = p.stat().st_mtime >= newest
-    chk.details.update({"identical_to_fresh_build": identical if fresh else None,
-                        "newer_than_all_firmware_sources": newer})
-    if not identical and not newer:
-        stale = max(srcs, key=lambda s: s.stat().st_mtime)
-        chk.fail(f"production/firmware.uf2 differs from the fresh build and is older than {stale.relative_to(ctx.root)}")
+    for name, km in files.items():
+        p = ctx.p(f"production/{name}")
+        if not p.is_file():
+            chk.fail(f"production/{name} missing")
+            continue
+        data = chk.read(p, "b")
+        check_uf2_bytes(chk, data, f"production/{name}")
+        fresh = ctx.cache.get(f"uf2_{km}")
+        identical = bool(fresh and fresh.read_bytes() == data)
+        newer = p.stat().st_mtime >= newest
+        chk.details[name] = {"identical_to_fresh_build": identical if fresh else None, "newer_than_all_firmware_sources": newer}
+        if not identical and not newer:
+            stale = max(srcs, key=lambda s: s.stat().st_mtime)
+            chk.fail(f"production/{name} differs from the fresh build and is older than {stale.relative_to(ctx.root)}")
+    for other in sorted(ctx.p("production").glob("*.uf2")):
+        if other.name not in files:
+            chk.fail(f"production/{other.name} is not a build of this firmware")
     return chk
 
 
 F1_LINES = ("PASS F1 KBD: panel matches buffer on all 4 pages", "PASS F1 idle screen: 0 I2C bytes in 1000 loops",
             "PASS F1 HID: slot strip and HID reach the panel", "PASS F1 divider all 42 dots on panel")
+BRINGUP_PANEL_LINES = ("PASS bringup: every pixel lit after boot", "PASS bringup: screen cleared to the last column after the pixel test",
+                       "PASS bringup: start screen on the panel")
+# run.sh runs two programs. Each prints this as its last line, so a program that never ran or died early is seen.
+HARNESS_ENDS = {"harness (default keymap)": "fails=0", "bringup_test (bringup keymap)": "bringup fails=0"}
 
 
 def _uv_host(ctx: Ctx):
@@ -1451,20 +1460,28 @@ def _harness(chk: Check):
 
 
 def g6_firmware_harness(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G6.firmware_harness", "G6", "Real keymap.c + real QMK OLED driver on the desk under ASan/UBSan, plus the host<->firmware protocol")
+    chk = Check(ctx, "G6.firmware_harness", "G6", "Both real keymaps + real QMK OLED driver on the desk under ASan/UBSan, plus the host<->firmware protocol")
     h = _harness(chk)
     if h is None:
         return chk
     code, so, out = h
-    passed = [l for l in so.splitlines() if l.startswith("PASS ")]
-    failed = [l for l in so.splitlines() if l.startswith("FAIL ")]
-    chk.details["harness"] = {"exit_code": code, "pass": len(passed), "fail": len(failed)}
+    lines = so.splitlines()
+    passed = [l for l in lines if l.startswith("PASS ")]
+    failed = [l for l in lines if l.startswith("FAIL ")]
+    n_bringup = sum(l.startswith("PASS bringup:") for l in passed)
+    chk.details["harness"] = {"exit_code": code, "pass": len(passed), "fail": len(failed),
+                              "pass_default": len(passed) - n_bringup, "pass_bringup": n_bringup}
     if code != 0:
         chk.fail(f"harness exited {code}" + (f"; {failed[0]}" if failed else ""))
     for l in failed[:20]:
         chk.fail(l)
-    if not passed:
-        chk.fail("harness printed no PASS lines")
+    if n_bringup == len(passed):
+        chk.fail("harness printed no PASS lines for the default keymap")
+    if n_bringup == 0:
+        chk.fail("harness printed no PASS lines for the bringup keymap")
+    for prog, end in HARNESS_ENDS.items():
+        if end not in lines:
+            chk.fail(f"{prog} did not finish clean: no '{end}' line")
     binary, proto = out / "harness", ctx.p("Firmware/tests/proto_test.py")
     if binary.is_file() and proto.is_file() and ctx.p("host/pyproject.toml").is_file():
         uv, env = _uv_host(ctx)
@@ -1479,13 +1496,15 @@ def g6_firmware_harness(ctx: Ctx) -> Check:
 
 
 def g6_oled_strip_panel(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G6.oled_strip_panel", "G6", "F1 regression: slot strip and divider reach the simulated SSD1306, not just the frame buffer")
+    chk = Check(ctx, "G6.oled_strip_panel", "G6", "F1 regression and bringup screens: what both keymaps draw reaches the simulated SSD1306, not just the frame buffer")
     h = _harness(chk)
     if h is None:
         return chk
     chk.note("reads the harness run recorded under G6.firmware_harness")
+    if h[0] != 0:
+        chk.fail(f"harness exited {h[0]}")
     lines = h[1].splitlines()
-    for want in F1_LINES:
+    for want in F1_LINES + BRINGUP_PANEL_LINES:
         if want not in lines:
             chk.fail(f"missing from harness output: '{want}'")
     pages = [l for l in lines if re.match(r"page\d buffer ", l)]
@@ -1549,11 +1568,45 @@ def g7_host_tests(ctx: Ctx) -> Check:
     return chk
 
 
+BOM_COLUMNS = ("item", "link", "price_usd")
 IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|<img[^>]*src=[\"']([^\"']+)[\"'][^>]*>", re.I)
 
 
+def check_bom_csv(chk: Check):
+    """Stardance rule: "BOM in CSV in the root directory WITH LINKS AND PRICES IN USD"."""
+    p = chk.ctx.p("BOM.csv")
+    if not p.is_file():
+        chk.fail("BOM.csv missing from the root directory")
+        return
+    reader = csv.DictReader(io.StringIO(chk.read(p)))
+    rows = list(reader)
+    cols = reader.fieldnames or []
+    miss = [c for c in BOM_COLUMNS if c not in cols]
+    if miss:
+        chk.fail(f"BOM.csv has no column {miss}")
+        return
+    if not rows:
+        chk.fail("BOM.csv has no rows")
+    for i, r in enumerate(rows, start=1):
+        name = (r["item"] or "").strip() or f"row {i}"
+        for c in BOM_COLUMNS:
+            if not (r[c] or "").strip():
+                chk.fail(f"BOM.csv {name}: {c} is empty")
+        link, price = (r["link"] or "").strip(), (r["price_usd"] or "").strip()
+        if link and not re.match(r"https?://\S+$", link):
+            chk.fail(f"BOM.csv {name}: link {link!r} is not a URL")
+        if price:
+            try:
+                ok = float(price) >= 0
+            except ValueError:
+                ok = False
+            if not ok:
+                chk.fail(f"BOM.csv {name}: price_usd {price!r} is not a number of US dollars")
+    chk.details["bom_csv_rows"] = len(rows)
+
+
 def g8_package(ctx: Ctx) -> Check:
-    chk = Check(ctx, "G8.package", "G8", "Hackpad submission structure and README sections")
+    chk = Check(ctx, "G8.package", "G8", "Hackpad submission structure, BOM.csv and README sections")
     r = ctx.root
     cad = [p for p in find_one(ctx.p("CAD"), "*") if p.suffix.lower() in (".step", ".stp", ".3mf")]
     if len(cad) != 1:
@@ -1564,7 +1617,7 @@ def g8_package(ctx: Ctx) -> Check:
             chk.fail(f"PCB/ has no {ext}")
     if not find_one(ctx.p("Firmware"), "keyboard.json"):
         chk.fail("Firmware/ has no keyboard.json")
-    for f in ("production/gerbers.zip", "production/firmware.uf2"):
+    for f in ("production/gerbers.zip", "production/firmware.uf2", "production/bringup.uf2"):
         if not ctx.p(f).is_file():
             chk.fail(f"{f} missing")
         else:
@@ -1579,8 +1632,12 @@ def g8_package(ctx: Ctx) -> Check:
             chk.fail(f"production/{n}.step missing")
         elif not st.read_bytes()[:12].startswith(b"ISO-10303-21"):
             chk.fail(f"production/{n}.step is not a STEP file")
+    for p in sorted(parts):
+        if p.stem not in PARTS:
+            chk.fail(f"production/{p.name} is not a part of this design")
     for p in cad + parts:
         chk.hash(p)
+    check_bom_csv(chk)
     readme = ctx.p("README.md")
     if not readme.is_file():
         chk.fail("README.md missing")
@@ -1593,11 +1650,14 @@ def g8_package(ctx: Ctx) -> Check:
         if not re.match(r"https?://", src) and not (r / src.split("#")[0]).is_file():
             chk.fail(f"README image link does not resolve: {src}")
     chk.details["images"] = [{"alt": a, "src": s} for a, s in imgs]
-    for need, pat in (("whole hackpad render", r"render|hackpad|frostbite|assembly|overview"),
+    # Only images in the repo count, matched on alt text and file name. The KiCanvas badge is remote and says
+    # PCB, and PCB/images/schematic.png has PCB in its folder: neither may stand in for a board picture.
+    local = [(a, Path(s).name) for a, s in imgs if not re.match(r"https?://", s)]
+    for need, pat in (("whole hackpad render", r"(?<!pcb_)(?<!pcb )render|hackpad|frostbite|assembly|overview"),
                       ("schematic", r"schematic|sch"), ("PCB", r"pcb|board|layout"),
                       ("case fit", r"case|fit|exploded|cad")):
-        if not any(re.search(pat, a + " " + s, re.I) for a, s in imgs):
-            chk.fail(f"README has no image for the {need} (alt text or path matching /{pat}/)")
+        if not any(re.search(pat, a + " " + s, re.I) for a, s in local):
+            chk.fail(f"README has no image for the {need} (alt text or file name matching /{pat}/)")
     bom = re.search(r"^#+\s*(BOM|Bill of materials)\b.*$", txt, re.I | re.M)
     if not bom:
         chk.fail("README has no 'BOM' / 'Bill of Materials' heading")
@@ -1622,7 +1682,7 @@ def load_cad_positions(ctx: Ctx, chk: Check):
 
 
 def x_cross_positions(ctx: Ctx) -> Check:
-    chk = Check(ctx, "X.cross_positions", "X", "design.json vs PCB vs CAD: keys, encoder, OLED, USB")
+    chk = Check(ctx, "X.cross_positions", "X", "design.json vs PCB vs CAD: keys, encoder, OLED, screw and insert holes, USB notch and tongue")
     d = design(chk)
     if d is None:
         return chk
@@ -1665,6 +1725,8 @@ def x_cross_positions(ctx: Ctx) -> Check:
         else:
             if abs(u["x"] - xc) > CAD_POS_TOL:
                 chk.fail(f"{rel}: usb_cutout centre x {u['x']} != XIAO centre x {xc}")
+            if abs(u.get("z_from_pcb_bottom", USB_Z) - USB_Z) > CAD_POS_TOL:
+                chk.fail(f"{rel}: usb_cutout centre z {u['z_from_pcb_bottom']} != receptacle centre z {USB_Z}")
             for k in ("w", "h"):
                 if k in du and (u.get(k) is None or u[k] < du[k] - 1e-9):
                     chk.fail(f"{rel}: usb_cutout {k} {u.get(k)} < design.json case.usb_cutout.{k} {du[k]}")
@@ -1681,73 +1743,190 @@ def x_cross_positions(ctx: Ctx) -> Check:
             chk.fail(f"{rel}: no oled_window entry")
         elif any(abs(w[k] - ow[k]) > CAD_POS_TOL for k in ("x", "y", "w", "h")):
             chk.fail(f"{rel}: oled_window {w} != design {ow}")
-    # Measured from the Top mesh; no positions file involved.
+    # Measured from the meshes; no positions file involved.
     if top_stl(ctx):
         M = top_model(chk, d)
         if M is not None:
             ran.append("design<->Top STL")
-            meas = {}
-            for i, sc in enumerate((d["case"].get("screws") or {}).get("positions", [])):
-                op = M.opening_at(sc["x"], sc["y"], M.hmax - 0.05)
-                if op is None:
-                    chk.fail(f"Top STL: no insert hole at design screw {i} ({sc['x']}, {sc['y']})")
-                    continue
-                b = op.bounds
-                cx, cy, w = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]
-                meas[f"screw{i}"] = {"centre": [round(cx, 3), round(cy, 3)], "d": round(w, 3)}
-                if abs(cx - sc["x"]) > CAD_POS_TOL or abs(cy - sc["y"]) > CAD_POS_TOL:
-                    chk.fail(f"Top STL: insert hole {i} at ({cx:.3f}, {cy:.3f}), design ({sc['x']}, {sc['y']})")
-                if abs(w - INSERT_HOLE) > INSERT_HOLE_TOL:
-                    chk.fail(f"Top STL: insert hole {i} is {w:.3f} mm, want {INSERT_HOLE} +/-{INSERT_HOLE_TOL}")
-            du = d["case"].get("usb_cutout")
-            if du:
-                xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
-                z = -(1.2 + 3.26 / 2)            # receptacle centre below the PCB underside (XIAO 1.2 + shell 3.26 / 2)
-                h = heights(d)["pcb_under"] - z
-                spans = [M.spans(xc, y, "x", h, h + 0.001) for y in USB_WALL_Y]
-                if any(not q for q in spans):
-                    chk.fail(f"Top STL: back wall is solid at the USB receptacle (x {xc}, depth {h:.2f} mm)")
-                else:
-                    a, b = max(q[0][0] for q in spans), min(q[0][1] for q in spans)
-                    meas["usb_width"] = round(b - a, 3)
-                    meas["usb_centre_x"] = round((a + b) / 2, 3)
-                    if b - a < du["w"] - 1e-3:
-                        chk.fail(f"Top STL: USB opening {b - a:.3f} mm wide through the wall, design.json needs {du['w']}")
-                    if abs((a + b) / 2 - xc) > CAD_POS_TOL:
-                        chk.fail(f"Top STL: USB opening centred at x {(a + b) / 2:.3f}, XIAO at {xc}")
-            chk.details["top_measured"] = meas
+            chk.details["top_measured"] = measure_top(chk, d, M)
+            B = bottom_model(chk, d)
+            if B is not None:
+                ran.append("design<->Bottom STL")
+                chk.details["bottom_measured"] = measure_bottom(chk, d, B, M)
     chk.details["comparisons_run"] = ran
     if not ran:
         chk.not_run("no PCB, no CAD positions file and no Top STL to compare with design.json")
     return chk
 
 
+def usb_axis(d: dict) -> float:
+    r = d["mcu"]["rect"]
+    return r["x"] + r["w"] / 2
+
+
+def deepest(M, x: float, y: float) -> float:
+    """Depth where the material through (x, y) ends, 0 if there is none."""
+    p = geom_point(x, y)
+    return max((s["h1"] for s in M.slabs if s["mat"].contains(p)), default=0.0)
+
+
+def geom_point(x, y):
+    import shapely.geometry as g
+    return g.Point(x, y)
+
+
+def measure_top(chk: Check, d: dict, M) -> dict:
+    """Ø3.4 clearance holes at design.json case.screws, right through."""
+    meas = {}
+    for i, sc in enumerate((d["case"].get("screws") or {}).get("positions", [])):
+        x, y = sc["x"], sc["y"]
+        op = M.opening_at(x, y, 0.05)
+        if op is None:
+            chk.fail(f"Top STL: no screw hole at design screw {i} ({x}, {y})")
+            continue
+        b = op.bounds
+        cx, cy, w = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]
+        gap, at = M.min_gap(geom_point(x, y).buffer(M3_SHANK / 2, 48), 0, M.hmax)
+        meas[f"screw{i}"] = {"centre": [round(cx, 3), round(cy, 3)], "d": round(w, 3), "shank_gap": round(gap, 3)}
+        if abs(cx - x) > CAD_POS_TOL or abs(cy - y) > CAD_POS_TOL:
+            chk.fail(f"Top STL: screw hole {i} at ({cx:.3f}, {cy:.3f}), design ({x}, {y})")
+        if abs(w - SCREW_HOLE) > SCREW_HOLE_TOL:
+            chk.fail(f"Top STL: screw hole {i} is {w:.3f} mm, want {SCREW_HOLE} +/-{SCREW_HOLE_TOL}")
+        if gap < 0:
+            chk.fail(f"Top STL: an M3 shank at screw {i} hits the Top at depth {at} mm")
+    return meas
+
+
+def measure_bottom(chk: Check, d: dict, B, M) -> dict:
+    """Insert holes and the USB notch in the Bottom, and the Top tongue that closes the notch."""
+    meas = {}
+    sh = d["case"]["shell"]
+    # The Top must sit on the rim: its plate is as thick as the case height leaves above the Bottom.
+    wall_x = (d["pcb"]["w"] - sh["w"]) / 2 + 1.0
+    plate = deepest(M, wall_x, d["pcb"]["h"] / 2)
+    meas["top_plate_mm"], meas["rim_below_plate_top_mm"] = round(plate, 3), round(B.rim, 3)
+    if abs(plate - B.rim) > CAD_POS_TOL:
+        chk.fail(f"case height: Top plate {plate:.2f} + Bottom {B.hmax:.2f} != design.json case.shell.height {sh['height']}")
+    ins = re.search(r"(\d+)\s*x\s*M3 heat-set.*?\bL\s*([\d.]+)", d["case"]["inserts"])
+    scr = re.search(r"M3x(\d+)", d["case"]["inserts"])
+    if not ins or not scr:
+        chk.fail("design.json case.inserts: cannot read the insert length or the screw length")
+        return meas
+    ins_l, tip = float(ins.group(2)), float(scr.group(1)) - B.rim       # tip depth below the rim
+    for i, sc in enumerate((d["case"].get("screws") or {}).get("positions", [])):
+        x, y = sc["x"], sc["y"]
+        op = B.opening_at(x, y, ins_l / 2)
+        if op is None:
+            chk.fail(f"Bottom STL: no insert hole at design screw {i} ({x}, {y})")
+            continue
+        b = op.bounds
+        cx, cy, w = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]
+        m = {"centre": [round(cx, 3), round(cy, 3)], "d": round(w, 3)}
+        meas[f"insert{i}"] = m
+        if abs(cx - x) > CAD_POS_TOL or abs(cy - y) > CAD_POS_TOL:
+            chk.fail(f"Bottom STL: insert hole {i} at ({cx:.3f}, {cy:.3f}), design ({x}, {y})")
+        if abs(w - INSERT_HOLE) > INSERT_HOLE_TOL:
+            chk.fail(f"Bottom STL: insert hole {i} is {w:.3f} mm, want {INSERT_HOLE} +/-{INSERT_HOLE_TOL}")
+        mid = next(s["mat"] for s in B.slabs_between(ins_l / 2, ins_l / 2 + 0.001))
+        rings = [r for pl in (mid.geoms if hasattr(mid, "geoms") else [mid]) for r in [pl.exterior, *pl.interiors]]
+        wall = min(op.distance(r) for r in rings if op.distance(r) > 1e-6)    # the hole itself is at 0
+        m["wall_mm"] = round(wall, 3)
+        if wall < INSERT_WALL_MIN:
+            chk.fail(f"Bottom STL: wall round insert hole {i} is {wall:.2f} mm, want >= {INSERT_WALL_MIN}")
+        below = B.opening_at(x, y, ins_l + 0.05)
+        m["below_insert_d"] = round(below.bounds[2] - below.bounds[0], 3) if below is not None else None
+        if below is None or below.bounds[2] - below.bounds[0] > SCREW_HOLE + SCREW_HOLE_TOL:
+            chk.fail(f"Bottom STL: insert hole {i} has no {ins_l} mm seat: {m['below_insert_d']} mm below it")
+        gap, at = B.min_gap(geom_point(x, y).buffer(M3_SHANK / 2, 48), 0, tip)
+        m["shank_gap"] = round(gap, 3)
+        if gap < 0:
+            chk.fail(f"Bottom STL: an M3 tip at screw {i} hits the Bottom at depth {at} mm (tip at {tip:.1f})")
+        hole_end = min((s["h0"] for s in B.slabs if s["mat"].contains(geom_point(x, y))), default=B.hmax)
+        m["floor_under_hole_mm"] = round(B.hmax - hole_end, 3)
+        if B.hmax - hole_end < FLOOR_SKIN_MIN:
+            chk.fail(f"Bottom STL: {B.hmax - hole_end:.2f} mm of floor under insert hole {i}, want >= {FLOOR_SKIN_MIN}")
+    du = d["case"].get("usb_cutout")
+    if not du:
+        chk.fail("design.json case.usb_cutout missing")
+        return meas
+    xc = usb_axis(d)
+    under = heights(d)["pcb_under"] - B.rim                  # PCB underside below the rim
+    floor_h = under - USB_Z + du["h"] / 2                     # window bottom edge, below the rim
+    spans = [B.spans(xc, y, "x", 0, floor_h) for y in USB_WALL_Y]
+    if any(not q for q in spans):
+        chk.fail(f"Bottom STL: back wall is closed at the USB receptacle (x {xc}, from the rim down to {floor_h:.2f} mm)")
+        return meas
+    a = max(q[0] for sp in spans for q in sp)
+    b = min(q[1] for sp in spans for q in sp)
+    meas["usb_notch_width"], meas["usb_notch_centre_x"] = round(b - a, 3), round((a + b) / 2, 3)
+    if b - a < du["w"] - 1e-3:
+        chk.fail(f"Bottom STL: USB notch {b - a:.3f} mm wide through the wall, design.json needs {du['w']}")
+    if abs((a + b) / 2 - xc) > CAD_POS_TOL:
+        chk.fail(f"Bottom STL: USB notch centred at x {(a + b) / 2:.3f}, XIAO at {xc}")
+    # The window is the notch floor below, the tongue above. No tongue: the top of the window is open to the plate.
+    ym = USB_WALL_Y[1]
+    tongue = deepest(M, xc, ym)
+    floor = min((s["h0"] for s in B.slabs if s["mat"].contains(geom_point(xc, ym))), default=B.hmax) + B.rim
+    centre = heights(d)["pcb_under"] - USB_Z
+    meas["usb_window"] = {"tongue_end_depth": round(tongue, 3), "notch_floor_depth": round(floor, 3), "h": round(floor - tongue, 3)}
+    if tongue <= B.rim + 1e-3:
+        chk.fail("Top STL: no tongue in the USB notch, the back wall is open above the window")
+    elif abs(floor - tongue - du["h"]) > CAD_POS_TOL or abs((floor + tongue) / 2 - centre) > CAD_POS_TOL:
+        chk.fail(f"USB window runs from depth {tongue:.2f} to {floor:.2f}, design.json wants {du['h']} centred on the receptacle at {centre:.2f}")
+    return meas
+
+
+def moving_parts(d: dict, pcb: dict, B, M) -> list:
+    """(name, plan shape, depth of its lowest point below the Bottom rim at the seat) for everything that goes into the Bottom."""
+    import shapely.geometry as g
+    H = heights(d)
+    under, top = H["pcb_under"] - B.rim, H["pcb_top"] - B.rim
+    tol, W, Ht = d["case"]["tolerance"], d["pcb"]["w"], d["pcb"]["h"]
+    r, xc, e = d["mcu"]["rect"], usb_axis(d), d["encoder"]
+    sw, ec, mo = 7.0, EC11_BODY_W / 2, d["oled"]["module"]
+    out = [("PCB + tolerance", g.box(-tol, -tol, W + tol, Ht + tol), under),
+           ("XIAO board", g.box(r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]), under + XIAO_T),
+           ("XIAO shield", g.box(xc - XIAO_SHIELD[0] / 2, 8.0, xc + XIAO_SHIELD[0] / 2, 19.0), under + XIAO_T + XIAO_SHIELD[2]),
+           ("USB receptacle", g.box(xc - USB_W / 2, -USB_OVERHANG, xc + USB_W / 2, USB_LEN - USB_OVERHANG), under + XIAO_T + USB_H),
+           ("OLED module", g.box(mo["x"], mo["y"], mo["x"] + mo["w"], mo["y"] + mo["h"]), top),
+           ("EC11 body", g.box(e["x"] - ec, e["y"] - ec, e["x"] + ec, e["y"] + ec), top)]
+    out += [(f"{k['ref']} housing", g.box(k["x"] - sw, k["y"] - sw, k["x"] + sw, k["y"] + sw), top) for k in d["keys"]]
+    for p in parser_bottom_pads(pcb):
+        low = under + (THT_TAIL if p["through_hole"] else SMD_JOINT)
+        out.append((f"{p['ref']} pad {p['pad']} joint", g.box(p["x0"], p["y0"], p["x1"], p["y1"]), low))
+    # The Top comes down with the PCB: anything of it below the rim, the USB tongue, passes through the Bottom too.
+    out += [("Top below the rim", s["mat"], s["h1"] - B.rim) for s in M.slabs if s["h1"] > B.rim + 1e-3 and not s["mat"].is_empty]
+    return out
+
+
 def x_pcb_insertion(ctx: Ctx) -> Check:
-    chk = Check(ctx, "X.pcb_insertion", "X", "PCB envelope (design.json pcb + tolerance) swept from the skirt rim to its seat through Top.stl")
+    chk = Check(ctx, "X.pcb_insertion", "X", "PCB, its parts and the Top tongue swept from above to their seat in Bottom.stl")
     d = design(chk)
     if d is None:
         return chk
-    M = top_model(chk, d)
-    if M is None:
+    pcb, _ = _pcb(chk)
+    M = top_model(chk, d) if pcb is not None else None
+    B = bottom_model(chk, d) if M is not None else None
+    if B is None:
         return chk
-    import shapely.geometry as g
-    tol = d["case"]["tolerance"]
-    W, H = d["pcb"]["w"], d["pcb"]["h"]
-    env = g.box(-tol, -tol, W + tol, H + tol)
-    seat = heights(d)["pcb_top"]
-    vol, rows, worst = 0.0, [], None
-    for s in M.slabs_between(seat, M.hmax):
-        ov = s["mat"].intersection(env)
-        dv = ov.area * (s["h1"] - s["h0"])
-        vol += dv
-        rows.append({"depth_mm": [s["h0"], s["h1"]], "overlap_mm2": round(ov.area, 4)})
-        if ov.area > 0 and (worst is None or ov.area > worst[0]):
-            worst = (ov.area, [round(v, 2) for v in ov.bounds], [s["h0"], s["h1"]])
-    chk.details.update({"envelope": [-tol, -tol, W + tol, H + tol], "sweep_from_depth": M.hmax, "seat_depth": seat,
-                        "slabs": rows, "swept_overlap_mm3": round(vol, 4)})
-    if vol > SWEEP_LIMIT:
-        chk.fail(f"PCB cannot reach its seat: {vol:.2f} mm3 of Top inside the {W + 2 * tol:.2f} x {H + 2 * tol:.2f} envelope "
-                 f"on the way in; worst {worst[0]:.2f} mm2 at depth {worst[2]} mm, bounds {worst[1]}")
+    rows, worst = [], {}
+    total = 0.0
+    for name, shape, low in moving_parts(d, pcb, B, M):
+        vol, hit = 0.0, None
+        for s in B.slabs_between(0, low):
+            ov = s["mat"].intersection(shape)
+            dv = ov.area * (min(s["h1"], low) - s["h0"])
+            vol += dv
+            if ov.area > 0 and (hit is None or ov.area > hit[0]):
+                hit = (ov.area, [round(v, 2) for v in ov.bounds], [s["h0"], s["h1"]])
+        total += vol
+        rows.append({"part": name, "seated_depth_below_rim": round(low, 3), "overlap_mm3": round(vol, 4)})
+        if vol > SWEEP_LIMIT:
+            chk.fail(f"PCB cannot reach its seat: {name} meets {vol:.2f} mm3 of Bottom on the way in; "
+                     f"worst {hit[0]:.2f} mm2 at depth {hit[2]} mm below the rim, bounds {hit[1]}")
+    chk.details.update({"sweep_from": "above the rim", "rim_below_plate_top": round(B.rim, 3), "parts_swept": len(rows),
+                        "swept_overlap_mm3": round(total, 4), "largest": sorted(rows, key=lambda r: -r["overlap_mm3"])[:8],
+                        "deepest": sorted(rows, key=lambda r: -r["seated_depth_below_rim"])[:4]})
     return chk
 
 
@@ -1877,15 +2056,19 @@ def circle_rect_gap(cx, cy, r, x0, y0, x1, y1) -> float:
 
 
 def parser_bottom_pads(pcb) -> list[dict]:
-    """Bottom-copper pad bboxes from our own .kicad_pcb parse, in design coordinates (Edge.Cuts top-left)."""
+    """Bottom-copper pad bboxes from our own .kicad_pcb parse, in design coordinates (Edge.Cuts top-left).
+
+    cx, cy is the copper centre, not the anchor: the 14 XIAO pads have a 1 mm (drill (offset ...)), so
+    their copper sits 1 mm from their anchor. The boxes must use the copper, as pcbnew does."""
     o = pcb_origin(pcb)
     out = []
     for f in pcb["footprints"]:
         for p in f["pads"]:
             if not pad_on_bottom(p):
                 continue
-            out.append({"ref": f["ref"], "pad": p["num"], "x0": p["x"] - p["hw"] - o["x0"], "y0": p["y"] - p["hh"] - o["y0"],
-                        "x1": p["x"] + p["hw"] - o["x0"], "y1": p["y"] + p["hh"] - o["y0"], "shape": p["shape"]})
+            out.append({"ref": f["ref"], "pad": p["num"], "x0": p["cx"] - p["hw"] - o["x0"], "y0": p["cy"] - p["hh"] - o["y0"],
+                        "x1": p["cx"] + p["hw"] - o["x0"], "y1": p["cy"] + p["hh"] - o["y0"], "shape": p["shape"],
+                        "through_hole": p["type"] == "thru_hole"})
     return out
 
 
@@ -1957,7 +2140,7 @@ def x_boss_vs_pads(ctx: Ctx) -> Check:
                           and p["x1"] >= q["x1"] - 0.005 and p["y1"] >= q["y1"] - 0.005 for p in b)]
         chk.details["json_pads_not_inside_parsed_bbox"] = unc[:30]
         if unc:
-            chk.note(f"{len(unc)} pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree)")
+            chk.fail(f"{len(unc)} pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree): {unc[:5]}")
     if cp is not None:
         cs = cp.get("screws")
         if not isinstance(cs, list):

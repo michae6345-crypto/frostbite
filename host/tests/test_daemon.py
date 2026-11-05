@@ -19,7 +19,7 @@ from frostbite_host.daemon import Daemon, SocketServer
 from frostbite_host.device import (HOLD, TAP, DeviceLink, EncoderEvent, FakeDevice, KeyEvent,
                                    OledLine, SetSelected, Status, encode)
 from frostbite_host.hook import hook_to_message
-from frostbite_host.state import ICE_BLUE, Board, Slot
+from frostbite_host.state import Board, Slot
 
 FIX = Path(__file__).parent / "fixtures"
 TTY = "/dev/ttys004"
@@ -253,7 +253,7 @@ def test_end_to_end_hook_ctl_train_unplug(running):
         f.write("Epoch 3/10 | step 812 | loss: nan\n")
     assert wait_for(lambda: fake.slots[1] is Status.ERROR)
 
-    # the hook that raised the amber has gone, so Approve finds nothing to answer
+    # the hook that raised the wait has gone, so Approve finds nothing to answer
     fake.press("approve")
     assert wait_for(lambda: fake.oled[1].rstrip() == "answer in terminal")
     assert runner.keystrokes() == []
@@ -264,7 +264,6 @@ def test_end_to_end_hook_ctl_train_unplug(running):
     fake.replug()
     assert wait_for(lambda: fake.slots[:3] == [Status.NEEDS, Status.ERROR, Status.RUN])
     assert wait_for(lambda: fake.oled[0].startswith("claude#1 my-app"))
-    assert fake.glow is not None and fake.glow[:3] == (0xFF, 0x4D, 0x4F)
 
 
 def test_second_daemon_refused_and_stale_socket_cleaned(running):
@@ -469,14 +468,6 @@ def test_daemon_rejects_bad_arguments_before_starting(argv, capsys):
         dm.main(["--fake", *argv])
     assert e.value.code == 2
     assert "Traceback" not in capsys.readouterr().err
-
-
-def test_glow_matches_the_firmware_default():
-    keymap = Path(__file__).parents[2] / "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c"
-    if not keymap.is_file():
-        pytest.skip("firmware not in this copy")
-    fw = {c: int(v, 16) for c, v in re.findall(r"GLOW_DEFAULT_([RGB]) (0x[0-9a-f]+)", keymap.read_text())}
-    assert (fw["R"], fw["G"], fw["B"]) == ICE_BLUE
 
 
 def test_watching_a_name_again_after_unwatch_works(tmp_path):

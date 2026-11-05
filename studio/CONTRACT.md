@@ -1,5 +1,7 @@
 # Frostbite Studio contract
 
+Note: Studio is the design explorer from earlier concepts. The final design has no LEDs and is defined by [`design.json`](../design.json).
+
 Frostbite is a Hack Club Hackpad macropad that shows the status of coding agents and ML training runs.
 The base design has 3×3 keys, a 0.91" OLED and an EC11 dial along the top, and a matte black shell with
 the top plate floating over a glowing light gap. The top two rows are "agent slots" whose frosted caps

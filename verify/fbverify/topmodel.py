@@ -4,7 +4,9 @@ No section height or opening shape is assumed. Section heights are the mesh's ow
 plus the heights where real parts start or stop. Checks then ask whether a real part's outline
 is clear of material at a height.
 
-h = depth below the plate top face (h=0), towards the skirt rim. (x, y) = PCB coordinates.
+(x, y) = PCB coordinates. h = depth below the part's upper face as assembled: the plate top face
+for the Top, the rim for the Bottom. Both models look down on the case from above, so a point
+means the same thing in either.
 """
 from __future__ import annotations
 
@@ -233,3 +235,48 @@ def register(mesh, d, extra_h=()):
                    "rotation_sign": s, "feature_points_open_at_plate_top": f"{score}/{len(pts)}",
                    "levels_h": model.levels, "section_volume_mm3": round(model.section_volume, 1),
                    "mesh_volume_mm3": round(model.mesh_volume, 1)}
+
+
+def register_tray(mesh, d, below_plate=()):
+    """Same for the Bottom: h=0 at the rim, opening up. The rim side has the smaller section.
+
+    The 180 degree choice is the one that puts the USB notch on the back wall. With no notch both
+    choices are equal and the checks report the missing notch. below_plate: heights to section
+    at, as depth below the plate top. model.rim is the plate top to rim depth, from the part's
+    height and design.json case.shell.height."""
+    shell = d["case"]["shell"]
+    W, H = d["pcb"]["w"], d["pcb"]["h"]
+    px = shell.get("x", (W - shell["w"]) / 2) + shell["w"] / 2
+    py = shell.get("y", (H - shell["h"]) / 2) + shell["h"] / 2
+    n0 = _axis_and_up(mesh)
+    tries = []
+    for n in (n0, -n0):
+        top = float((mesh.vertices @ n).max())
+        tries.append((_material(mesh, n * (top - 0.05), n, *_in_plane_axes(mesh, n)).area, n, top))
+    area0, n, top = min(tries, key=lambda t: t[0])
+    u, v = _in_plane_axes(mesh, n)
+    eu, ev = mesh.vertices @ u, mesh.vertices @ v
+    wu, wv = float(eu.max() - eu.min()), float(ev.max() - ev.min())
+    if abs(wv - shell["w"]) + abs(wu - shell["h"]) < abs(wu - shell["w"]) + abs(wv - shell["h"]):
+        u, v = v, -u
+        eu, ev = mesh.vertices @ u, mesh.vertices @ v
+        wu, wv = float(eu.max() - eu.min()), float(ev.max() - ev.min())
+    cu, cv = float(eu.max() + eu.min()) / 2, float(ev.max() + ev.min()) / 2
+    height = top - float((mesh.vertices @ n).min())
+    rim = shell["height"] - height
+    r = d["mcu"]["rect"]
+    usb = g.Point(r["x"] + r["w"] / 2, -(shell["h"] - H) / 4)      # middle of the back wall, on the USB axis
+    best = None
+    for s in (1, -1):
+        m = PartModel.__new__(PartModel)
+        m.c, m.s, m.pcb_c = (cu, cv), s, (px, py)
+        is_open = not m._pcb(_material(mesh, n * (top - 0.05), n, u, v)).contains(usb)
+        if best is None or (is_open and not best[0]):
+            best = (is_open, s)
+    is_open, s = best
+    model = PartModel(mesh, n, u, v, top, cu, cv, s, (px, py), extra_h=tuple(h - rim for h in below_plate))
+    model.rim = rim
+    return model, {"rim_normal": [round(float(x), 4) for x in n], "outline_mm": [round(wu, 3), round(wv, 3)],
+                   "height_mm": round(height, 3), "rim_below_plate_top_mm": round(rim, 3), "rotation_sign": s,
+                   "usb_notch_found_on_back_wall": bool(is_open), "levels_h": model.levels,
+                   "section_volume_mm3": round(model.section_volume, 1), "mesh_volume_mm3": round(model.mesh_volume, 1)}

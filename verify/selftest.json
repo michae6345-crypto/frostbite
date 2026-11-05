@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-04T05:01:22+00:00",
+  "timestamp": "2026-11-05T11:34:08+00:00",
   "status": "PASS",
   "cases": [
     {
@@ -14,13 +14,57 @@
       "ok": true
     },
     {
-      "case": "design.json: duplicate LED index",
+      "case": "design.json: LED_DIN back in the pins",
       "check": "G0.design_json",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "leds: indices [0, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] are not exactly 0..12"
+        "pins: net LED_DIN is not a net of this design"
+      ],
+      "ok": true
+    },
+    {
+      "case": "design.json: leds block back",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "leds: block is back in design.json, the design has no LEDs"
+      ],
+      "ok": true
+    },
+    {
+      "case": "design.json: a key has an led index",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "keys: ['SW2'] carry an led index, the design has no LEDs"
+      ],
+      "ok": true
+    },
+    {
+      "case": "design.json: a 5V rail back",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "power: rails ['3V3', '5V', 'GND'] != ['3V3', 'GND']"
+      ],
+      "ok": true
+    },
+    {
+      "case": "design.json: case tilted",
+      "check": "G0.design_json",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "case.shell.tilt_deg 6 != 0: the case is flat"
       ],
       "ok": true
     },
@@ -47,13 +91,24 @@
       "ok": true
     },
     {
-      "case": "keyboard.json: 12 LEDs instead of 13",
+      "case": "keyboard.json: ws2812 back",
       "check": "G2.firmware_pins",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "LED count 12 != design 13"
+        "keyboard.json mentions ['ws2812']: the design has no LEDs"
+      ],
+      "ok": true
+    },
+    {
+      "case": "keyboard.json: rgb_matrix feature back",
+      "check": "G2.firmware_pins",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "keyboard.json mentions ['rgb_matrix']: the design has no LEDs"
       ],
       "ok": true
     },
@@ -70,13 +125,25 @@
       "ok": true
     },
     {
-      "case": "netlist: LED chain broken after LED7",
+      "case": "netlist: +5V net back",
       "check": "G2.netlist",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "LED chain from XIAO D6 (LED_DIN) reaches 7 LEDs (['LED1', 'LED2', 'LED3', 'LED4', 'LED5', 'LED6', 'LED7']), design needs 13"
+        "schematic has a 5 V net ['+5V'], the only rails are 3V3 and GND",
+        "XIAO 5V is on net '+5V' with other parts, design leaves it free"
+      ],
+      "ok": true
+    },
+    {
+      "case": "netlist: an SK6812 part back",
+      "check": "G2.netlist",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED parts in the schematic ['LED1'], the design has none"
       ],
       "ok": true
     },
@@ -104,14 +171,38 @@
       "ok": true
     },
     {
-      "case": "pcb: chain LEDs 3/4 swapped",
+      "case": "pcb: an LED footprint back",
       "check": "G3.positions",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "chain LED 3 (LED4) sits under SW5, design says SW6",
-        "chain LED 4 (LED5) sits under SW6, design says SW5"
+        "LED footprints on the PCB ['LED1'], the design has none",
+        "PCB pads on a 5 V net ['+5V'], the only rails are 3V3 and GND"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real PCB: an LED footprint back",
+      "check": "G3.positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED footprints on the PCB ['LED1'], the design has none",
+        "PCB pads on a 5 V net ['+5V'], the only rails are 3V3 and GND"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real PCB: an LED footprint on +5V back",
+      "check": "G3.positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "LED footprints on the PCB ['LED1'], the design has none",
+        "PCB pads on a 5 V net ['+5V'], the only rails are 3V3 and GND"
       ],
       "ok": true
     },
@@ -133,8 +224,8 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "production/firmware.uf2: size 86428 is not a multiple of 512 (truncated or padded)",
-        "production/firmware.uf2: numBlocks field says 171, file has 168 blocks (truncated?)"
+        "production/firmware.uf2: size 68508 is not a multiple of 512 (truncated or padded)",
+        "production/firmware.uf2: numBlocks field says 136, file has 133 blocks (truncated?)"
       ],
       "ok": true
     },
@@ -150,6 +241,40 @@
       "ok": true
     },
     {
+      "case": "uf2: bringup.uf2 truncated",
+      "check": "G6.production_uf2",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/bringup.uf2: size 67484 is not a multiple of 512 (truncated or padded)",
+        "production/bringup.uf2: numBlocks field says 134, file has 131 blocks (truncated?)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "uf2: bringup.uf2 missing",
+      "check": "G6.production_uf2",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/bringup.uf2 missing"
+      ],
+      "ok": true
+    },
+    {
+      "case": "uf2: old led-test.uf2 left behind",
+      "check": "G6.production_uf2",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/led-test.uf2 is not a build of this firmware"
+      ],
+      "ok": true
+    },
+    {
       "case": "stl: non-watertight Top",
       "check": "G4.stl_mesh",
       "clean_status": "PASS",
@@ -157,6 +282,17 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "Top.stl: not watertight"
+      ],
+      "ok": true
+    },
+    {
+      "case": "stl: GlowBand.stl left behind",
+      "check": "G4.stl_mesh",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/GlowBand.stl is not a part of this design"
       ],
       "ok": true
     },
@@ -189,11 +325,9 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -4.350 mm from LED12 pad 4 [57.250,79.500 - 58.250,80.300] (min 0.5)",
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -3.575 mm from LED12 pad 3 [57.250,80.900 - 58.250,81.700] (min 0.5)",
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.965 mm from LED12 pad 1 [54.050,79.500 - 55.050,80.300] (min 0.5)",
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.842 mm from LED12 pad 2 [54.050,80.900 - 55.050,81.700] (min 0.5)",
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)"
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 7.6 is -0.600 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "[design.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 7.6 is -0.600 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, -3.0), (-3.0, 86.15), (64.15, -3.0), (64.15, 86.15)] != design.json case.screws [(-3.0, -3.0), (-3.0, 86.15), (57.435, 80.125), (64.15, -3.0)] (tol 0.1)"
       ],
       "ok": true
     },
@@ -204,11 +338,9 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -4.350 mm from LED12 pad 4 [57.250,79.500 - 58.250,80.300] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -3.575 mm from LED12 pad 3 [57.250,80.900 - 58.250,81.700] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.965 mm from LED12 pad 1 [54.050,79.500 - 55.050,80.300] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.842 mm from LED12 pad 2 [54.050,80.900 - 55.050,81.700] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 8.7 is -1.150 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)"
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 3 at (57.435, 80.125) OD 7.6 is -0.600 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "[CAD/positions.json vs parsed .kicad_pcb] boss 3 at (57.435, 80.125) OD 7.6 is -0.600 mm from D9 pad 2 [52.635,79.325 - 54.235,80.925] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, -3.0), (-3.0, 86.15), (57.435, 80.125), (64.15, -3.0)] != design.json case.screws [(-3.0, -3.0), (-3.0, 86.15), (64.15, -3.0), (64.15, 86.15)] (tol 0.1)"
       ],
       "ok": true
     },
@@ -219,8 +351,9 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[design.json vs PCB/build/bottom_pads.json] boss 0 at (-4.65, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [-0.150,8.500 - 0.850,9.500] (min 0.5)",
-        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 0 at (-4.65, 9.0) OD 8.7 is 0.150 mm from TP1 pad 1 [-0.150,8.500 - 0.850,9.500] (min 0.5)"
+        "[design.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, -3.0) OD 7.6 is 0.150 mm from TP1 pad 1 [0.950,-3.500 - 1.950,-2.500] (min 0.5)",
+        "[CAD/positions.json vs PCB/build/bottom_pads.json] boss 0 at (-3.0, -3.0) OD 7.6 is 0.150 mm from TP1 pad 1 [0.950,-3.500 - 1.950,-2.500] (min 0.5)",
+        "1 pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree): ['TP1 pad 1']"
       ],
       "ok": true
     },
@@ -231,9 +364,20 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
-        "[design.json vs parsed .kicad_pcb] boss 3 at (63.15, 67.815) OD 8.7 is -1.150 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
-        "CAD/positions.json: screws [(-4.65, 9.0), (-4.65, 62.1), (65.8, 9.0), (65.8, 62.1)] != design.json case.screws [(-4.65, 9.0), (-4.65, 62.1), (63.15, 67.815), (65.8, 9.0)] (tol 0.1)"
+        "[design.json vs PCB/build/bottom_pads.json] boss 3 at (63.15, 67.815) OD 7.6 is -0.600 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
+        "[design.json vs parsed .kicad_pcb] boss 3 at (63.15, 67.815) OD 7.6 is -0.600 mm from D9 pad 2 [58.350,67.015 - 59.950,68.615] (min 0.5)",
+        "CAD/positions.json: screws [(-3.0, -3.0), (-3.0, 86.15), (64.15, -3.0), (64.15, 86.15)] != design.json case.screws [(-3.0, -3.0), (-3.0, 86.15), (63.15, 67.815), (64.15, -3.0)] (tol 0.1)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real PCB: bottom_pads.json and the parse disagree by 1 mm",
+      "check": "X.boss_vs_pads",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "1 pads in bottom_pads.json are not inside the parsed pad boxes (sources disagree): ['U1 pad 1']"
       ],
       "ok": true
     },
@@ -273,16 +417,16 @@
       "ok": true
     },
     {
-      "case": "top 13 mm tall: heights come from the part",
+      "case": "top with a longer tongue: heights come from the part",
       "check": "G4.switch_cutouts",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
         "SW1: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW1: a 13.9 mm switch housing hits the Top at depth [0.55, 1.0] mm",
+        "SW1: a 13.9 mm switch housing hits the Top at depth [1.0, 1.5] mm",
         "SW2: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1",
-        "SW2: a 13.9 mm switch housing hits the Top at depth [1.0, 1.5] mm",
+        "SW2: a 13.9 mm switch housing hits the Top at depth [0.0, 0.5] mm",
         "SW3: narrowest opening 13.700 x 13.700, want 14.0 +/-0.1"
       ],
       "ok": true
@@ -294,11 +438,11 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "Top.stl outline 120.59 x 111.22 != design.json case.shell 79.15 x 97.15 (tol 0.2)",
-        "cross-sections integrate to 168.4 mm3, mesh volume is -233.8: the slicer lost material, no measurement here can be trusted",
-        "SW1: narrowest opening 120.000 x 120.000, want 14.0 +/-0.1",
-        "SW1: clips engage 0.00 mm of plate, want 1.5 +/-0.15",
-        "SW2: narrowest opening 120.000 x 120.000, want 14.0 +/-0.1"
+        "cross-sections integrate to 4652.8 mm3, mesh volume is 4614.9: the slicer lost material, no measurement here can be trusted",
+        "SW1: narrowest opening 15.400 x 15.400, want 14.0 +/-0.1",
+        "SW1: opening centre (11.525, 30.575), design (11.525, 33.525) tol 0.1",
+        "SW1: a 13.9 mm switch housing hits the Top at depth [2.93, 3.2] mm",
+        "SW1: clips engage 0.00 mm of plate, want 1.5 +/-0.15"
       ],
       "ok": true
     },
@@ -309,7 +453,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "EC11 body gap -4.076 mm at depth [0.55, 1.0] mm, want >= 0.2"
+        "EC11 body gap -4.076 mm at depth [0.5, 0.55] mm, want >= 0.2"
       ],
       "ok": true
     },
@@ -378,7 +522,7 @@
       "fault_reasons": [
         "OLED glass stands proud of the plate by 0.65 mm with module_gap 3.0",
         "OLED board hits the Top on its way in, at depth [0.8, 1.0] mm (96.97 mm2, module turned 1.0 deg and shifted 0.1)",
-        "OLEDSupport is 1.400 mm tall, module_gap 3.0 - 2 x tape 0.2 needs 2.600"
+        "OLEDSupport is 1.800 mm tall, module_gap is 3.0"
       ],
       "ok": true
     },
@@ -390,7 +534,7 @@
       "fault_status": "FAIL",
       "fault_reasons": [
         "OLED glass stands proud of the plate by 0.15 mm with module_gap 2.5",
-        "OLEDSupport is 1.400 mm tall, module_gap 2.5 - 2 x tape 0.2 needs 2.100"
+        "OLEDSupport is 1.800 mm tall, module_gap is 2.5"
       ],
       "ok": true
     },
@@ -412,7 +556,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "OLEDSupport is 2.000 mm tall, module_gap 1.8 - 2 x tape 0.2 needs 1.400"
+        "OLEDSupport is 2.000 mm tall, module_gap is 1.8"
       ],
       "ok": true
     },
@@ -434,8 +578,8 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "OLEDSupport: STEP volume 3217.6 mm3, STL volume 259.6 mm3: not the same part",
-        "OLEDSupport: production STEP is 3217.6 mm3, a rebuild from the current source is 259.6 mm3: stale, rebuild the case"
+        "OLEDSupport: STEP volume 3217.6 mm3, STL volume 333.8 mm3: not the same part",
+        "OLEDSupport: production STEP is 3217.6 mm3, a rebuild from the current source is 333.8 mm3: stale, rebuild the case"
       ],
       "ok": true
     },
@@ -446,7 +590,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "OLEDSupport: production STEP is 259.6 mm3, a rebuild from the current source is 296.7 mm3: stale, rebuild the case"
+        "OLEDSupport: production STEP is 333.8 mm3, a rebuild from the current source is 370.9 mm3: stale, rebuild the case"
       ],
       "ok": true
     },
@@ -462,24 +606,67 @@
       "ok": true
     },
     {
-      "case": "pcb insertion: bosses at old x -3.0 / 64.15",
+      "case": "pcb insertion: bosses 1.5 mm inside the corners",
       "check": "X.pcb_insertion",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "PCB cannot reach its seat: 344.99 mm3 of Top inside the 61.75 x 83.75 envelope on the way in; worst 31.36 mm2 at depth [5.0, 5.43] mm, bounds [-0.3, -0.3, 61.45, 83.45]"
+        "PCB cannot reach its seat: PCB + tolerance meets 56.26 mm3 of Bottom on the way in; worst 15.26 mm2 at depth [4.0, 4.0999996185302745] mm below the rim, bounds [-0.3, -0.3, 61.45, 83.45]"
       ],
       "ok": true
     },
     {
-      "case": "pcb insertion: the real audited B1 Top",
+      "case": "pcb insertion: the real audited B1 part as the tray",
       "check": "X.pcb_insertion",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "PCB cannot reach its seat: 265.87 mm3 of Top inside the 61.75 x 83.75 envelope on the way in; worst 31.26 mm2 at depth [8.542, 12.0] mm, bounds [-0.3, -0.3, 61.45, 83.45]"
+        "PCB cannot reach its seat: PCB + tolerance meets 162.39 mm3 of Bottom on the way in; worst 31.25 mm2 at depth [4.0, 5.200000000000012] mm below the rim, bounds [-0.3, -0.3, 61.45, 83.45]",
+        "PCB cannot reach its seat: USB receptacle meets 95.00 mm3 of Bottom on the way in; worst 9.83 mm2 at depth [0.0, 2.57] mm below the rim, bounds [16.53, -1.4, 25.47, -0.3]",
+        "PCB cannot reach its seat: D9 pad 1 joint meets 0.31 mm3 of Bottom on the way in; worst 0.04 mm2 at depth [4.0, 5.200000000000012] mm below the rim, bounds [59.83, 74.64, 59.95, 75.27]",
+        "PCB cannot reach its seat: Top below the rim meets 184.65 mm3 of Bottom on the way in; worst 1846.53 mm2 at depth [0.0, 2.57] mm below the rim, bounds [-7.0, -7.0, 68.15, 90.15]",
+        "PCB cannot reach its seat: Top below the rim meets 1107.92 mm3 of Bottom on the way in; worst 1846.53 mm2 at depth [0.0, 2.57] mm below the rim, bounds [-7.0, -7.0, 68.15, 90.15]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb insertion: post under the XIAO",
+      "check": "X.pcb_insertion",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB cannot reach its seat: XIAO board meets 19.20 mm3 of Bottom on the way in; worst 16.00 mm2 at depth [4.0999996185302745, 4.399999618530274] mm below the rim, bounds [19.0, 8.0, 23.0, 12.0]",
+        "PCB cannot reach its seat: XIAO shield meets 35.20 mm3 of Bottom on the way in; worst 16.00 mm2 at depth [4.0999996185302745, 4.399999618530274] mm below the rim, bounds [19.0, 8.0, 23.0, 12.0]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb insertion: tongue wider than the notch",
+      "check": "X.pcb_insertion",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB cannot reach its seat: Top below the rim meets 5.16 mm3 of Bottom on the way in; worst 7.37 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]",
+        "PCB cannot reach its seat: Top below the rim meets 18.43 mm3 of Bottom on the way in; worst 7.37 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]",
+        "PCB cannot reach its seat: Top below the rim meets 21.59 mm3 of Bottom on the way in; worst 7.37 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]"
+      ],
+      "ok": true
+    },
+    {
+      "case": "pcb insertion: notch closed, receptacle stopped",
+      "check": "X.pcb_insertion",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB cannot reach its seat: USB receptacle meets 84.18 mm3 of Bottom on the way in; worst 9.83 mm2 at depth [0.0, 4.0] mm below the rim, bounds [16.53, -1.4, 25.47, -0.3]",
+        "PCB cannot reach its seat: Top below the rim meets 61.44 mm3 of Bottom on the way in; worst 87.77 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]",
+        "PCB cannot reach its seat: Top below the rim meets 219.42 mm3 of Bottom on the way in; worst 87.77 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]",
+        "PCB cannot reach its seat: Top below the rim meets 257.17 mm3 of Bottom on the way in; worst 87.77 mm2 at depth [0.0, 4.0] mm below the rim, bounds [14.45, -7.0, 27.55, -0.3]"
       ],
       "ok": true
     },
@@ -490,21 +677,114 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "Top STL: insert hole 0 at (-4.150, 9.000), design (-4.65, 9.0)",
-        "Top STL: insert hole 1 at (66.300, 9.000), design (65.8, 9.0)",
-        "Top STL: insert hole 2 at (-4.150, 62.100), design (-4.65, 62.1)",
-        "Top STL: insert hole 3 at (66.300, 62.100), design (65.8, 62.1)"
+        "Bottom STL: insert hole 0 at (-2.500, -3.000), design (-3.0, -3.0)",
+        "Bottom STL: wall round insert hole 0 is 1.13 mm, want >= 1.3",
+        "Bottom STL: an M3 tip at screw 0 hits the Bottom at depth [10.929999618530275, 12.4] mm (tip at 13.5)"
       ],
       "ok": true
     },
     {
-      "case": "mesh: USB opening 13.0 < 13.5 mm",
+      "case": "mesh: insert hole removed from Bottom",
       "check": "X.cross_positions",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "Top STL: USB opening 13.000 mm wide through the wall, design.json needs 13.5"
+        "Bottom STL: no insert hole at design screw 0 (-3.0, -3.0)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: USB notch 13.0 < 13.5 mm",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Bottom STL: USB notch 13.000 mm wide through the wall, design.json needs 13.5"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: USB notch closed in Bottom",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Bottom STL: back wall is closed at the USB receptacle (x 21.0, from the rim down to 10.93 mm)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: screw hole 0.5 mm off in Top",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: screw hole 0 at (-2.500, -3.000), design (-3.0, -3.0)",
+        "Top STL: an M3 shank at screw 0 hits the Top at depth [0.0, 0.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: screw hole 2.6 mm in Top",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: screw hole 0 is 2.600 mm, want 3.4 +/-0.1",
+        "Top STL: an M3 shank at screw 0 hits the Top at depth [0.0, 0.5] mm",
+        "Top STL: screw hole 1 is 2.600 mm, want 3.4 +/-0.1",
+        "Top STL: an M3 shank at screw 1 hits the Top at depth [0.0, 0.5] mm",
+        "Top STL: screw hole 2 is 2.600 mm, want 3.4 +/-0.1"
+      ],
+      "ok": true
+    },
+    {
+      "case": "mesh: USB tongue gone from Top",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: no tongue in the USB notch, the back wall is open above the window"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real Top: screw hole moved 0.5 mm",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Top STL: screw hole 0 at (-2.500, -3.000), design (-3.0, -3.0)",
+        "Top STL: an M3 shank at screw 0 hits the Top at depth [1.0, 1.5] mm"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real Bottom: insert hole filled",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Bottom STL: no insert hole at design screw 0 (-3.0, -3.0)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "real Bottom: USB notch closed",
+      "check": "X.cross_positions",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "Bottom STL: back wall is closed at the USB receptacle (x 21.0, from the rim down to 10.93 mm)"
       ],
       "ok": true
     },
@@ -575,7 +855,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "LED1 pad 3: zone_connect 2 override (2 = solid), must inherit thermal"
+        "U1 pad 13: zone_connect 2 override (2 = solid), must inherit thermal"
       ],
       "ok": true
     },
@@ -597,11 +877,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "LED1 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
-        "LED2 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
-        "LED3 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
-        "LED4 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)",
-        "LED5 pad 3 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)"
+        "U1 pad 13 on B.Cu: 100% of the ring around the pad is pour, no working thermal relief (max 45%)"
       ],
       "ok": true
     },
@@ -623,6 +899,7 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
+        "harness exited 1",
         "missing from harness output: 'PASS F1 KBD: panel matches buffer on all 4 pages'",
         "missing from harness output: 'PASS F1 idle screen: 0 I2C bytes in 1000 loops'",
         "missing from harness output: 'PASS F1 HID: slot strip and HID reach the panel'",
@@ -637,11 +914,70 @@
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "harness exited 1; FAIL resume panel |1- 2- 3- 4- 5- 6- KBD|",
-        "FAIL resume panel |1- 2- 3- 4- 5- 6- KBD|",
-        "FAIL F1 KBD diff=20",
-        "FAIL F1 idle i2c 42000",
-        "FAIL F1 HID diff=39 |1? 2- 3- 4- 5- 6- HID|"
+        "harness exited 1; FAIL sel panel bad=6",
+        "FAIL sel panel bad=6",
+        "FAIL enc panel sel=0",
+        "FAIL fb strip |#####################|",
+        "FAIL resume panel |1- 2- 3- 4- 5- 6- KBD|"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: bringup keymap draws the wrong screen",
+      "check": "G6.firmware_harness",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness exited 1; FAIL bringup: start screen",
+        "FAIL bringup: start screen",
+        "bringup_test (bringup keymap) did not finish clean: no 'bringup fails=0' line"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: bringup screen missing from the panel lines",
+      "check": "G6.oled_strip_panel",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness exited 1",
+        "missing from harness output: 'PASS bringup: start screen on the panel'"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: run.sh exits non-zero with no FAIL line",
+      "check": "G6.firmware_harness",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness exited 7"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: panel check sees run.sh exit non-zero",
+      "check": "G6.oled_strip_panel",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness exited 7"
+      ],
+      "ok": true
+    },
+    {
+      "case": "firmware: run.sh stops running the bringup program",
+      "check": "G6.firmware_harness",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "harness printed no PASS lines for the bringup keymap",
+        "bringup_test (bringup keymap) did not finish clean: no 'bringup fails=0' line"
       ],
       "ok": true
     },
@@ -657,14 +993,26 @@
       "ok": true
     },
     {
-      "case": "BOM: 17 LEDs > kit 16",
+      "case": "BOM: 8 inserts > kit 6",
       "check": "G5.bom_kit",
       "clean_status": "PASS",
       "clean_reasons": [],
       "fault_status": "FAIL",
       "fault_reasons": [
-        "design needs 17 leds, kit has 16",
-        "PCB has 13 leds footprints, design.json implies 17"
+        "design.json: 8 inserts but 4 screw positions",
+        "design needs 8 screws, kit has 6",
+        "design needs 8 inserts, kit has 6"
+      ],
+      "ok": true
+    },
+    {
+      "case": "BOM: an LED footprint on the real PCB",
+      "check": "G5.bom_kit",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "PCB has LED footprints ['LED1'], the design has none"
       ],
       "ok": true
     },
@@ -677,7 +1025,174 @@
       "fault_reasons": [
         "production/gerbers.zip missing",
         "production/OLEDSupport.step missing",
-        "README image link does not resolve: docs/schematic.png"
+        "README image link does not resolve: PCB/images/schematic.png"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: schematic image file missing",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/gerbers.zip missing",
+        "production/OLEDSupport.step missing",
+        "README image link does not resolve: PCB/images/schematic.png"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: bringup.uf2 missing",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/bringup.uf2 missing"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: GlowBand.stl left behind",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "production/GlowBand.stl is not a part of this design"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: README loses the hackpad image",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "README has no image for the whole hackpad render (alt text or file name matching /(?<!pcb_)(?<!pcb )render|hackpad|frostbite|assembly|overview/)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: README loses the exploded image",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "README has no image for the case fit (alt text or file name matching /case|fit|exploded|cad/)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: README loses the schematic image",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "README has no image for the schematic (alt text or file name matching /schematic|sch/)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: README loses both PCB renders, the badge does not count",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "README has no image for the PCB (alt text or file name matching /pcb|board|layout/)"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: README loses the BOM table",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "README BOM section has no markdown table"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv missing",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv missing from the root directory"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv row with no item",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv row 4: item is empty"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv row with no link",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv 1N4148 through-hole diodes: link is empty"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv row with no price",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv 1N4148 through-hole diodes: price_usd is empty"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv link is not a URL",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv Seeed XIAO RP2040: link 'see the kit' is not a URL"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv price is not a number",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv Printed case: Top, Bottom, OLEDSupport, Knob in black: price_usd 'free-ish' is not a number of US dollars"
+      ],
+      "ok": true
+    },
+    {
+      "case": "package: BOM.csv has no price_usd column",
+      "check": "G8.package",
+      "clean_status": "PASS",
+      "clean_reasons": [],
+      "fault_status": "FAIL",
+      "fault_reasons": [
+        "BOM.csv has no column ['price_usd']"
       ],
       "ok": true
     }
@@ -709,6 +1224,11 @@
       "ok": true
     },
     {
+      "assert": "X.pcb_insertion on an empty project is NOT_RUN",
+      "got": "NOT_RUN",
+      "ok": true
+    },
+    {
       "assert": "exit code 0 when only PASS/NOT_RUN",
       "got": 0,
       "ok": true
@@ -729,23 +1249,13 @@
       "ok": true
     },
     {
-      "assert": "REPORT lists 'Glow brightness' under Needs real parts",
-      "got": true,
-      "ok": true
-    },
-    {
-      "assert": "REPORT lists 'LED data level' under Needs real parts",
-      "got": true,
-      "ok": true
-    },
-    {
       "assert": "REPORT lists 'OLED flex clearance' under Needs real parts",
       "got": true,
       "ok": true
     },
     {
-      "assert": "exactly the 5 agreed Needs real parts items",
-      "got": 5,
+      "assert": "exactly the 3 agreed Needs real parts items",
+      "got": 3,
       "ok": true
     },
     {

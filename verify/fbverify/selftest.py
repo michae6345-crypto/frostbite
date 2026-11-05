@@ -3,12 +3,15 @@ design.json where a real file cannot serve, and requires PASS. It then injects o
 requires FAIL with a reason that names the fault."""
 from __future__ import annotations
 
+import csv
 import datetime as _dt
+import io
 import json
 import os
 import re
 import shutil
 import struct
+import subprocess
 import tempfile
 import time
 import traceback
@@ -16,7 +19,7 @@ from pathlib import Path
 
 from . import checks as C
 from . import geom, sexpr
-from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli, sha256
+from .core import FAIL, NOT_RUN, PASS, Check, Ctx, base_env, find_kicad_cli, scrub, sha256
 from .main import NEEDS_REAL_PARTS, exit_code, write_report
 
 OX, OY = 100.0, 50.0  # KiCad sheet offset for the synthetic board
@@ -52,18 +55,9 @@ def synth_pcb(d: dict) -> str:
     r = d["mcu"]["rect"]
     out.append(f' (footprint "Seeed:XIAO-RP2040-DIP" (layer "B.Cu") {A(r["x"] + r["w"] / 2, r["y"] + r["h"] / 2)}'
                ' (property "Reference" "U1") (property "Value" "XIAO-RP2040")'
-               f' (fp_rect (start {-r["w"] / 2} {-r["h"] / 2}) (end {r["w"] / 2} {r["h"] / 2}) (layer "B.Fab")))')
-    pos = {k["led"]: (k["x"], k["y"] + 5.08, "F.Cu") for k in d["keys"]}
-    pos.update({gl["led"]: (gl["x"], gl["y"], "B.Cu") for gl in d["leds"]["glow"]})
-    for i in range(d["leds"]["count"]):
-        x, y, side = pos[i]
-        din = "LED_DIN" if i == 0 else f"LEDN{i - 1}"
-        out.append(f' (footprint "frostbite:LED_SK6812MINI-E" (layer "{side}") {A(x, y)}'
-                   f' (property "Reference" "LED{i + 1}") (property "Value" "SK6812MINI-E")'
-                   f' (pad "1" smd rect (at -1.6 -0.7) (size 1 0.8) (layers "B.Cu") (net "+5V") (pinfunction "VDD"))'
-                   f' (pad "2" smd rect (at -1.6 0.7) (size 1 0.8) (layers "B.Cu") (net "LEDN{i}") (pinfunction "DOUT"))'
-                   f' (pad "3" smd rect (at 1.6 0.7) (size 1 0.8) (layers "B.Cu") (net "GND") (pinfunction "GND"))'
-                   f' (pad "4" smd rect (at 1.6 -0.7) (size 1 0.8) (layers "B.Cu") (net "{din}") (pinfunction "DIN")))')
+               f' (fp_rect (start {-r["w"] / 2} {-r["h"] / 2}) (end {r["w"] / 2} {r["h"] / 2}) (layer "B.Fab"))'
+               ' (pad "12" smd rect (at -7.6 -5.0) (size 1 0.8) (layers "B.Cu") (net "+3V3") (pinfunction "3V3"))'
+               ' (pad "13" smd rect (at -7.6 -2.5) (size 1 0.8) (layers "B.Cu") (net "GND") (pinfunction "GND")))')
     for k in d["keys"]:
         n = k["ref"][2:]
         out.append(f' (footprint "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal" (layer "F.Cu") {A(k["x"], k["y"] + 8.5)}'
@@ -87,7 +81,9 @@ def synth_netlist(d: dict, fault: str | None = None) -> str:
     for p in d["pins"]:
         x = swap.get(p["xiao"], p["xiao"])
         node("/" + p["net"], "U1", str(int(x[1:]) + 1), x)
-    node("+5V", "U1", "14", "5V")
+    if fault == "five_volt":
+        node("+5V", "U1", "14", "5V")
+        node("+5V", "SW10", "S1", "S1")
     node("+3V3", "U1", "12", "3V3")
     node("GND", "U1", "13", "GND")
     for k in d["keys"]:
@@ -106,16 +102,10 @@ def synth_netlist(d: dict, fault: str | None = None) -> str:
     node("/ENC_A", "SW10", "A", "A")
     node("/ENC_B", "SW10", "B", "B")
     node("GND", "SW10", "C", "C")
-    for i in range(d["leds"]["count"]):
-        ref = f"LED{i + 1}"
-        comps.append((ref, "SK6812MINI-E", "frostbite:LED_SK6812MINI-E"))
-        node("+5V", ref, "1", "VDD")
-        node(f"Net-(LED{i + 1}-DOUT)", ref, "2", "DOUT")
-        node("GND", ref, "3", "GND")
-        din = "/LED_DIN" if i == 0 else f"Net-(LED{i}-DOUT)"
-        if fault == "chain_break" and i == 7:
-            din = "Net-(cut)"
-        node(din, ref, "4", "DIN")
+    if fault == "led_part":
+        comps.append(("LED1", "SK6812MINI-E", "frostbite:SK6812MINI-E_key"))
+        node("+3V3", "LED1", "1", "VDD")
+        node("GND", "LED1", "3", "GND")
     L = ['(export (version "E")', " (components"]
     for ref, val, fp in comps:
         L.append(f'  (comp (ref "{ref}") (value "{val}") (footprint "{fp}") (libsource (lib "x") (part "{val}")))')
@@ -150,18 +140,34 @@ def synth_box(height: float):
     return trimesh.creation.box(extents=(34.0, 13.5, height))
 
 
-def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(31.0, 12.98), window_dx=0.0,
-              boss_x=None, depth=16.0, usb_w=None, hole_move=0.0):
-    """A Top like the real one, in print orientation: plate top on the bed at z=0, skirt rising to z=depth."""
-    import shapely.geometry as g
-    import shapely.ops as o
+def _stack(layers, W, H):
+    """Extrude [(polygon, z0, z1)] into one mesh, centred like an export."""
     import trimesh
+    meshes = []
+    for poly, z0, z1 in layers:
+        for p in (poly.geoms if hasattr(poly, "geoms") else [poly]):
+            m = trimesh.creation.extrude_polygon(p, z1 - z0)
+            m.apply_translation([-W / 2, -H / 2, z0])
+            meshes.append(m)
+    return trimesh.util.concatenate(meshes)
+
+
+def _shell(d: dict):
+    import shapely.geometry as g
     W, H = d["pcb"]["w"], d["pcb"]["h"]
     sh = d["case"]["shell"]
     x0, y0 = (W - sh["w"]) / 2, (H - sh["h"]) / 2
-    shell = g.box(x0, y0, x0 + sh["w"], y0 + sh["h"])
+    return g.box(x0, y0, x0 + sh["w"], y0 + sh["h"]), x0, y0
+
+
+def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(31.0, 12.98), window_dx=0.0,
+              depth=5.43, hole_move=0.0, hole_d=3.4, tongue=True):
+    """A Top like the real one, in print orientation: plate top on the bed at z=0, USB tongue rising to z=depth."""
+    import shapely.geometry as g
+    import shapely.ops as o
+    W, H = d["pcb"]["w"], d["pcb"]["h"]
+    shell, x0, y0 = _shell(d)
     tol = d["case"]["tolerance"]
-    pocket = g.box(-tol, -tol, W + tol, H + tol)
     cuts, pockets = [], []
     for i, k in enumerate(d["keys"]):
         x, y = k["x"], k["y"]
@@ -180,27 +186,46 @@ def synth_top(d: dict, cut=14.0, move=None, enc=("rect", 12.98, 16.0), window=(3
     cxw += window_dx
     win = g.box(cxw - window[0] / 2, cyw - window[1] / 2, cxw + window[0] / 2, cyw + window[1] / 2)
     recess = g.box(mod["x"] - 1.1, mod["y"] - 0.8, mod["x"] + mod["w"] + tol, mod["y"] + mod["h"] + 0.8)
-    bosses, holes = [], []
-    for sc in d["case"]["screws"]["positions"]:
-        x = sc["x"] if boss_x is None else (boss_x[0] if sc["x"] < W / 2 else boss_x[1])
-        bosses.append(g.Point(x, sc["y"]).buffer(d["case"]["screws"]["boss_od"] / 2, 48))
-        holes.append(g.Point(x + hole_move, sc["y"]).buffer(4.7 / 2, 48))
-    ring = shell.difference(pocket).union(o.unary_union(bosses).intersection(shell))
+    holes = [g.Point(sc["x"] + (hole_move if i == 0 else 0.0), sc["y"]).buffer(hole_d / 2, 48)
+             for i, sc in enumerate(d["case"]["screws"]["positions"])]
+    all_holes = o.unary_union(holes)
+    layers = [(shell.difference(o.unary_union(cuts + [eo, win])).difference(all_holes), 0.0, 1.0),
+              (shell.difference(o.unary_union(cuts + [eo, recess])).difference(all_holes), 1.0, 1.5),
+              (shell.difference(o.unary_union(pockets + [eo, recess])).difference(all_holes), 1.5, 2.5)]
+    if tongue:
+        uw = d["case"]["usb_cutout"]["w"]
+        xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
+        layers.append((g.box(xc - uw / 2 + 0.2, y0, xc + uw / 2 - 0.2, -tol), 2.5, depth))
+    return _stack(layers, W, H)
+
+
+def synth_bottom(d: dict, hole_move=0.0, no_hole=False, usb_w=None, notch=True, boss_in=0.0, floor_post=False):
+    """A Bottom like the real one, in print orientation: underside on the bed at z=0, rim at z=14.9."""
+    import shapely.geometry as g
+    import shapely.ops as o
+    W, H = d["pcb"]["w"], d["pcb"]["h"]
+    shell, x0, y0 = _shell(d)
+    tol, sc = d["case"]["tolerance"], d["case"]["screws"]
+    pocket = g.box(-tol, -tol, W + tol, H + tol)
+    wall = shell.difference(pocket)
+    centres = [(p["x"] + (boss_in if p["x"] < W / 2 else -boss_in), p["y"] + (boss_in if p["y"] < H / 2 else -boss_in))
+               for p in sc["positions"]]
+    if boss_in:
+        wall = wall.union(o.unary_union([g.Point(c).buffer(sc["boss_od"] / 2, 48) for c in centres]))
+    centres = [(x + (hole_move if i == 0 else 0.0), y) for i, (x, y) in enumerate(centres)]
+    inserts = o.unary_union([g.Point(c).buffer(2.35, 48) for i, c in enumerate(centres) if not (no_hole and i == 0)])
+    clear = o.unary_union([g.Point(c).buffer(1.7, 48) for c in centres])
     uw = d["case"]["usb_cutout"]["w"] if usb_w is None else usb_w
     xc = d["mcu"]["rect"]["x"] + d["mcu"]["rect"]["w"] / 2
-    notch = g.box(xc - uw / 2, y0 - 1, xc + uw / 2, 0)
-    layers = [(shell.difference(o.unary_union(cuts + [eo, win])), 0.0, 1.0),
-              (shell.difference(o.unary_union(cuts + [eo, recess])), 1.0, 1.5),
-              (shell.difference(o.unary_union(pockets + [eo, recess])), 1.5, 2.5),
-              (ring, 2.5, 5.43), (ring.difference(notch), 5.43, depth - 4),
-              (ring.difference(notch).difference(o.unary_union(holes)), depth - 4, depth)]
-    meshes = []
-    for poly, z0, z1 in layers:
-        for p in (poly.geoms if hasattr(poly, "geoms") else [poly]):
-            m = trimesh.creation.extrude_polygon(p, z1 - z0)
-            m.apply_translation([-W / 2, -H / 2, z0])
-            meshes.append(m)
-    return trimesh.util.concatenate(meshes)
+    cut = g.box(xc - uw / 2, y0 - 1, xc + uw / 2, 1.0) if notch else g.GeometryCollection()
+    floor = shell.difference(clear)
+    layers = [(shell, 0.0, 1.0), (floor, 1.0, 2.5), (wall.difference(clear), 2.5, 3.97),
+              (wall.difference(clear).difference(cut), 3.97, 10.9), (wall.difference(inserts).difference(cut), 10.9, 14.9)]
+    if floor_post:                                # stands under the XIAO, up to the PCB underside
+        layers.append((g.box(19.0, 8.0, 23.0, 12.0), 2.5, 10.8))
+    m = _stack(layers, W, H)
+    m.apply_scale([1, -1, 1])     # exported as modelled: mesh y is minus PCB y, where the Top is turned over about x
+    return m
 
 
 class SkipCase(Exception):
@@ -228,8 +253,9 @@ def _copy_project(real: Path, dst: Path):
         if (real / sub).is_dir():
             shutil.copytree(real / sub, dst / sub, ignore=shutil.ignore_patterns(
                 ".venv", "*-backups", ".build", "__pycache__", ".pytest_cache", "previews", "images"))
-    if (real / "README.md").is_file():
-        shutil.copy2(real / "README.md", dst / "README.md")
+    for f in ("README.md", "BOM.csv"):
+        if (real / f).is_file():
+            shutil.copy2(real / f, dst / f)
 
 
 def _edit_json(p: Path, fn):
@@ -254,6 +280,29 @@ def _positions(d: dict, oled_window: dict) -> dict:
             "screws": [dict(p) for p in d["case"]["screws"]["positions"]]}
 
 
+def real_fault(real: Path, name: str):
+    """A fault made by editing the real part in CadQuery (probe_fault.py). Runs on the copy at root."""
+    def fn(root):
+        py = real / "CAD/.venv/bin/python"
+        if not py.is_file():
+            raise SkipCase("CAD/.venv/bin/python missing")
+        env = {**base_env(), "PYTHONDONTWRITEBYTECODE": "1"}
+        subprocess.run([str(py), str(Path(__file__).with_name("probe_fault.py")), str(root), name], check=True, env=env,
+                       capture_output=True, text=True, timeout=120)
+    return fn
+
+
+def _edit_bom(root: Path, fn):
+    p = root / "BOM.csv"
+    rows = list(csv.DictReader(io.StringIO(p.read_text())))
+    fn(rows)
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=list(rows[0]))
+    w.writeheader()
+    w.writerows(rows)
+    p.write_text(out.getvalue())
+
+
 def run_selftest(verify: Path, real: Path) -> int:
     d = json.loads((real / "design.json").read_text())
     tmp = Path(tempfile.mkdtemp(prefix="fbverify-selftest-"))
@@ -275,8 +324,11 @@ def run_selftest(verify: Path, real: Path) -> int:
         t = t.replace("I2C1_SDA_PIN GP6", "I2C1_SDA_PIN GPX").replace("I2C1_SCL_PIN GP7", "I2C1_SCL_PIN GP6").replace("I2C1_SDA_PIN GPX", "I2C1_SDA_PIN GP7")
         p.write_text(t)
 
-    def fw_led_count(root):
-        _edit_json(root / kb_rel, lambda j: j["rgb_matrix"]["layout"].pop())
+    def fw_ws2812(root):
+        _edit_json(root / kb_rel, lambda j: j.update(ws2812={"pin": "GP0", "driver": "vendor"}))
+
+    def fw_rgb_matrix(root):
+        _edit_json(root / kb_rel, lambda j: j["features"].update(rgb_matrix=True))
 
     def pcb_clean(root):
         pd = root / "PCB"
@@ -298,27 +350,26 @@ def run_selftest(verify: Path, real: Path) -> int:
         p = root / "PCB/frostbite.kicad_pcb"
         p.write_text(p.read_text().replace('(2 "B.Cu" signal)', '(2 "B.Cu" signal) (4 "In1.Cu" signal)'))
 
-    def pcb_swap_led_chain(root):
+    def pcb_led_back(root):
+        """One SK6812 footprint added to the board that is there, real or generated."""
         p = root / "PCB/frostbite.kicad_pcb"
-        t = p.read_text()
-        # swap physical positions of chain LEDs 3 and 4 (LED4 <-> LED5 refs keep their nets)
-        a = re.search(r'\(at [\d.]+ [\d.]+\) \(property "Reference" "LED4"\)', t).group(0)
-        b = re.search(r'\(at [\d.]+ [\d.]+\) \(property "Reference" "LED5"\)', t).group(0)
-        at_a, at_b = a.split(" (property")[0], b.split(" (property")[0]
-        t = t.replace(a, at_b + ' (property "Reference" "LED4")').replace(b, at_a + ' (property "Reference" "LED5")')
-        p.write_text(t)
+        t = p.read_text().rstrip()
+        assert t.endswith(")"), "fixture: board file does not end in )"
+        fp = ('(footprint "frostbite:SK6812MINI-E_key" (layer "F.Cu") (at 130 80)\n'
+              ' (property "Reference" "LED1" (at 0 0 0) (layer "F.SilkS"))\n (property "Value" "SK6812MINI-E" (at 0 0 0) (layer "F.Fab"))\n'
+              ' (pad "1" smd rect (at -1.6 -0.7) (size 1 0.8) (layers "F.Cu") (net "+5V"))\n'
+              ' (pad "3" smd rect (at 1.6 0.7) (size 1 0.8) (layers "F.Cu") (net "GND")))\n')
+        p.write_text(t[:-1] + fp + ")\n")
 
     def uf2_clean(root):
         (root / "production").mkdir(exist_ok=True)
-        p = root / "production/firmware.uf2"
-        if not p.is_file():
-            p.write_bytes(synth_uf2())
-        for other in (root / "production").glob("*.uf2"):
-            if other.name != "firmware.uf2":
-                other.unlink()
-        if (root / C.KB_DIR).is_dir():
-            t = time.time()
-            os.utime(p, (t, t))  # copy is newer than the copied sources
+        for n in ("firmware.uf2", "bringup.uf2"):
+            p = root / "production" / n
+            if not p.is_file():
+                p.write_bytes(synth_uf2())
+            if (root / C.KB_DIR).is_dir():
+                t = time.time()
+                os.utime(p, (t, t))  # copy is newer than the copied sources
 
     def uf2_truncate(root):
         p = root / "production/firmware.uf2"
@@ -330,6 +381,20 @@ def run_selftest(verify: Path, real: Path) -> int:
         b = bytearray(p.read_bytes())
         struct.pack_into("<I", b, 28, 0x00FF00FF)
         p.write_bytes(bytes(b))
+
+    def bringup_truncate(root):
+        p = root / "production/bringup.uf2"
+        b = p.read_bytes()
+        p.write_bytes(b[: len(b) - 512 * 2 - 100])
+
+    def bringup_missing(root):
+        (root / "production/bringup.uf2").unlink()
+
+    def old_led_test_uf2(root):
+        (root / "production/led-test.uf2").write_bytes(synth_uf2())
+
+    def stale_glowband(root):
+        synth_solid(d).export(root / "production/GlowBand.stl")
 
     def stl_clean(root):
         prod = root / "production"
@@ -347,23 +412,25 @@ def run_selftest(verify: Path, real: Path) -> int:
         m.update_faces(keep)
         m.export(p)
 
-    def top_write(root, **kw):
+    def top_write(root, bot=None, **kw):
         prod = root / "production"
         prod.mkdir(exist_ok=True)
         _drop_stls(prod)
         dd = kw.pop("dd", d)
         synth_top(dd, **kw).export(prod / "Top.stl")
-        sup = dd["case"]["oled_support"]
-        synth_box(sup["module_gap"] - 2 * sup["tape"]).export(prod / "OLEDSupport.stl")
+        synth_bottom(dd, **(bot or {})).export(prod / "Bottom.stl")
+        synth_box(dd["case"]["oled_support"]["module_gap"]).export(prod / "OLEDSupport.stl")
         o = d["oled"]["window"]
         c = kw.get("window", (31.0, 12.98))
         cut = {"x": o["x"] + o["w"] / 2 + kw.get("window_dx", 0.0) - c[0] / 2, "y": o["y"] + o["h"] / 2 - c[1] / 2, "w": c[0], "h": c[1]}
         (root / "CAD").mkdir(exist_ok=True)
         (root / "CAD/positions.json").write_text(json.dumps(_positions(d, {**o, "cut": cut})))
-        shutil.rmtree(root / "PCB", ignore_errors=True)
 
     def t(**kw):
         return lambda root: top_write(root, **kw)
+
+    def b(**kw):
+        return lambda root: top_write(root, bot=kw)
 
     def with_gap(gap):
         def fn(root):
@@ -419,16 +486,8 @@ def run_selftest(verify: Path, real: Path) -> int:
         m.export(p)
 
     def old_b1(root):
-        """The real audited Top (B1) with the design of that day: shell 75.15, bosses at -3.0 / 64.15."""
-        prod = root / "production"
-        _drop_stls(prod)
-        shutil.copy2(verify / "fixtures/old_b1_Top.stl", prod / "Top.stl")
-
-        def edit(j):
-            j["case"]["shell"]["w"] = 75.15
-            for sc in j["case"]["screws"]["positions"]:
-                sc["x"] = -3.0 if sc["x"] < 30 else 64.15
-        _edit_json(root / "design.json", edit)
+        """The real audited blocked tray (B1, the old Top with its bosses inside the envelope) in place of the Bottom."""
+        shutil.copy2(verify / "fixtures/old_b1_Top.stl", root / "production/Bottom.stl")
 
     def stale_cut(root):
         _edit_json(root / "CAD/positions.json", lambda j: j["oled_window"].__setitem__("cut", dict(d["oled"]["window"])))
@@ -451,7 +510,9 @@ def run_selftest(verify: Path, real: Path) -> int:
     def gnd_override(root):
         p = root / "PCB/frostbite.kicad_pcb"
         t0 = p.read_text()
-        p.write_text(t0.replace('(size 1 0.8) (layers "B.Cu") (net "GND")', '(size 1 0.8) (layers "B.Cu") (zone_connect 2) (net "GND")', 1))
+        key = '(size 1 0.8) (layers "B.Cu") (net "GND")'
+        assert key in t0, "fixture: GND pad not found"
+        p.write_text(t0.replace(key, '(size 1 0.8) (layers "B.Cu") (zone_connect 2) (net "GND")', 1))
 
     def gnd_zone_solid(root):
         p = root / "PCB/frostbite.kicad_pcb"
@@ -480,6 +541,26 @@ def run_selftest(verify: Path, real: Path) -> int:
         key = "for (uint8_t x = 0; x < 126; x += 3) oled_write_pixel(x, 19, true);"
         assert key in t0, "fixture: divider loop not found in keymap.c"
         p.write_text(t0.replace(key, 'oled_set_cursor(0, 2); oled_write_P(PSTR("                     "), false);\n    ' + key))
+
+    def bringup_broken(root):
+        p = root / C.KB_DIR / "keymaps/bringup/keymap.c"
+        t0 = p.read_text()
+        t1 = t0.replace("knob: turn it", "knob: spin it")
+        assert t1 != t0, "fixture: start screen text not found in the bringup keymap"
+        p.write_text(t1)
+
+    def runsh_bad_exit(root):
+        p = root / "Firmware/tests/run.sh"
+        t0 = p.read_text()
+        assert t0.rstrip().endswith("exit $rc2"), "fixture: run.sh does not end in exit $rc2"
+        p.write_text(t0.rstrip()[: -len("exit $rc2")] + "exit 7\n")
+
+    def runsh_skips_bringup(root):
+        p = root / "Firmware/tests/run.sh"
+        t0 = p.read_text()
+        key = "./bringup_test\nrc2=$?"
+        assert key in t0, "fixture: bringup run not found in run.sh"
+        p.write_text(t0.replace(key, "rc2=0"))
 
     def host_test_breaks(root):
         (root / "host/tests/test_selftest_fault.py").write_text("def test_fault():\n    assert False\n")
@@ -522,22 +603,42 @@ def run_selftest(verify: Path, real: Path) -> int:
     def pad_under_boss_json(root):
         b = d["case"]["screws"]["positions"][0]
         _edit_json(root / "PCB/build/bottom_pads.json", lambda j: j["pads"].append(
-            {"ref": "TP1", "pad": "1", "x0": b["x"] + 4.5, "y0": b["y"] - 0.5, "x1": b["x"] + 5.5, "y1": b["y"] + 0.5}))
+            {"ref": "TP1", "pad": "1", "x0": b["x"] + 3.95, "y0": b["y"] - 0.5, "x1": b["x"] + 4.95, "y1": b["y"] + 0.5}))
+
+    def pad_shifted_json(root):
+        def edit(j):
+            p = next(p for p in j["pads"] if p["ref"] == "U1" and p["pad"] == "1")
+            p["x0"] -= 1.0
+            p["x1"] -= 1.0
+        _edit_json(root / "PCB/build/bottom_pads.json", edit)
 
     def real_boss_clean(root):
         if not (root / "PCB/frostbite.kicad_pcb").is_file() or not (root / "PCB/build/bottom_pads.json").is_file():
             raise SkipCase("real PCB or PCB/build/bottom_pads.json not present")
 
     def design_bad_pin(root):
-        _edit_json(root / "design.json", lambda j: j["pins"][9].__setitem__("gpio", "GP5"))
+        _edit_json(root / "design.json", lambda j: next(p for p in j["pins"] if p["xiao"] == "D9").__setitem__("gpio", "GP5"))
 
-    def design_dup_led(root):
+    def design_led_din(root):
+        _edit_json(root / "design.json", lambda j: j["pins"].append({"xiao": "D6", "gpio": "GP0", "net": "LED_DIN"}))
+
+    def design_leds_block(root):
+        _edit_json(root / "design.json", lambda j: j.update(leds={"count": 13, "glow": []}))
+
+    def design_key_led(root):
         _edit_json(root / "design.json", lambda j: j["keys"][1].__setitem__("led", 0))
 
+    def design_tilt(root):
+        _edit_json(root / "design.json", lambda j: j["case"]["shell"].__setitem__("tilt_deg", 6))
+
+    def design_five_volt(root):
+        _edit_json(root / "design.json", lambda j: j["power"].__setitem__("5V", "XIAO 5V -> LEDs"))
+
     def bom_too_many(root):
-        _edit_json(root / "design.json", lambda j: j["leds"].__setitem__("count", 17))
+        _edit_json(root / "design.json", lambda j: j["case"].__setitem__("inserts", "8 x M3 heat-set (OD 5, L 4, hole 4.7)"))
 
     def pkg_clean(root):
+        """The real README and BOM.csv, on stand-in files."""
         (root / "CAD").mkdir(exist_ok=True)
         if not any(q.suffix.lower() in (".step", ".stp", ".3mf") for q in (root / "CAD").rglob("*")):
             (root / "CAD/frostbite.step").write_text("ISO-10303-21;")
@@ -546,21 +647,53 @@ def run_selftest(verify: Path, real: Path) -> int:
         prod.mkdir(exist_ok=True)
         (prod / "gerbers.zip").write_bytes(b"PK\x05\x06" + b"\0" * 18)
         (prod / "firmware.uf2").write_bytes(synth_uf2())
+        (prod / "bringup.uf2").write_bytes(synth_uf2())
         for n in C.PARTS:
             (prod / f"{n}.step").write_text("ISO-10303-21;")
             (prod / f"{n}.stl").write_text("solid x")
-        img = root / "docs"
-        img.mkdir(exist_ok=True)
-        for n in ("render", "schematic", "pcb", "case-exploded"):
-            (img / f"{n}.png").write_bytes(b"\x89PNG")
-        (root / "README.md").write_text(
-            "# Frostbite\n![Frostbite render](docs/render.png)\n![Schematic](docs/schematic.png)\n"
-            "![PCB](docs/pcb.png)\n![Case exploded](docs/case-exploded.png)\n\n## BOM\n\n| Part | Qty |\n|---|---|\n| XIAO | 1 |\n")
+        for m in C.IMG_RE.finditer((root / "README.md").read_text()):
+            src = m.group(2) or m.group(3)
+            if not re.match(r"https?://", src):
+                (root / src).parent.mkdir(parents=True, exist_ok=True)
+                (root / src).write_bytes(b"\x89PNG")
 
     def pkg_broken(root):
         (root / "production/gerbers.zip").unlink()
         (root / "production/OLEDSupport.step").unlink()
-        (root / "docs/schematic.png").unlink()
+        (root / "PCB/images/schematic.png").unlink()
+
+    def readme_drop(*names):
+        def fn(root):
+            p = root / "README.md"
+            lines = p.read_text().splitlines(keepends=True)
+            keep = [ln for ln in lines if not any(n in ln and "src=" in ln for n in names)]
+            assert len(keep) == len(lines) - len(names), f"fixture: image lines {names} not found in README.md"
+            p.write_text("".join(keep))
+        return fn
+
+    def readme_no_bom_table(root):
+        p = root / "README.md"
+        p.write_text(re.sub(r"^\|.*\|\s*$\n", "", p.read_text(), flags=re.M))
+
+    def bom_missing(root):
+        (root / "BOM.csv").unlink()
+
+    def bom_blank(col):
+        def fn(root):
+            _edit_bom(root, lambda rows: rows[3].__setitem__(col, ""))
+        return fn
+
+    def bom_price_text(root):
+        _edit_bom(root, lambda rows: rows[-1].__setitem__("price_usd", "free-ish"))
+
+    def bom_link_text(root):
+        _edit_bom(root, lambda rows: rows[0].__setitem__("link", "see the kit"))
+
+    def bom_no_column(root):
+        def edit(rows):
+            for r in rows:
+                r.pop("price_usd")
+        _edit_bom(root, edit)
 
     def netlist_check(kind):
         def fn(ctx):
@@ -575,29 +708,42 @@ def run_selftest(verify: Path, real: Path) -> int:
 
     cases = [
         Case("design.json: wrong GPIO for a XIAO pin", "G0.design_json", C.g0_design_json, noop, design_bad_pin, "D9"),
-        Case("design.json: duplicate LED index", "G0.design_json", C.g0_design_json, noop, design_dup_led, "leds"),
+        Case("design.json: LED_DIN back in the pins", "G0.design_json", C.g0_design_json, noop, design_led_din, "net LED_DIN"),
+        Case("design.json: leds block back", "G0.design_json", C.g0_design_json, noop, design_leds_block, "leds: block"),
+        Case("design.json: a key has an led index", "G0.design_json", C.g0_design_json, noop, design_key_led, "SW2"),
+        Case("design.json: a 5V rail back", "G0.design_json", C.g0_design_json, noop, design_five_volt, "rails"),
+        Case("design.json: case tilted", "G0.design_json", C.g0_design_json, noop, design_tilt, "tilt_deg"),
         Case("keyboard.json: swapped column pins", "G2.firmware_pins", C.g2_firmware_pins, fw_clean, fw_swap_cols, "matrix_pins.cols"),
         Case("config.h: swapped I2C SDA/SCL", "G2.firmware_pins", C.g2_firmware_pins, fw_clean, fw_swap_i2c, "I2C1_SDA_PIN"),
-        Case("keyboard.json: 12 LEDs instead of 13", "G2.firmware_pins", C.g2_firmware_pins, fw_clean, fw_led_count, "LED count"),
+        Case("keyboard.json: ws2812 back", "G2.firmware_pins", C.g2_firmware_pins, fw_clean, fw_ws2812, "ws2812"),
+        Case("keyboard.json: rgb_matrix feature back", "G2.firmware_pins", C.g2_firmware_pins, fw_clean, fw_rgb_matrix, "rgb_matrix"),
         Case("netlist: OLED SCL/SDA swapped", "G2.netlist", netlist_check("oled_swap"), noop, None, "OLED1 pin 3"),
-        Case("netlist: LED chain broken after LED7", "G2.netlist", netlist_check("chain_break"), noop, None, "LED chain"),
+        Case("netlist: +5V net back", "G2.netlist", netlist_check("five_volt"), noop, None, "5 V net"),
+        Case("netlist: an SK6812 part back", "G2.netlist", netlist_check("led_part"), noop, None, "LED parts"),
         Case("netlist: XIAO D9/D10 swapped", "G2.netlist", netlist_check("xiao_pin"), noop, None, "XIAO D9"),
         Case("pcb: SW5 moved 0.2 mm", "G3.positions", C.g3_positions, pcb_clean, pcb_move_sw5, "SW5"),
-        Case("pcb: chain LEDs 3/4 swapped", "G3.positions", C.g3_positions, pcb_clean, pcb_swap_led_chain, "chain LED 3"),
+        Case("pcb: an LED footprint back", "G3.positions", C.g3_positions, pcb_clean, pcb_led_back, "LED footprints"),
+        Case("real PCB: an LED footprint back", "G3.positions", C.g3_positions, real_gnd_clean, pcb_led_back, "LED footprints"),
+        Case("real PCB: an LED footprint on +5V back", "G3.positions", C.g3_positions, real_gnd_clean, pcb_led_back, "5 V net"),
         Case("pcb: 3 copper layers", "G3.outline_layers", C.g3_outline_layers, pcb_clean, pcb_three_layers, "copper layers"),
         Case("uf2: truncated", "G6.production_uf2", C.g6_production_uf2, uf2_clean, uf2_truncate, "multiple of 512"),
         Case("uf2: wrong family ID", "G6.production_uf2", C.g6_production_uf2, uf2_clean, uf2_family, "family"),
+        Case("uf2: bringup.uf2 truncated", "G6.production_uf2", C.g6_production_uf2, uf2_clean, bringup_truncate, "production/bringup.uf2: size"),
+        Case("uf2: bringup.uf2 missing", "G6.production_uf2", C.g6_production_uf2, uf2_clean, bringup_missing, "bringup.uf2 missing"),
+        Case("uf2: old led-test.uf2 left behind", "G6.production_uf2", C.g6_production_uf2, uf2_clean, old_led_test_uf2, "led-test.uf2"),
         Case("stl: non-watertight Top", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, stl_hole, "not watertight"),
+        Case("stl: GlowBand.stl left behind", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, stale_glowband, "GlowBand.stl is not a part"),
         Case("CAD positions: SW7 moved 0.4 mm", "X.cross_positions", C.x_cross_positions, cadpos_clean, cadpos_move, "SW7"),
         Case("CAD positions: USB cutout 13.0 < 13.5 mm", "X.cross_positions", C.x_cross_positions, cadpos_clean, cadpos_usb_narrow, "usb_cutout w"),
         Case("boss (design.json) moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, boss_on_pad_design, "[design.json vs"),
         Case("boss (CAD/positions.json) moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, boss_on_pad_cad, "[CAD/positions.json vs"),
         Case("bottom_pads.json: pad 0.15 mm from a boss", "X.boss_vs_pads", C.x_boss_vs_pads, boss_clean, pad_under_boss_json, "vs PCB/build/bottom_pads.json] boss 0"),
         Case("real PCB: design.json boss moved onto D9 pad", "X.boss_vs_pads", C.x_boss_vs_pads, real_boss_clean, boss_on_pad_design, "D9 pad 2"),
+        Case("real PCB: bottom_pads.json and the parse disagree by 1 mm", "X.boss_vs_pads", C.x_boss_vs_pads, real_boss_clean, pad_shifted_json, "sources disagree"),
         Case("stl: OLEDSupport.stl missing", "G4.stl_mesh", C.g4_stl_mesh, stl_clean, support_missing, "production/OLEDSupport.stl missing"),
         Case("top: one cutout 14.3 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(cut=[14.0] * 4 + [14.3] + [14.0] * 4), "14.300"),
         Case("top: one cutout moved 0.5 mm", "G4.switch_cutouts", C.g4_switch_cutouts, t(), t(move=(4, 0.5)), "opening centre"),
-        Case("top 13 mm tall: heights come from the part", "G4.switch_cutouts", C.g4_switch_cutouts, t(depth=13.0), t(depth=13.0, cut=13.7), "13.700"),
+        Case("top with a longer tongue: heights come from the part", "G4.switch_cutouts", C.g4_switch_cutouts, t(depth=8.0), t(depth=8.0, cut=13.7), "13.700"),
         Case("top: walls missing, slicer must not guess", "G4.switch_cutouts", C.g4_switch_cutouts, t(), top_broken, "lost material"),
         Case("encoder: round 17.4 clears, 15.0 hits the body", "G4.encoder_clearance", C.g4_encoder_clearance, t(enc=("round", 17.4)), t(enc=("round", 15.0)), "EC11 body"),
         Case("encoder: 12.98 x 16 clears, 11.9 x 16 does not", "G4.encoder_clearance", C.g4_encoder_clearance, t(), t(enc=("rect", 11.9, 16.0)), "EC11 body"),
@@ -614,10 +760,21 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("step: OLEDSupport.step is another part", "G4.step_parts", C.g4_step_parts, noop, step_swapped, "OLEDSupport: STEP volume"),
         Case("step: prose edit in design.json is fine, a real geometry edit is stale", "G4.step_parts", C.g4_step_parts, prose_edit, with_gap(2.0), "OLEDSupport: production STEP"),
         Case("oled: positions.json states the design window, not the cut", "G4.oled_clearance", C.g4_oled_clearance, t(), stale_cut, "oled_window cut"),
-        Case("pcb insertion: bosses at old x -3.0 / 64.15", "X.pcb_insertion", C.x_pcb_insertion, t(), t(boss_x=(-3.0, 64.15)), "cannot reach its seat"),
-        Case("pcb insertion: the real audited B1 Top", "X.pcb_insertion", C.x_pcb_insertion, t(), old_b1, "cannot reach its seat"),
-        Case("mesh: insert hole 0.5 mm off", "X.cross_positions", C.x_cross_positions, t(), t(hole_move=0.5), "insert hole"),
-        Case("mesh: USB opening 13.0 < 13.5 mm", "X.cross_positions", C.x_cross_positions, t(), t(usb_w=13.0), "USB opening"),
+        Case("pcb insertion: bosses 1.5 mm inside the corners", "X.pcb_insertion", C.x_pcb_insertion, t(), b(boss_in=1.5), "cannot reach its seat"),
+        Case("pcb insertion: the real audited B1 part as the tray", "X.pcb_insertion", C.x_pcb_insertion, t(), old_b1, "cannot reach its seat"),
+        Case("pcb insertion: post under the XIAO", "X.pcb_insertion", C.x_pcb_insertion, t(), b(floor_post=True), "XIAO board"),
+        Case("pcb insertion: tongue wider than the notch", "X.pcb_insertion", C.x_pcb_insertion, t(), b(usb_w=12.0), "Top below the rim"),
+        Case("pcb insertion: notch closed, receptacle stopped", "X.pcb_insertion", C.x_pcb_insertion, noop, real_fault(real, "close_notch"), "USB receptacle"),
+        Case("mesh: insert hole 0.5 mm off", "X.cross_positions", C.x_cross_positions, t(), b(hole_move=0.5), "insert hole 0"),
+        Case("mesh: insert hole removed from Bottom", "X.cross_positions", C.x_cross_positions, t(), b(no_hole=True), "no insert hole"),
+        Case("mesh: USB notch 13.0 < 13.5 mm", "X.cross_positions", C.x_cross_positions, t(), b(usb_w=13.0), "USB notch"),
+        Case("mesh: USB notch closed in Bottom", "X.cross_positions", C.x_cross_positions, t(), b(notch=False), "back wall is closed"),
+        Case("mesh: screw hole 0.5 mm off in Top", "X.cross_positions", C.x_cross_positions, t(), t(hole_move=0.5), "screw hole 0"),
+        Case("mesh: screw hole 2.6 mm in Top", "X.cross_positions", C.x_cross_positions, t(), t(hole_d=2.6), "screw hole 0"),
+        Case("mesh: USB tongue gone from Top", "X.cross_positions", C.x_cross_positions, t(), t(tongue=False), "no tongue"),
+        Case("real Top: screw hole moved 0.5 mm", "X.cross_positions", C.x_cross_positions, noop, real_fault(real, "move_top_hole"), "screw hole 0"),
+        Case("real Bottom: insert hole filled", "X.cross_positions", C.x_cross_positions, noop, real_fault(real, "plug_insert"), "no insert hole"),
+        Case("real Bottom: USB notch closed", "X.cross_positions", C.x_cross_positions, noop, real_fault(real, "close_notch"), "back wall is closed"),
         Case("usb: host VID/PID filter removed", "X.usb_ids", C.x_usb_ids, noop, usb_filter_removed, "keychron"),
         Case("usb: keyboard.json PID differs", "X.usb_ids", C.x_usb_ids, noop, fw_pid, "keyboard.json usb"),
         Case("usb: design.json PID differs", "X.usb_ids", C.x_usb_ids, noop, design_pid, "VENDOR_ID/PRODUCT_ID"),
@@ -629,9 +786,31 @@ def run_selftest(verify: Path, real: Path) -> int:
         Case("gnd: real U1 pad 13 set to full", "G3.gnd_thermal", C.g3_gnd_thermal, real_gnd_clean, real_gnd_override, "U1 pad 13"),
         Case("firmware: F1 blanking line back in keymap.c", "G6.oled_strip_panel", C.g6_oled_strip_panel, noop, f1_back, "PASS F1 HID: slot strip"),
         Case("firmware: harness fails with F1 back", "G6.firmware_harness", C.g6_firmware_harness, noop, f1_back, "FAIL F1 HID"),
+        Case("firmware: bringup keymap draws the wrong screen", "G6.firmware_harness", C.g6_firmware_harness, noop, bringup_broken, "FAIL bringup"),
+        Case("firmware: bringup screen missing from the panel lines", "G6.oled_strip_panel", C.g6_oled_strip_panel, noop, bringup_broken, "PASS bringup: start screen"),
+        Case("firmware: run.sh exits non-zero with no FAIL line", "G6.firmware_harness", C.g6_firmware_harness, noop, runsh_bad_exit, "harness exited 7"),
+        Case("firmware: panel check sees run.sh exit non-zero", "G6.oled_strip_panel", C.g6_oled_strip_panel, noop, runsh_bad_exit, "harness exited 7"),
+        Case("firmware: run.sh stops running the bringup program", "G6.firmware_harness", C.g6_firmware_harness, noop, runsh_skips_bringup, "bringup keymap"),
         Case("host: a failing test in host/tests", "G7.host_tests", C.g7_host_tests, noop, host_test_breaks, "pytest exited"),
-        Case("BOM: 17 LEDs > kit 16", "G5.bom_kit", C.g5_bom_kit, noop, bom_too_many, "leds"),
+        Case("BOM: 8 inserts > kit 6", "G5.bom_kit", C.g5_bom_kit, noop, bom_too_many, "design needs 8 inserts"),
+        Case("BOM: an LED footprint on the real PCB", "G5.bom_kit", C.g5_bom_kit, real_gnd_clean, pcb_led_back, "LED footprints"),
         Case("package: gerbers.zip and schematic image missing", "G8.package", C.g8_package, pkg_clean, pkg_broken, "gerbers.zip"),
+        Case("package: schematic image file missing", "G8.package", C.g8_package, pkg_clean, pkg_broken, "does not resolve: PCB/images/schematic.png"),
+        Case("package: bringup.uf2 missing", "G8.package", C.g8_package, pkg_clean, bringup_missing, "bringup.uf2 missing"),
+        Case("package: GlowBand.stl left behind", "G8.package", C.g8_package, pkg_clean, stale_glowband, "GlowBand.stl is not a part"),
+        Case("package: README loses the hackpad image", "G8.package", C.g8_package, pkg_clean, readme_drop("docs/images/hackpad.png"), "whole hackpad"),
+        Case("package: README loses the exploded image", "G8.package", C.g8_package, pkg_clean, readme_drop("docs/images/exploded.png"), "case fit"),
+        Case("package: README loses the schematic image", "G8.package", C.g8_package, pkg_clean, readme_drop("PCB/images/schematic.png"), "for the schematic"),
+        Case("package: README loses both PCB renders, the badge does not count", "G8.package", C.g8_package, pkg_clean,
+             readme_drop("pcb_render_top", "pcb_render_bottom"), "for the PCB"),
+        Case("package: README loses the BOM table", "G8.package", C.g8_package, pkg_clean, readme_no_bom_table, "no markdown table"),
+        Case("package: BOM.csv missing", "G8.package", C.g8_package, pkg_clean, bom_missing, "BOM.csv missing"),
+        Case("package: BOM.csv row with no item", "G8.package", C.g8_package, pkg_clean, bom_blank("item"), "item is empty"),
+        Case("package: BOM.csv row with no link", "G8.package", C.g8_package, pkg_clean, bom_blank("link"), "link is empty"),
+        Case("package: BOM.csv row with no price", "G8.package", C.g8_package, pkg_clean, bom_blank("price_usd"), "price_usd is empty"),
+        Case("package: BOM.csv link is not a URL", "G8.package", C.g8_package, pkg_clean, bom_link_text, "is not a URL"),
+        Case("package: BOM.csv price is not a number", "G8.package", C.g8_package, pkg_clean, bom_price_text, "not a number of US dollars"),
+        Case("package: BOM.csv has no price_usd column", "G8.package", C.g8_package, pkg_clean, bom_no_column, "no column"),
     ]
 
     for i, cs in enumerate(cases):
@@ -676,7 +855,8 @@ def run_selftest(verify: Path, real: Path) -> int:
     (empty / "design.json").write_text((real / "design.json").read_text())
     ectx = _ctx(empty, tmp / "empty-ev")
     for fn, cid in ((C.g3_drc, "G3.drc"), (C.g2_erc, "G2.erc"), (C.g4_stl_mesh, "G4.stl_mesh"),
-                    (C.g6_production_uf2, "G6.production_uf2"), (C.g7_host_tests, "G7.host_tests")):
+                    (C.g6_production_uf2, "G6.production_uf2"), (C.g7_host_tests, "G7.host_tests"),
+                    (C.x_pcb_insertion, "X.pcb_insertion")):
         st = fn(ectx).status
         meta.append({"assert": f"{cid} on an empty project is NOT_RUN", "got": st, "ok": st == NOT_RUN})
     fake = [{"status": PASS}, {"status": NOT_RUN}]
@@ -688,7 +868,7 @@ def run_selftest(verify: Path, real: Path) -> int:
     text = rep.read_text()
     for name, _, _ in NEEDS_REAL_PARTS:
         meta.append({"assert": f"REPORT lists '{name}' under Needs real parts", "got": name in text, "ok": name in text})
-    meta.append({"assert": "exactly the 5 agreed Needs real parts items", "got": len(NEEDS_REAL_PARTS), "ok": len(NEEDS_REAL_PARTS) == 5})
+    meta.append({"assert": "exactly the 3 agreed Needs real parts items", "got": len(NEEDS_REAL_PARTS), "ok": len(NEEDS_REAL_PARTS) == 3})
     pinned = sha256(verify / C.JLC_DRU.split("verify/")[1]) == C.JLC_DRU_SHA256
     meta.append({"assert": "pinned JLCPCB rules file matches its SHA-256", "got": pinned, "ok": pinned})
     for m in meta:
@@ -698,7 +878,7 @@ def run_selftest(verify: Path, real: Path) -> int:
     summary = {"timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
                "status": "PASS" if not bad else "FAIL", "cases": results, "meta": meta,
                "skipped": [r["case"] for r in results if r["ok"] is None]}
-    (verify / "selftest.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (verify / "selftest.json").write_text(scrub(json.dumps(summary, indent=2)) + "\n")
     n_ok = sum(1 for r in results if r["ok"])
     print(f"self-test {summary['status']}: {n_ok}/{len(results)} fault cases caught, "
           f"{len(summary['skipped'])} skipped, {sum(m['ok'] for m in meta)}/{len(meta)} harness assertions; wrote verify/selftest.json")

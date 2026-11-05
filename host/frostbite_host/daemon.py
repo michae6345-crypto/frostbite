@@ -31,7 +31,7 @@ from . import ipc
 from .actions import USE_TERMINAL, Actions
 from .device import (HOLD, KEY_APPROVE, KEY_NAMES, KEY_STOP, KEY_TALK, NUM_SLOTS, OLED_COLS, TAP,
                      DeviceLink, DryRunTransport, EncoderEvent, FakeDevice, HidTransport,
-                     KeyEvent, OledLine, PingReply, SetAll, SetGlow, SetSelected, Status, Unknown)
+                     KeyEvent, OledLine, PingReply, SetAll, SetSelected, Status, Unknown)
 from .hook import MAX_WAIT
 from .state import Board
 from .train import TrainWatcher, done_pattern
@@ -106,10 +106,6 @@ class Daemon:
         shown = b.shown_request(now)
         if shown != self._shown_id:
             self._shown_id, self._shown_at = shown, now
-        glow = b.glow()
-        if self._sent.get("glow") != glow:
-            self.send(SetGlow(*glow))
-            self._sent["glow"] = glow
 
     def handle(self, item: tuple) -> None:
         kind = item[0]
@@ -524,10 +520,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--stale-minutes", type=float, default=10.0,
                    help="flag a run when its log stops growing this long (default 10)")
     p.add_argument("--stale-status", choices=["idle", "done"], default="idle",
-                   help="status for a stale run (default idle: dim, and a tap clears it)")
+                   help="status for a stale run (default idle, and a tap clears it)")
     p.add_argument("--done-pattern", type=done_pattern, help="extra regex that marks the final log line")
     p.add_argument("--linger-minutes", type=float, default=10.0,
-                   help="how long finished slots stay green before they free (default 10)")
+                   help="how long finished slots stay before they free (default 10)")
     p.add_argument("--socket", type=Path, default=None, help="socket path (default: state dir)")
     p.add_argument("-v", "--verbose", action="store_true")
     return p

@@ -1,45 +1,42 @@
 {
   "check": "G8.package",
   "gate": "G8",
-  "title": "Hackpad submission structure and README sections",
+  "title": "Hackpad submission structure, BOM.csv and README sections",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906",
-    "production/firmware.uf2": "046855ee04f45ef8adce095890e9fcd61bb5b6d5c49badc2046ca2d0e2eba76e",
-    "CAD/frostbite-assembly.step": "59075b8c79fe791f7156f3effec906c3416d0d50787d4b5fcc3b196fa7c790a8",
-    "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
-    "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
-    "production/OLEDSupport.step": "dbd31eee41cc6043ac5e7c5c5dc873df4cd837abacde58c2b401c22db4526e97",
-    "production/GlowBand.step": "5137d655d087c73b5f877fe94c1990bd4c5ff6e9a1023396c0d39287ea99d2de",
-    "production/Top.step": "b1e4247318cc0c203b3e59eadaf4b399a15319b81bf79f4b0991f864ae14abc8",
-    "production/Bottom.step": "bd120fd3729495f5f8f9ea0dfc259bd18f6a7c4866c2eff07d449d0414aa0f43",
+    "production/gerbers.zip": "28ffdafbe62abb47bc553fe166de3628a8f1d1acc32fd818617f15cc302604fe",
+    "production/firmware.uf2": "5da8bfea2599b0514126bb8fe5e1c0ca76e8a0cce224e1eafdef3da006aa22ec",
+    "production/bringup.uf2": "730c49ca552107c6f451ac64b8db078e2f55bb13ef338e61c8647342641630df",
+    "CAD/frostbite-assembly.step": "0d4a0dfdd902d2b84af642c9a811431e06e6f3a248079cac1738c5fe6db2eeb3",
+    "production/OLEDSupport.stl": "81c9be3e7ea168a295192d9af888562386cd21ff916bef076543f7a190816727",
+    "production/Bottom.stl": "2db8391b845fdf86660c3bde3b9990bb7faeddfa45466a96e35d5d963c4576ee",
+    "production/OLEDSupport.step": "a9afdbb6f9a963c173315306ad33ae31d44340243738c33bc2cf1232592ae999",
+    "production/Top.step": "5f834b4035885322da210df37daf49612198f52b92fd92dc442ccf2821cdb548",
+    "production/Bottom.step": "f7167304113c73063dfcb09c11416e625a503c9bbcf3a3e857ec5a284f370bef",
     "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
-    "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
-    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e",
-    "production/Knob.step": "802e24c38cf3cee306a25c3bde4350e8a959dc71f9d3bbe5dae7238f3ea4cb0a",
-    "README.md": "f3274a9d7601e3c62491e228a2c38c8faee7359ea9d0913eb6548dc2061a8300"
+    "production/Top.stl": "5e9c771e4283061e1ea169735118a935092f4452d4b641e70426cb1831190dc7",
+    "production/Knob.step": "9cc7871adde16e2f8ba0b09b0abe26651239cae2618fa381e2dd4dae170bb315",
+    "BOM.csv": "01a7a581eec6c1be60689da66561588077537a07794acf8fddcf65fbfeac7fae",
+    "README.md": "c0cb1570f7ea3387f7f40a22549763a2bc4d0a57663f2660a4233014f3f1432f"
   },
   "details": {
+    "bom_csv_rows": 10,
     "images": [
       {
-        "alt": "",
-        "src": "docs/images/top.png"
+        "alt": "View PCB on KiCanvas",
+        "src": "https://hack.club/pcb-badge"
       },
       {
         "alt": "",
-        "src": "CAD/previews/assembly-iso.svg.png"
+        "src": "docs/images/hackpad.png"
       },
       {
         "alt": "",
-        "src": "docs/images/status-cycle.gif"
-      },
-      {
-        "alt": "",
-        "src": "CAD/previews/exploded-iso.svg.png"
+        "src": "docs/images/exploded.png"
       },
       {
         "alt": "",
@@ -55,6 +52,6 @@
       }
     ]
   },
-  "timestamp": "2026-11-04T04:56:02+00:00",
-  "duration_s": 2.26
+  "timestamp": "2026-11-05T11:31:04+00:00",
+  "duration_s": 0.29
 }

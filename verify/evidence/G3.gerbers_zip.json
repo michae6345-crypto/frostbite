@@ -8,13 +8,13 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "production/gerbers.zip": "b631b0be2ecd21598abdced744a43d95dfa4b69c5031d329006f8dedc6d95906"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "production/gerbers.zip": "28ffdafbe62abb47bc553fe166de3628a8f1d1acc32fd818617f15cc302604fe"
   },
   "details": {
     "gerbonara_warnings": [
       "frostbite-NPTH.drl:14 \"G90\": G90 header statement found after end of header",
-      "frostbite-PTH.drl:22 \"G90\": G90 header statement found after end of header"
+      "frostbite-PTH.drl:20 \"G90\": G90 header statement found after end of header"
     ],
     "layers_found": {
       "top copper": "frostbite-F_Cu.gtl",
@@ -34,6 +34,6 @@
       "stroke": 0.1
     }
   },
-  "timestamp": "2026-11-04T04:52:29+00:00",
-  "duration_s": 0.14
+  "timestamp": "2026-11-05T05:05:45+00:00",
+  "duration_s": 0.04
 }

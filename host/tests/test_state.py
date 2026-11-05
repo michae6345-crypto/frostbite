@@ -199,7 +199,7 @@ def test_overflow_clears_and_expires():
         b.update(f"c{i}", "claude", 0, status=Status.RUN)
     msg = {"op": "update", "source": "claude", "key": "c6", "name": "n", "status": "needs"}
     assert not b.apply(msg, 1)
-    assert b.glow()[:3] == (0xFF, 0xB0, 0x20)
+    assert "c6" in b.overflow
     b.free("c0")
     assert b.apply(msg, 2) and not b.overflow
     b.free("c6")
@@ -255,15 +255,6 @@ def test_fit_lr():
     assert len(fit_lr("x" * 40, "DONE")) == 21
     assert fit_lr("x" * 40, "DONE").endswith("x DONE")
     assert fit_lr("c#1 frostbite-firmware", "WAIT") == "c#1 fros~irmware WAIT"
-
-
-def test_glow_worst_status():
-    b = Board()
-    assert b.glow()[3] == 50
-    b.update("a", "ctl", 0, status=Status.NEEDS)
-    assert b.glow()[:3] == (0xFF, 0xB0, 0x20)
-    b.update("b", "ctl", 0, status=Status.ERROR)
-    assert b.glow()[:3] == (0xFF, 0x4D, 0x4F)
 
 
 def test_quiet_training_slot_frees_itself():

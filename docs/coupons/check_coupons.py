@@ -13,12 +13,10 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
-from shapely.affinity import translate
-from shapely.geometry import LineString, Polygon, box
+from shapely.geometry import LineString, Polygon
 from shapely.ops import polygonize, unary_union
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent.parent
 TOL_DIM = 0.02
 RESULTS: list[tuple[str, bool, str]] = []
 PETG = 1.27          # g/cm^3
@@ -126,7 +124,7 @@ def estimate(m, infill=0.25):
     return v * PETG / 1000, (v / FLOW + layers * LAYER_S) / 60
 
 
-def common(name, stl, size, bodies=1, zmax=None, xmax=None, infill=0.25):
+def common(name, stl, size, bodies=1, zmax=None, xmax=None):
     m = trimesh.load(HERE / stl, force="mesh")
     rec(f"{name}: watertight, winding ok", m.is_watertight and m.is_winding_consistent and m.volume > 0,
         f"{m.volume / 1000:.2f} cm^3 solid")
@@ -141,7 +139,7 @@ def common(name, stl, size, bodies=1, zmax=None, xmax=None, infill=0.25):
         f"overhang {bad:.2f} mm^2, bridges {len(spans)}" + (f", max {max(spans):.1f}" if spans else ""))
     t = thin_wall(m, zmax, xmax)
     rec(f"{name}: walls >= 0.8", t >= 0.8, f"thinnest {t:.2f} mm" + (" (labels excluded)" if zmax or xmax else ""))
-    g, mins = estimate(m, infill)
+    g, mins = estimate(m)
     rec(f"{name}: estimate under 15 g, 30 min", g < 15 and mins < 30, f"ESTIMATE {g:.1f} g, {mins:.0f} min")
     return m
 
@@ -174,26 +172,25 @@ def plate():
 
 def inserts():
     n = "2 inserts"
-    m = common(n, "coupon2_inserts.stl", (28.70, 39.00, 16.00), bodies=2, xmax=14.35 - 9.0 + 1e-3)
-    hs = sorted([h for h in holes(section(m, 14.0))], key=lambda h: h[1])
+    m = common(n, "coupon2_inserts.stl", (30.00, 37.00, 14.90), bodies=2, xmax=6.0 + 1e-3)
+    polys = [p for p in section(m, 13.0) if p.interiors]
+    hs = sorted(holes(polys), key=lambda h: -h[1])       # 4.5 at the high y end
     ds = [round(h[4], 2) for h in hs]
     rec(f"{n}: holes 4.5 / 4.7 / 4.9", len(hs) == 3 and all(near(a, b, 0.03) for a, b in zip(ds, (4.5, 4.7, 4.9))), str(ds))
-    sect = max(section(m, 14.0), key=lambda p: p.area)
-    x0, _, x1, _ = sect.bounds
-    walls = [round(min(h[0] - h[4] / 2 - x0, x1 - h[0] - h[4] / 2), 2) for h in hs]
-    rec(f"{n}: wall 2.1 / 2.0 / 1.9 (bar 8.7 wide)", near(x1 - x0, 8.7) and all(near(a, b, 0.03) for a, b in
-        zip(walls, (2.1, 2.0, 1.9))), f"walls {walls}, bar {x1 - x0:.2f}")
-    d4 = [round(h[4], 2) for h in holes(section(m, 12.05))]
-    d3 = [round(h[4], 2) for h in holes(section(m, 11.95)) if h[4] < 4.0]
+    walls = {round(Polygon(p.interiors[0]).area ** 0.5, 3): round(p.exterior.distance(p.interiors[0]), 2) for p in polys}
+    walls = [walls[k] for k in sorted(walls)]
+    rec(f"{n}: real corner, thinnest wall 1.57 / 1.47 / 1.37", all(near(a, b, 0.03) for a, b in zip(walls, (1.57, 1.47, 1.37))), f"walls {walls}")
+    d4 = [round(h[4], 2) for h in holes(section(m, 10.95))]
+    d3 = [round(h[4], 2) for h in holes(section(m, 10.85))]
     rec(f"{n}: insert depth 4.0, then 3.4", len(d4) == 3 and min(d4) > 4.4 and len(d3) == 3 and all(near(d, 3.4, 0.03) for d in d3),
-        f"above z 12 {d4}, below {d3}")
-    deep = [h for h in holes(section(m, 3.3)) if near(h[4], 3.4, 0.03)]
-    shallow = [h for h in holes(section(m, 3.1)) if near(h[4], 3.4, 0.03)]
-    # the spacer's bore ends at z 3.6, so it counts at both heights
-    rec(f"{n}: skin 3.2 under the blind hole", len(deep) == 4 and len(shallow) == 1, f"bores at z 3.3: {len(deep)}, at z 3.1: {len(shallow)}")
-    spacer = min(m.split(only_watertight=True), key=lambda b: b.volume)
-    rec(f"{n}: spacer 3.6 tall", near(spacer.extents[2], 3.6), f"{spacer.extents.round(2).tolist()}")
-    text_strokes(n, m, 2.3, 9, others=2)
+        f"above z 10.9 {d4}, below {d3}")
+    deep = [h for h in holes(section(m, 1.1)) if near(h[4], 3.4, 0.03)]
+    shallow = [h for h in holes(section(m, 0.9)) if near(h[4], 3.4, 0.03)]
+    # the clamp ring's bore goes all the way, so it counts at both heights
+    rec(f"{n}: floor 1.0 under the blind hole", len(deep) == 4 and len(shallow) == 1, f"bores at z 1.1: {len(deep)}, at z 0.9: {len(shallow)}")
+    ring = min(m.split(only_watertight=True), key=lambda b: b.volume)
+    rec(f"{n}: clamp ring 2.5 tall", near(ring.extents[2], 2.5), f"{ring.extents.round(2).tolist()}")
+    text_strokes(n, m, 2.3, 9, others=4)
 
 
 def pocket():
@@ -220,34 +217,10 @@ def pocket():
     text_strokes(n, m, 2.8, 18, others=2)
 
 
-def glow():
-    n = "4 band"
-    m = common(n, "coupon4_glow_band.stl", (17.00, 43.00, 8.80), infill=1.0)
-    # compare sections with the same slice of the real part. Real print frame: x = pcb x - 30.575,
-    # y = 41.575 - pcb y, both centred on the shell. Coupon: y span 14..57 centred.
-    real = trimesh.load(ROOT / "production" / "GlowBand.stl", force="mesh")
-    clip = box(-40, 41.575 - 57.0, -20.575 + 0.0, 41.575 - 14.0)
-    worst = 0.0
-    for z in (0.5, 1.5, 1.85, 3.0, 5.0, 8.5):
-        a = unary_union([translate(p, -30.575, 41.575 - 35.5) for p in section(m, z)])
-        b = unary_union(section(real, z)).intersection(clip)
-        worst = max(worst, a.symmetric_difference(b).area / b.area)
-    rec(f"{n}: matches that slice of production/GlowBand.stl", worst < 0.005, f"worst section difference {worst * 100:.3f} %")
-    c = common("4 cap", "coupon4_glow_cap.stl", (19.00, 21.00, 3.56))
-    win = holes(section(c, 0.9))
-    rec("4 cap: LED window 6.3 x 3.0", len(win) == 1 and near(win[0][2], 6.3) and near(win[0][3], 3.0))
-    feet = section(c, 2.5)
-    rec("4 cap: 2 feet, 1.76 tall on 1.8 plate", len(feet) == 2 and near(c.extents[2] - 1.8, 1.76),
-        f"{len(feet)} feet, gap {c.extents[2] - 1.8:.2f}")
-    fx = np.mean([p.centroid.x for p in feet])
-    rec("4 cap: LED 5.0 from the PCB edge when feet sit on the riser", near(win[0][0] - (fx - 1.0), 5.0), f"{win[0][0] - (fx - 1.0):.2f}")
-
-
 def main():
     plate()
     inserts()
     pocket()
-    glow()
     w = max(len(r[0]) for r in RESULTS)
     for name, ok, d in RESULTS:
         print(f"{name.ljust(w)}  {'PASS' if ok else 'FAIL'}  {d}")

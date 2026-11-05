@@ -8,39 +8,27 @@
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "production/Bottom.stl": "f68846066f82cfaf6bc1dac7a8226913a6c99fc2c6f52fa88ef15111fc0dff4e",
-    "production/GlowBand.stl": "eaf433a7080b39a81f05b45090b706aa312884d32ee2e52db00cd926faab0844",
+    "production/Bottom.stl": "2db8391b845fdf86660c3bde3b9990bb7faeddfa45466a96e35d5d963c4576ee",
     "production/Knob.stl": "ace11fc2152f5958c113154ee727e34736a095fc68df01f6800c59ad982d553f",
-    "production/OLEDSupport.stl": "3c1f858e33665e5380a714b5f13bcca80f416c2a5dec2f027ba4debb99d162a4",
-    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e"
+    "production/OLEDSupport.stl": "81c9be3e7ea168a295192d9af888562386cd21ff916bef076543f7a190816727",
+    "production/Top.stl": "5e9c771e4283061e1ea169735118a935092f4452d4b641e70426cb1831190dc7"
   },
   "details": {
     "combined_extents": [
-      79.15,
-      97.606,
-      16.0
+      75.15,
+      97.15,
+      15.0
     ],
     "parts": {
       "Bottom.stl": {
-        "faces": 4820,
+        "faces": 5872,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 27950.979401820503,
+        "volume": 42767.98589981541,
         "extents": [
-          79.15,
-          97.606,
-          9.908
-        ]
-      },
-      "GlowBand.stl": {
-        "faces": 4304,
-        "watertight": true,
-        "winding_consistent": true,
-        "volume": 10444.839046386354,
-        "extents": [
-          78.15,
-          96.15,
-          8.8
+          75.15,
+          97.15,
+          14.9
         ]
       },
       "Knob.stl": {
@@ -58,26 +46,26 @@
         "faces": 28,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 259.61602344322154,
+        "volume": 333.79202698326003,
         "extents": [
           33.9,
           13.5,
-          1.4
+          1.8
         ]
       },
       "Top.stl": {
-        "faces": 5496,
+        "faces": 3464,
         "watertight": true,
         "winding_consistent": true,
-        "volume": 43176.39769975228,
+        "volume": 11901.942802956752,
         "extents": [
-          79.15,
+          75.15,
           97.15,
-          16.0
+          5.43
         ]
       }
     }
   },
-  "timestamp": "2026-11-04T04:54:32+00:00",
-  "duration_s": 0.75
+  "timestamp": "2026-11-05T05:05:58+00:00",
+  "duration_s": 0.29
 }

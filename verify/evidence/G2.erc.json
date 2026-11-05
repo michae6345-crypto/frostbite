@@ -22,7 +22,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 1.28,
+      "duration_s": 0.31,
       "stdout_tail": [
         "Found 0 violations",
         "Saved ERC Report to ~/Documents/frostbite/verify/.cache/work/erc.json"
@@ -33,11 +33,11 @@
     }
   ],
   "inputs_sha256": {
-    "PCB/frostbite.kicad_sch": "4d947106d758fc3405be5d4da340b47f76696e6900322e39446c424f5ea3b0e2"
+    "PCB/frostbite.kicad_sch": "a1d50cf19e4f02509700c5f894e295b3a1f8638a4ac9cefb6c011241f6a1e12e"
   },
   "details": {
     "violations": []
   },
-  "timestamp": "2026-11-04T04:52:13+00:00",
-  "duration_s": 1.28
+  "timestamp": "2026-11-05T05:05:43+00:00",
+  "duration_s": 0.31
 }

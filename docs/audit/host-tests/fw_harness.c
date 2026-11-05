@@ -10,7 +10,7 @@ void oled_write(const char*s,bool inv){while(*s&&oled_col<63){oled_rows[oled_row
 void raw_hid_send(uint8_t*d,uint8_t n){printf("SEND ");for(int i=0;i<n;i++)printf("%02x",d[i]);printf("\n");}
 static void dump(void){oled_task_user();
  printf("STATE sel=%d status=",selected_slot);for(int i=0;i<NUM_SLOTS;i++)printf("%d",slot_status[i]);
- printf(" glow=%02x%02x%02x@%d line0=[%s] line1=[%s] oled0=[%s] oled1=[%s] oled3=[%s] host=%d\n",glow_r,glow_g,glow_b,glow_bri,host_line[0],host_line[1],oled_rows[0],oled_rows[1],oled_rows[3],host_mode());}
+ printf(" line0=[%s] line1=[%s] oled0=[%s] oled1=[%s] oled3=[%s] host=%d\n",host_line[0],host_line[1],oled_rows[0],oled_rows[1],oled_rows[3],host_mode());}
 int main(void){char b[256];uint8_t d[32];setvbuf(stdout,0,_IOLBF,0);keyboard_post_init_user();
  while(fgets(b,sizeof b,stdin)){switch(b[0]){
   case 'R':{memset(d,0,32);for(int i=0;i<32;i++){unsigned v;if(sscanf(b+2+i*2,"%2x",&v)!=1)break;d[i]=v;}raw_hid_receive(d,32);break;}

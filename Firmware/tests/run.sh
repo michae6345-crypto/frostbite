@@ -1,7 +1,8 @@
 #!/bin/bash
-# Firmware desk harness: the real keymap.c and QMK's real OLED driver on this Mac, under ASan and UBSan.
+# Firmware desk harness: the real keymaps and QMK's real OLED driver on this Mac, under ASan and UBSan.
 # Usage: run.sh [output dir] [keymap.c]     QMK_HOME defaults to ~/qmk_firmware
-# Exit: harness exit code (non-zero on any FAIL), 2 if it does not build.
+# keymap.c replaces the default keymap. The bring-up keymap always runs too.
+# Exit: non-zero on any FAIL, 2 if it does not build.
 A=$(cd "$(dirname "$0")" && pwd)
 K=$(cd "$A/../qmk/keyboards/frostbite" && pwd)
 Q=${QMK_HOME:-$HOME/qmk_firmware}
@@ -16,6 +17,12 @@ clang "${CF[@]}" '-DQMK_KEYBOARD_H="stub_qmk.h"' "-DKEYMAP_FILE=\"$KM\"" -c "$A/
 clang "${CF[@]}" -c "$Q/drivers/oled/oled_driver.c" -o oled.o || exit 2
 clang "${CF[@]}" -c "$A/panel.c" -o panel.o || exit 2
 clang "${CF[@]}" -c "$K/frostbite.c" -o fb.o || exit 2
-clang "${CF[@]}" -D__arm__=1 -c "$A/stub/lib/lib8tion/lib8tion.c" -o l8.o || exit 2
-clang "${CF[@]}" harness.o oled.o panel.o fb.o l8.o -o harness || exit 2
-exec ./harness
+clang "${CF[@]}" harness.o oled.o panel.o fb.o -o harness || exit 2
+clang "${CF[@]}" '-DQMK_KEYBOARD_H="stub_qmk.h"' "-DKEYMAP_FILE=\"$K/keymaps/bringup/keymap.c\"" -c "$A/bringup_test.c" -o bringup_test.o || exit 2
+clang "${CF[@]}" bringup_test.o oled.o panel.o fb.o -o bringup_test || exit 2
+./harness
+rc=$?
+./bringup_test
+rc2=$?
+[ $rc -ne 0 ] && exit $rc
+exit $rc2

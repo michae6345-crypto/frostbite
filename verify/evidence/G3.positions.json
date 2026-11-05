@@ -25,7 +25,7 @@
       ],
       "cwd": "~/Documents/frostbite",
       "exit_code": 0,
-      "duration_s": 3.0,
+      "duration_s": 0.17,
       "stdout_tail": [
         "Wrote position data to '~/Documents/frostbite/verify/.cache/work/pos.csv'."
       ],
@@ -33,25 +33,10 @@
     }
   ],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "PCB/frostbite.kicad_pcb": "df9123a3f7420b2df86a90f6431405b69142bcf2f6ddad1cfd7528a04dd633dd"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "PCB/frostbite.kicad_pcb": "e95bba0e3e450e687101d9c415e8e531a943faa9c496329514fdc72703861f9a"
   },
   "details": {
-    "pcb_led_chain": [
-      "LED1",
-      "LED2",
-      "LED3",
-      "LED4",
-      "LED5",
-      "LED6",
-      "LED7",
-      "LED8",
-      "LED9",
-      "LED10",
-      "LED11",
-      "LED12",
-      "LED13"
-    ],
     "measured": {
       "SW1": [
         11.525,
@@ -106,13 +91,9 @@
       "encoder": "midpoint of the two MP pads (shaft centre)",
       "xiao": "centre of the Fab-layer outline (17.8 x 21 body)"
     },
-    "pos_csv_sha256": "ea59af11d4325ff974c9405e9e221b84a6d411ac0e9b6e13bce7228a0a44b9bd",
+    "pos_csv_sha256": "a784f0d8a9d58eed57bcf1f40709d4e78720f261b8502bad2e74120b1fb8bde8",
     "pos_csv_head": [
       "Ref,Val,Package,PosX,PosY,Rot,Side",
-      "\"LED10\",\"SK6812MINI-E\",\"SK6812MINI-E_glow_down\",5.000000,-25.400000,180.000000,bottom",
-      "\"LED11\",\"SK6812MINI-E\",\"SK6812MINI-E_glow_down\",56.150000,-25.400000,180.000000,bottom",
-      "\"LED12\",\"SK6812MINI-E\",\"SK6812MINI-E_glow_down\",56.150000,-80.600000,180.000000,bottom",
-      "\"LED13\",\"SK6812MINI-E\",\"SK6812MINI-E_glow_down\",5.000000,-80.600000,180.000000,bottom",
       "\"U1\",\"XIAO RP2040\",\"XIAO-Generic-Hybrid-14P-2.54-21X17.8MM\",21.000000,-10.500000,180.000000,bottom",
       "\"D1\",\"1N4148\",\"D_DO-35_SOD27_P7.62mm_Horizontal\",21.050000,-37.335000,90.000000,top",
       "\"D2\",\"1N4148\",\"D_DO-35_SOD27_P7.62mm_Horizontal\",40.100000,-37.335000,90.000000,top",
@@ -125,21 +106,17 @@
       "\"D9\",\"1N4148\",\"D_DO-35_SOD27_P7.62mm_Horizontal\",59.150000,-75.435000,90.000000,top",
       "\"ENC1\",\"EC11E\",\"EC11E-Switch_Vertical_H20mm_Slot3.4x1.5\",46.650000,-20.500000,90.000000,top",
       "\"J1\",\"OLED_0.91in_I2C\",\"PinHeader_1x04_P2.54mm_Vertical\",39.000000,-9.190000,0.000000,top",
-      "\"LED1\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",11.525000,-38.605000,0.000000,top",
-      "\"LED2\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",30.575000,-38.605000,0.000000,top",
-      "\"LED3\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",49.625000,-38.605000,0.000000,top",
-      "\"LED4\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",49.625000,-57.655000,0.000000,top",
-      "\"LED5\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",30.575000,-57.655000,0.000000,top",
-      "\"LED6\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",11.525000,-57.655000,0.000000,top",
-      "\"LED7\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",11.525000,-76.705000,0.000000,top",
-      "\"LED8\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",30.575000,-76.705000,0.000000,top",
-      "\"LED9\",\"SK6812MINI-E\",\"SK6812MINI-E_key\",49.625000,-76.705000,0.000000,top",
       "\"SW1\",\"MX_agent1\",\"MX-Solderable-1U\",11.525000,-33.525000,0.000000,top",
       "\"SW2\",\"MX_agent2\",\"MX-Solderable-1U\",30.575000,-33.525000,0.000000,top",
       "\"SW3\",\"MX_agent3\",\"MX-Solderable-1U\",49.625000,-33.525000,0.000000,top",
-      "\"SW4\",\"MX_agent4\",\"MX-Solderable-1U\",11.525000,-52.575000,0.000000,top"
+      "\"SW4\",\"MX_agent4\",\"MX-Solderable-1U\",11.525000,-52.575000,0.000000,top",
+      "\"SW5\",\"MX_agent5\",\"MX-Solderable-1U\",30.575000,-52.575000,0.000000,top",
+      "\"SW6\",\"MX_agent6\",\"MX-Solderable-1U\",49.625000,-52.575000,0.000000,top",
+      "\"SW7\",\"MX_approve\",\"MX-Solderable-1U\",11.525000,-71.625000,0.000000,top",
+      "\"SW8\",\"MX_talk\",\"MX-Solderable-1U\",30.575000,-71.625000,0.000000,top",
+      "\"SW9\",\"MX_stop\",\"MX-Solderable-1U\",49.625000,-71.625000,0.000000,top"
     ]
   },
-  "timestamp": "2026-11-04T04:52:16+00:00",
-  "duration_s": 3.0
+  "timestamp": "2026-11-05T05:05:43+00:00",
+  "duration_s": 0.18
 }

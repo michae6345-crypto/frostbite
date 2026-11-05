@@ -1,4 +1,4 @@
-"""Slot model: six slots, assignment, lingering, selection, OLED text and glow colour.
+"""Slot model: six slots, assignment, lingering, selection and OLED text.
 Every mutating call takes `now`, so there is no clock here."""
 
 from __future__ import annotations
@@ -10,16 +10,16 @@ from .device import NUM_SLOTS, OLED_COLS, Status, to_ascii
 
 log = logging.getLogger("frostbite.state")
 
-LINGER_DONE = 10 * 60.0     # finished slots stay green this long, then free
-LINGER_ERROR = 30 * 60.0    # failed slots stay red a bit longer
+LINGER_DONE = 10 * 60.0     # finished slots stay this long, then free
+LINGER_ERROR = 30 * 60.0    # failed slots stay a bit longer
 QUIET_RUN = 60 * 60.0       # silent this long inside one tool call: Stop never fires after an
                             # interrupt, and cancelling a tool fires nothing either
 QUIET_TURN = 15 * 60.0      # silent this long with no tool in flight
-QUIET_NEEDS = 30 * 60.0     # an amber slot nobody can answer from the pad stops being amber
+QUIET_NEEDS = 30 * 60.0     # a waiting slot nobody can answer from the pad stops waiting
 DEAD_AFTER = 24 * 60 * 60.0 # any slot this silent is dead (crash, closed window, no SessionEnd)
 ANSWER_GRACE = 15.0         # Notification arrives ~6 s after the dialog: ignore it once answered
 PAGE_SECONDS = 2.0          # a prompt too long for the OLED pages through at this rate
-OVERFLOW_TTL = 60 * 60.0    # how long a session with no free slot keeps the glow amber
+OVERFLOW_TTL = 60 * 60.0    # how long a session with no free slot counts as waiting
 MAX_PENDING = 16
 FLASH_SECONDS = 3.0
 
@@ -31,10 +31,6 @@ STATUS_WORD = {
     Status.ERROR: "ERR",
 }
 
-# Glow colours. The first two are design.json protocol.status_colours.
-ERROR_RGB = (0xFF, 0x4D, 0x4F)
-NEEDS_RGB = (0xFF, 0xB0, 0x20)
-ICE_BLUE = (0x7F, 0xE3, 0xFF)    # same as GLOW_DEFAULT in keymap.c, so connecting does not shift the colour
 SEVERITY = [Status.ERROR, Status.NEEDS, Status.RUN, Status.DONE, Status.IDLE]
 
 
@@ -141,7 +137,7 @@ class Board:
     def _claim(self, key: str) -> int | None:
         if None in self.slots:
             return self.slots.index(None)
-        # Full: reuse a finished slot, then an idle one. A red slot may not have been seen
+        # Full: reuse a finished slot, then an idle one. A failed slot may not have been seen
         # yet, so it goes last. Running and waiting slots are never pushed out.
         for wanted in (Status.DONE, Status.IDLE, Status.ERROR):
             cands = [(s.since, i) for i, s in enumerate(self.slots)
@@ -466,18 +462,6 @@ class Board:
                 counts[s.status] += 1
         parts = [f"{counts[st]} {STATUS_WORD[st].lower()}" for st in SEVERITY if counts[st]]
         return fit(" ".join(parts) if parts else "no agents")
-
-    def glow(self) -> tuple[int, int, int, int]:
-        """Light-gap colour: red if anything failed, amber if anything waits on you,
-        otherwise the ice-blue case glow (dimmer when nothing is running)."""
-        sts = {s.status for s in self.slots if s is not None}
-        if Status.ERROR in sts:
-            return (*ERROR_RGB, 160)
-        if Status.NEEDS in sts or self.overflow:
-            return (*NEEDS_RGB, 160)
-        if Status.RUN in sts:
-            return (*ICE_BLUE, 110)
-        return (*ICE_BLUE, 50)
 
     def to_dict(self, now: float) -> dict:
         return {

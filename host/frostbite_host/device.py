@@ -6,7 +6,6 @@ host -> device
   0x01 SET_SLOT      [0x01, slot 0-5, status]
   0x02 SET_ALL       [0x02, s0..s5]
   0x03 OLED_LINE     [0x03, line 0-1, len, up to 21 ASCII bytes]
-  0x04 SET_GLOW      [0x04, r, g, b, brightness]
   0x05 PING          [0x05]
   0x06 SET_SELECTED  [0x06, slot 0-5]
 device -> host
@@ -76,7 +75,6 @@ class Cmd(IntEnum):
     SET_SLOT = 0x01
     SET_ALL = 0x02
     OLED_LINE = 0x03
-    SET_GLOW = 0x04
     PING = 0x05
     SET_SELECTED = 0x06
     KEY = 0x81
@@ -104,14 +102,6 @@ class SetAll:
 class OledLine:
     line: int
     text: str
-
-
-@dataclass(frozen=True)
-class SetGlow:
-    r: int
-    g: int
-    b: int
-    brightness: int
 
 
 @dataclass(frozen=True)
@@ -151,7 +141,7 @@ class Unknown:
     raw: bytes
 
 
-HostMsg = SetSlot | SetAll | OledLine | SetGlow | Ping | SetSelected
+HostMsg = SetSlot | SetAll | OledLine | Ping | SetSelected
 DeviceMsg = PingReply | KeyEvent | EncoderEvent | Unknown
 
 
@@ -199,8 +189,6 @@ def encode(msg: HostMsg) -> bytes:
                 raise ValueError("line must be 0 or 1")
             data = to_ascii(text)[:OLED_COLS].encode("ascii")
             return _report(Cmd.OLED_LINE, line, len(data), *data)
-        case SetGlow(r, g, b, brightness):
-            return _report(Cmd.SET_GLOW, r, g, b, brightness)
         case Ping():
             return _report(Cmd.PING)
         case SetSelected(slot):
@@ -235,8 +223,6 @@ def decode_host(report: bytes | list[int]) -> HostMsg | Unknown:
         if cmd == Cmd.OLED_LINE:
             n = min(r[2], OLED_COLS)
             return OledLine(r[1], r[3:3 + n].decode("ascii", "replace"))
-        if cmd == Cmd.SET_GLOW:
-            return SetGlow(r[1], r[2], r[3], r[4])
         if cmd == Cmd.PING:
             return Ping()
         if cmd == Cmd.SET_SELECTED:
@@ -267,8 +253,6 @@ def describe(msg: object) -> str:
             return f"SET_SLOT {slot} {status.name.lower()}"
         case OledLine(line, text):
             return f"OLED_LINE {line} {text!r}"
-        case SetGlow(r, g, b, br):
-            return f"SET_GLOW #{r:02x}{g:02x}{b:02x} @{br}"
         case Ping():
             return "PING"
         case SetSelected(slot):
@@ -377,7 +361,6 @@ class FakeDevice:
     slots: list[Status] = field(default_factory=lambda: [Status.IDLE] * NUM_SLOTS)
     oled: list[str] = field(default_factory=lambda: ["", ""])
     selected: int = 0
-    glow: tuple[int, int, int, int] | None = None
     pings: int = 0
     echo: Callable[[str], None] | None = None
 
@@ -401,8 +384,6 @@ class FakeDevice:
                     self.slots = list(statuses)
                 case OledLine(line, text) if line in (0, 1):
                     self.oled[line] = text
-                case SetGlow(r, g, b, br):
-                    self.glow = (r, g, b, br)
                 case SetSelected(slot) if 0 <= slot < NUM_SLOTS:
                     self.selected = slot
                 case Ping():
@@ -440,7 +421,6 @@ class FakeDevice:
             self.slots = [Status.IDLE] * NUM_SLOTS
             self.oled = ["", ""]
             self.selected = 0
-            self.glow = None
         self._inbox = queue.Queue()
         self.plugged = True
 
@@ -450,7 +430,7 @@ class FakeDevice:
     def snapshot(self) -> dict:
         with self._lock:
             return {"slots": list(self.slots), "oled": list(self.oled),
-                    "selected": self.selected, "glow": self.glow}
+                    "selected": self.selected}
 
 
 class DeviceLink:

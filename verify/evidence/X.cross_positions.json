@@ -1,16 +1,17 @@
 {
   "check": "X.cross_positions",
   "gate": "X",
-  "title": "design.json vs PCB vs CAD: keys, encoder, OLED, USB",
+  "title": "design.json vs PCB vs CAD: keys, encoder, OLED, screw and insert holes, USB notch and tongue",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "CAD/positions.json": "826016317b191de9e05f1d37088d8696a9d24c2708e06ff0cd2d3fa377a16e00",
-    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "CAD/positions.json": "e2746619e7a863e1bf3c46849d3762b914e2367f368fb825d72f69d20d36c321",
+    "production/Top.stl": "5e9c771e4283061e1ea169735118a935092f4452d4b641e70426cb1831190dc7",
+    "production/Bottom.stl": "2db8391b845fdf86660c3bde3b9990bb7faeddfa45466a96e35d5d963c4576ee"
   },
   "details": {
     "pcb": {
@@ -65,12 +66,12 @@
     },
     "registration": {
       "plate_normal": [
-        0.0,
+        -0.0,
         -0.0,
         -1.0
       ],
       "outline_mm": [
-        79.15,
+        75.15,
         97.15
       ],
       "rotation_sign": 1,
@@ -85,53 +86,145 @@
         2.5,
         3.2,
         5.0,
-        5.43,
-        6.6,
-        12.0,
-        13.23,
-        16.0
+        5.43
       ],
-      "section_volume_mm3": 43176.4,
-      "mesh_volume_mm3": 43176.4
+      "section_volume_mm3": 11901.9,
+      "mesh_volume_mm3": 11901.9
     },
     "top_measured": {
       "screw0": {
         "centre": [
-          -4.65,
-          9.0
+          -3.0,
+          -3.0
         ],
-        "d": 4.7
+        "d": 3.4,
+        "shank_gap": 0.199
       },
       "screw1": {
         "centre": [
-          65.8,
-          9.0
+          64.15,
+          -3.0
         ],
-        "d": 4.7
+        "d": 3.4,
+        "shank_gap": 0.199
       },
       "screw2": {
         "centre": [
-          -4.65,
-          62.1
+          -3.0,
+          86.15
         ],
-        "d": 4.7
+        "d": 3.4,
+        "shank_gap": 0.199
       },
       "screw3": {
         "centre": [
-          65.8,
-          62.1
+          64.15,
+          86.15
         ],
-        "d": 4.7
+        "d": 3.4,
+        "shank_gap": 0.199
+      }
+    },
+    "registration_bottom": {
+      "rim_normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "outline_mm": [
+        75.15,
+        97.15
+      ],
+      "height_mm": 14.9,
+      "rim_below_plate_top_mm": 2.5,
+      "rotation_sign": 1,
+      "usb_notch_found_on_back_wall": true,
+      "levels_h": [
+        0.0,
+        4.0,
+        4.0999996185302745,
+        4.399999618530274,
+        5.299999618530275,
+        6.0999996185302745,
+        6.299999618530276,
+        6.55,
+        6.85,
+        7.15,
+        7.45,
+        7.65,
+        7.85,
+        8.05,
+        8.559999618530274,
+        10.929999618530275,
+        12.4,
+        13.9,
+        14.9
+      ],
+      "section_volume_mm3": 42768.0,
+      "mesh_volume_mm3": 42768.0
+    },
+    "bottom_measured": {
+      "top_plate_mm": 2.5,
+      "rim_below_plate_top_mm": 2.5,
+      "insert0": {
+        "centre": [
+          -3.0,
+          -3.0
+        ],
+        "d": 4.7,
+        "wall_mm": 1.469,
+        "below_insert_d": 3.4,
+        "shank_gap": 0.199,
+        "floor_under_hole_mm": 1.0
       },
-      "usb_width": 13.5,
-      "usb_centre_x": 21.0
+      "insert1": {
+        "centre": [
+          64.15,
+          -3.0
+        ],
+        "d": 4.7,
+        "wall_mm": 1.469,
+        "below_insert_d": 3.4,
+        "shank_gap": 0.199,
+        "floor_under_hole_mm": 1.0
+      },
+      "insert2": {
+        "centre": [
+          -3.0,
+          86.15
+        ],
+        "d": 4.7,
+        "wall_mm": 1.469,
+        "below_insert_d": 3.4,
+        "shank_gap": 0.199,
+        "floor_under_hole_mm": 1.0
+      },
+      "insert3": {
+        "centre": [
+          64.15,
+          86.15
+        ],
+        "d": 4.7,
+        "wall_mm": 1.469,
+        "below_insert_d": 3.4,
+        "shank_gap": 0.199,
+        "floor_under_hole_mm": 1.0
+      },
+      "usb_notch_width": 13.5,
+      "usb_notch_centre_x": 21.0,
+      "usb_window": {
+        "tongue_end_depth": 5.43,
+        "notch_floor_depth": 13.43,
+        "h": 8.0
+      }
     },
     "comparisons_run": [
       "design<->PCB",
       "design<->CAD/positions.json",
-      "design<->Top STL"
+      "design<->Top STL",
+      "design<->Bottom STL"
     ]
   },
-  "timestamp": "2026-11-04T04:56:02+00:00",
-  "duration_s": 0.0
+  "timestamp": "2026-11-05T11:31:04+00:00",
+  "duration_s": 0.87
 }

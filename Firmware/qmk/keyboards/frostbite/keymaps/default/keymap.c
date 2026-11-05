@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Frostbite 9 default keymap: agent dashboard over Raw HID, plain keyboard when
-// no host app is talking to the pad. Protocol: design.json, Firmware/README.md.
+// no host app is talking to the pad. The pad has no lights, so all status is on
+// the OLED. Protocol: design.json, Firmware/README.md.
 //
 // Host mode lasts while a PING arrived in the last 5 s. Dropping to fallback
-// only changes what is shown: statuses, OLED text and glow are kept, so the pad
-// returns to its last state when PINGs resume, without a USB reconnect.
+// only changes what is shown: statuses and OLED text are kept, so the pad returns
+// to its last state when PINGs resume, without a USB reconnect.
 //
 // hidapi's leading 0x00 report ID is consumed by the OS (the raw HID descriptor
 // has no report IDs), so data[0] is the command.
@@ -16,20 +17,16 @@
 
 #include QMK_KEYBOARD_H
 #include "raw_hid.h"
-#include "lib/lib8tion/lib8tion.h"
 #include <string.h>
 
 #define NUM_SLOTS 6
 #define NUM_KEYS 9
-#define NUM_LEDS 13
 #define LINE_CHARS 21
 #define REPORT_BYTES 32 /* design.json firmware.raw_hid.report_bytes */
 
 #define PROTOCOL_VERSION 1
 #define HOST_TIMEOUT_MS 5000
 #define OLED_SLEEP_MS (10UL * 60UL * 1000UL)
-#define FADE_MS 300
-#define FALLBACK_FADE_MS 1500
 
 #ifndef FROSTBITE_HOLD_MS
 #    define FROSTBITE_HOLD_MS 400
@@ -39,7 +36,6 @@ enum cmd {
     CMD_SET_SLOT     = 0x01,
     CMD_SET_ALL      = 0x02,
     CMD_OLED_LINE    = 0x03,
-    CMD_SET_GLOW     = 0x04,
     CMD_PING         = 0x05,
     CMD_SET_SELECTED = 0x06,
     EVT_KEY          = 0x81,
@@ -48,58 +44,28 @@ enum cmd {
 
 enum status { ST_IDLE = 0, ST_RUN = 1, ST_DONE = 2, ST_NEEDS = 3, ST_ERROR = 4, ST_COUNT };
 
-/* key index (design.json keys[] order, row * 3 + col) -> LED index */
-static const uint8_t key_led[NUM_KEYS] = {0, 1, 2, 5, 4, 3, 6, 7, 8}; /* chain is serpentine */
-#define GLOW_FIRST 9
-#define KEY_TALK 7
+#define KEY_TALK 7 /* index in design.json keys[], row * 3 + col */
 
-static const rgb_t status_rgb[ST_COUNT] = {
-    [ST_IDLE]  = {.r = 0xee, .g = 0xf2, .b = 0xf5},
-    [ST_RUN]   = {.r = 0x3d, .g = 0x8b, .b = 0xff},
-    [ST_DONE]  = {.r = 0x2f, .g = 0xbf, .b = 0x5b},
-    [ST_NEEDS] = {.r = 0xff, .g = 0xb0, .b = 0x20},
-    [ST_ERROR] = {.r = 0xff, .g = 0x4d, .b = 0x4f},
-};
-static const char *const status_name[ST_COUNT] = {"IDLE", "RUN", "DONE", "NEEDS", "ERROR"};
-static const char status_letter[ST_COUNT]     = {'-', 'R', 'D', '?', '!'};
-
-static const rgb_t white_rgb = {.r = 0xee, .g = 0xf2, .b = 0xf5};
-#define GLOW_DEFAULT_R 0x7f
-#define GLOW_DEFAULT_G 0xe3
-#define GLOW_DEFAULT_B 0xff
-#define GLOW_DEFAULT_BRI 70
-
-#define LVL_IDLE 22
-#define LVL_IDLE_SEL 60
-#define LVL_STATUS 110
-#define LVL_CMD 22
-#define LVL_PRESSED 150
-
-/* rough current budget: sum of all channel values after scaling */
-#define POWER_BUDGET (NUM_LEDS * 3 * 255 * 2 / 5)
+/* design.json protocol.status_words */
+static const char *const status_name[ST_COUNT] = {"IDLE", "RUN", "DONE", "WAIT", "ERR"};
+/* One character per slot on the strip. Idle recedes, and the two states that need
+ * a person stand apart from the letters. */
+static const char status_letter[ST_COUNT] = {'-', 'R', 'D', '?', '!'};
 
 static uint8_t  slot_status[NUM_SLOTS];
 static bool     statuses_received;
 static uint8_t  selected_slot;
 static char     host_line[2][LINE_CHARS + 1];
-static uint8_t  glow_r = GLOW_DEFAULT_R, glow_g = GLOW_DEFAULT_G, glow_b = GLOW_DEFAULT_B, glow_bri = GLOW_DEFAULT_BRI;
 
 static bool     ever_pinged;
 static uint32_t last_ping;
-static bool     was_host_mode;
 
 static uint32_t last_activity;
 static bool     oled_asleep; /* latched so a 49.7-day timer wrap cannot relight it */
 
-static bool     key_down[NUM_KEYS];
 static bool     key_host[NUM_KEYS]; /* pressed while in host mode -> handled via HID */
 static bool     key_hold_sent[NUM_KEYS];
 static uint16_t key_press_time[NUM_KEYS];
-
-static rgb_t    led_last[NUM_LEDS];
-static rgb_t    led_from[NUM_LEDS];
-static uint32_t led_fade_start[NUM_LEDS];
-static uint16_t led_fade_ms[NUM_LEDS];
 
 // clang-format off
 /* Used only in fallback, when no host has pinged for 5 s. */
@@ -117,34 +83,18 @@ static bool host_mode(void) {
 }
 
 /* OLED sleep timer. Only a key, the encoder, a real status change or a USB resume
- * counts: PING, OLED_LINE, SET_GLOW, SET_SELECTED and a repeated SET_ALL do not. */
+ * counts: PING, OLED_LINE, SET_SELECTED and a repeated SET_ALL do not. */
 static void wake(void) {
     last_activity = timer_read32();
     oled_asleep   = false;
 }
 
-static void start_fade(uint8_t led, uint16_t ms) {
-    led_from[led]       = led_last[led];
-    led_fade_start[led] = timer_read32();
-    led_fade_ms[led]    = ms;
-}
-
-static void set_status(uint8_t slot, uint8_t st, uint16_t fade_ms) {
+static void set_status(uint8_t slot, uint8_t st) {
     if (slot >= NUM_SLOTS) return;
     if (st >= ST_COUNT) st = ST_IDLE;
     if (slot_status[slot] == st) return;
     slot_status[slot] = st;
-    start_fade(key_led[slot], fade_ms);
     wake();
-}
-
-static void set_glow(uint8_t r, uint8_t g, uint8_t b, uint8_t bri, uint16_t fade_ms) {
-    if (r == glow_r && g == glow_g && b == glow_b && bri == glow_bri) return;
-    glow_r   = r;
-    glow_g   = g;
-    glow_b   = b;
-    glow_bri = bri;
-    for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) start_fade(i, fade_ms);
 }
 
 static void send_report(uint8_t a, uint8_t b, uint8_t c) {
@@ -156,20 +106,6 @@ static void send_report(uint8_t a, uint8_t b, uint8_t c) {
     raw_hid_send(buf, sizeof(buf));
 }
 
-static uint8_t wave(uint32_t now, uint16_t period) {
-    return sin8((uint8_t)(((now % period) * 256UL) / period));
-}
-
-static rgb_t scale_rgb(rgb_t c, uint8_t level) {
-    rgb_t o = {.r = scale8(c.r, level), .g = scale8(c.g, level), .b = scale8(c.b, level)};
-    return o;
-}
-
-static rgb_t blend_rgb(rgb_t a, rgb_t b, uint8_t t) {
-    rgb_t o = {.r = lerp8by8(a.r, b.r, t), .g = lerp8by8(a.g, b.g, t), .b = lerp8by8(a.b, b.b, t)};
-    return o;
-}
-
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     uint8_t row = record->event.key.row;
     uint8_t col = record->event.key.col;
@@ -179,7 +115,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     wake();
 
     if (record->event.pressed) {
-        key_down[idx] = true;
         if (host_mode()) {
             key_host[idx]       = true;
             key_hold_sent[idx]  = false;
@@ -190,7 +125,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
     }
 
-    key_down[idx] = false;
     if (key_host[idx]) {
         key_host[idx] = false;
         if (!key_hold_sent[idx]) send_report(EVT_KEY, idx, 1);
@@ -216,14 +150,14 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
     switch (data[0]) {
         case CMD_SET_SLOT:
             if (length >= 3 && data[1] < NUM_SLOTS) {
-                set_status(data[1], data[2], FADE_MS);
+                set_status(data[1], data[2]);
                 statuses_received = true;
             }
             break;
 
         case CMD_SET_ALL:
             if (length >= 1 + NUM_SLOTS) {
-                for (uint8_t i = 0; i < NUM_SLOTS; i++) set_status(i, data[1 + i], FADE_MS);
+                for (uint8_t i = 0; i < NUM_SLOTS; i++) set_status(i, data[1 + i]);
                 statuses_received = true;
             }
             break;
@@ -241,10 +175,6 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
                 line[len] = '\0';
                 memcpy(host_line[data[1]], line, len + 1);
             }
-            break;
-
-        case CMD_SET_GLOW:
-            if (length >= 5) set_glow(data[1], data[2], data[3], data[4], FADE_MS);
             break;
 
         case CMD_PING:
@@ -272,85 +202,6 @@ void housekeeping_task_user(void) {
 
     /* latch the timeout so a 49.7-day timer wrap cannot look like a fresh PING */
     if (ever_pinged && timer_elapsed32(last_ping) >= HOST_TIMEOUT_MS) ever_pinged = false;
-
-    bool hm = host_mode();
-    if (hm != was_host_mode) {
-        uint16_t ms = hm ? FADE_MS : FALLBACK_FADE_MS;
-        for (uint8_t i = 0; i < NUM_SLOTS; i++) start_fade(key_led[i], ms);
-        for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) start_fade(i, ms);
-    }
-    was_host_mode = hm;
-}
-
-static rgb_t agent_target(uint8_t slot, uint32_t now, bool hm) {
-    uint8_t st    = hm ? slot_status[slot] : ST_IDLE;
-    bool    sel   = hm && slot == selected_slot;
-    uint8_t level = LVL_STATUS;
-
-    switch (st) {
-        case ST_IDLE:
-            level = sel ? LVL_IDLE_SEL : LVL_IDLE;
-            break;
-        case ST_NEEDS:
-            level = 30 + scale8(wave(now, 2400), 150);
-            break;
-        case ST_ERROR:
-            level = ((now / 500) & 1) ? 12 : 170;
-            break;
-        default:
-            break;
-    }
-
-    if (sel) {
-        /* x1.15 .. x1.6, breathing */
-        uint16_t gain = 294 + scale8(wave(now, 2000), 116);
-        uint16_t l    = ((uint16_t)level * gain) >> 8;
-        level         = l > 255 ? 255 : l;
-    }
-    if (key_down[slot] && level < LVL_PRESSED) level = LVL_PRESSED;
-
-    return scale_rgb(status_rgb[st], level);
-}
-
-bool rgb_matrix_indicators_user(void) {
-    uint32_t now = timer_read32();
-    bool     hm  = host_mode();
-    rgb_t    out[NUM_LEDS];
-
-    for (uint8_t k = 0; k < NUM_KEYS; k++) {
-        uint8_t led = key_led[k];
-        if (k < NUM_SLOTS) {
-            out[led] = agent_target(k, now, hm);
-        } else {
-            out[led] = scale_rgb(white_rgb, key_down[k] ? LVL_PRESSED : LVL_CMD);
-        }
-    }
-    uint8_t gb   = hm ? glow_bri : GLOW_DEFAULT_BRI;
-    rgb_t   glow = {.r = scale8(hm ? glow_r : GLOW_DEFAULT_R, gb), .g = scale8(hm ? glow_g : GLOW_DEFAULT_G, gb), .b = scale8(hm ? glow_b : GLOW_DEFAULT_B, gb)};
-    for (uint8_t i = GLOW_FIRST; i < NUM_LEDS; i++) out[i] = glow;
-
-    for (uint8_t i = 0; i < NUM_LEDS; i++) {
-        if (led_fade_ms[i]) {
-            uint32_t e = timer_elapsed32(led_fade_start[i]);
-            if (e >= led_fade_ms[i]) {
-                led_fade_ms[i] = 0;
-            } else {
-                out[i] = blend_rgb(led_from[i], out[i], (uint8_t)((e * 255UL) / led_fade_ms[i]));
-            }
-        }
-        led_last[i] = out[i];
-    }
-
-    /* crude current limiter for USB power */
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < NUM_LEDS; i++) sum += out[i].r + out[i].g + out[i].b;
-    uint8_t limit = 255;
-    if (sum > POWER_BUDGET) limit = (uint8_t)((POWER_BUDGET * 255UL) / sum);
-
-    for (uint8_t i = 0; i < NUM_LEDS; i++) {
-        rgb_matrix_set_color(i, scale8(out[i].r, limit), scale8(out[i].g, limit), scale8(out[i].b, limit));
-    }
-    return false;
 }
 
 /* Pad to LINE_CHARS so a shorter string blanks what a longer one left behind. */
@@ -444,11 +295,6 @@ bool oled_task_user(void) {
 }
 
 void keyboard_post_init_user(void) {
-    /* Solid colour at value 0 is a black canvas: rgb_matrix_indicators_user paints
-     * every LED itself. */
-    rgb_matrix_enable_noeeprom();
-    rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
-    rgb_matrix_sethsv_noeeprom(0, 0, 0);
     wake();
 }
 

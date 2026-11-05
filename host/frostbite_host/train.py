@@ -4,7 +4,7 @@
   done   on a final line ("training complete", {"event": "end"}, --done-pattern ...)
   idle   when the file stops growing for `stale_minutes`, and back to run if lines resume. A
          killed run also goes quiet, so silence is never shown as success, and nothing is
-         waiting on you, so it is not amber. --stale-status done shows green instead
+         waiting on you, so it is not WAIT. --stale-status done shows DONE instead
   error  on a nan/inf loss, a Python traceback or an "...Error:" line
 """
 

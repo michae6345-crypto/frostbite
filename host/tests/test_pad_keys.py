@@ -382,7 +382,7 @@ def test_no_tty_anywhere_is_empty(monkeypatch):
     assert REAL_CONTROLLING_TTY() == ""
 
 
-def test_stale_log_is_not_amber_and_the_pad_clears_it(tmp_path):
+def test_stale_log_is_not_waiting_and_the_pad_clears_it(tmp_path):
     p = tmp_path / "x.log"
     p.write_text("Epoch 10/10 - loss: 0.01\n")
     d, fake, runner, clock = make()
@@ -391,7 +391,7 @@ def test_stale_log_is_not_amber_and_the_pad_clears_it(tmp_path):
     assert fake.slots[0] is Status.RUN
     clock[0] += 601
     w.poll_once()
-    assert fake.slots[0] is Status.IDLE and d.board.glow()[:3] != (0xFF, 0xB0, 0x20)
+    assert fake.slots[0] is Status.IDLE and Status.NEEDS not in d.board.statuses() and not d.board.overflow
     assert fake.oled[1].startswith("quiet 10m")
     d.handle(("dev", KeyEvent(0, TAP)))          # already selected: acknowledges
     assert d.board.slots[0] is None and fake.oled[1].rstrip() == "cleared"
@@ -428,10 +428,10 @@ def test_overflow_clears_when_the_seventh_is_answered():
         d.handle(("ipc", {"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"}, None))
     seven = {"op": "update", "source": "claude", "key": "c6", "name": "n"}
     assert d.handle_ipc({**seven, "status": "needs"})["ok"] is False
-    assert d.board.glow()[:3] == (0xFF, 0xB0, 0x20)
+    assert "c6" in d.board.overflow
     assert len(d.board.oled_lines(clock[0])[1]) <= 21 and d.board.oled_lines(clock[0])[1] == "agent waits, no slot"
     d.handle_ipc({**seven, "status": "run"})
-    assert d.board.overflow == {} and d.board.glow()[:3] != (0xFF, 0xB0, 0x20)
+    assert d.board.overflow == {} and Status.NEEDS not in d.board.statuses()
 
 
 def test_seventh_request_is_released_at_once():
@@ -440,4 +440,4 @@ def test_seventh_request_is_released_at_once():
         d.handle(("ipc", {"op": "update", "source": "claude", "key": f"c{i}", "name": "n", "status": "run"}, None))
     rid, reply = ask(d, clock)
     assert reply.get_nowait() == {"id": rid, "decision": None}
-    assert d.board.glow()[:3] == (0xFF, 0xB0, 0x20)
+    assert d.board.overflow and d.board.oled_lines(clock[0])[1] == "agent waits, no slot"

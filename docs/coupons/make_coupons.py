@@ -39,12 +39,10 @@ KEYS = {k["ref"]: k for k in fc.D["keys"]}
 
 # coupon 2
 INSERT_TRIALS = (4.5, 4.7, 4.9)
-INSERT_PITCH = 13.0
-INSERT_Y_REAL = max(y for _, y in fc.SCREWS)        # the real screw at y 62.1 is the middle hole
-INSERT_X = min(x for x, _ in fc.SCREWS)             # -4.65, in the left side wall
-WALL_OUT = (fc.PCB_W - fc.SHELL_W) / 2              # -9.0, outer skin of the left wall
+CORNER_REACH = 4.0                                  # the real corner is cut 4 past the PCB corner
+CORNER_PITCH = 13.0
 FLANGE_W, FLANGE_T = 9.0, 2.0
-CLAMP_T = fc.SKIRT_BOT - fc.SEAT                    # 3.6: GlowBand + Bottom under the screw head
+CLAMP_T = fc.PLATE_TOP - fc.PLATE_UNDER             # 2.5: the Top plate under the screw head
 
 # coupon 3
 STEPS = (0.3, 0.2, 0.4)                             # from the corner out: the real 0.3 corner first
@@ -53,15 +51,6 @@ ARM = STEP_LEN * len(STEPS)
 POCKET_WALL = 3.0
 POCKET_RIM = 7.6                                    # height above the bed, 1.0 past the PCB underside
 USB_MARGIN = 3.0
-
-# coupon 4
-BAND_Y0, BAND_Y1 = 14.0, 57.0                       # clear of the screw reliefs at y 9.0 and 62.1
-GLOW = fc.GLOW[0]                                   # LED 9, back left, side pad
-# docs/audit/pcb-physical.md: the emitter hangs about 0.84 below the PCB, not the 1.78 the CAD
-# placeholder uses, so the real air gap above the pad is about 1.76, not 0.82.
-LED_DROP_REAL = 0.84
-LED_GAP = -fc.PAD_TOP - LED_DROP_REAL               # 1.76
-CAP_T = 1.8                                         # LED 1.78 tall: back flush, emitter at the cap face
 
 
 def text(s: str, x: float, y: float, z: float, angle: float = 0.0, size: float = FONT_SIZE) -> cq.Workplane:
@@ -74,7 +63,7 @@ def text(s: str, x: float, y: float, z: float, angle: float = 0.0, size: float =
 
 
 def flip(wp: cq.Workplane) -> cq.Workplane:
-    """Top-style print orientation: plate top on the bed (z = 0), rim up, print x/y = PCB x/y."""
+    """Top print orientation: plate top on the bed (z = 0), rim up, print x/y = PCB x/y."""
     return wp.rotate((0, 0, 0), (1, 0, 0), 180).translate((0, 0, fc.PLATE_TOP))
 
 
@@ -121,33 +110,34 @@ def plate(top: cq.Workplane) -> cq.Shape:
 
 
 # ------------------------------------------------------------------ 2 inserts
-def inserts(top: cq.Workplane) -> cq.Shape:
-    """A length of the real side wall: same width, height, hole axis and blind screw hole."""
-    ys = [INSERT_Y_REAL + (i - 1) * INSERT_PITCH for i in range(3)]
-    y0, y1 = ys[0] - INSERT_PITCH / 2, ys[-1] + INSERT_PITCH / 2
-    body = fc.box(WALL_OUT, -fc.TOL, y0, y1, fc.SKIRT_BOT, fc.PLATE_TOP)
-    for d, y in zip(INSERT_TRIALS, ys):
-        body = body.cut(fc.cyl(INSERT_X, y, d / 2, fc.SKIRT_BOT - 1, fc.SKIRT_BOT + fc.INSERT_DEPTH))
-        body = body.cut(fc.cyl(INSERT_X, y, fc.SCREW_CLR / 2, fc.SKIRT_BOT, fc.SCREW_TIP + 0.4))
-    window = fc.box(WALL_OUT, -fc.TOL, INSERT_Y_REAL - INSERT_PITCH / 2, INSERT_Y_REAL + INSERT_PITCH / 2,
-                    fc.SKIRT_BOT, fc.PLATE_TOP)
-    same_as_real("insert wall", body, top, window)
-    body = flip(body)
-    # label flange at the plate end, far from the holes, so it cannot change their walls
-    body = body.union(cq.Workplane("XY").box(FLANGE_W, y1 - y0, FLANGE_T, centered=False)
-                      .translate((-fc.TOL, y0, 0)))
-    for d, y in zip(INSERT_TRIALS, ys):
-        body = body.union(text(f"{d:.1f}", -fc.TOL + FLANGE_W / 2, y, FLANGE_T))
-    # spacer standing in for GlowBand + Bottom, so an M3x16 reaches its real depth and can be tightened
-    spacer = (cq.Workplane("XY").circle(4.0).circle(fc.SCREW_CLR / 2).extrude(CLAMP_T)
-              .translate((WALL_OUT - 7.0, INSERT_Y_REAL, 0)))
-    bar = fc.solid(body)
-    return centred(cq.Compound.makeCompound([bar, spacer.val()]))
+def inserts(bottom: cq.Workplane) -> cq.Shape:
+    """Three copies of the real back-left Bottom corner, cut from the real part, with a trial hole in each."""
+    sx, sy = min(fc.SCREWS)                                     # (-3.0, -3.0)
+    edge = (fc.PCB_W - fc.SHELL_W) / 2                          # -7.0, the outer skin
+    win = fc.box(edge, CORNER_REACH, edge, CORNER_REACH, fc.Z_UNDER, fc.RIM)
+    corner = bottom.intersect(win).union(fc.cyl(sx, sy, fc.INSERT_HOLE / 2, fc.RIM - fc.INSERT_DEPTH, fc.RIM))
+    body = None
+    for i, d in enumerate(INSERT_TRIALS):
+        c = corner.cut(fc.cyl(sx, sy, d / 2, fc.RIM - fc.INSERT_DEPTH, fc.RIM + 1))
+        if d == fc.INSERT_HOLE:
+            same_as_real("insert corner", c, bottom, win)
+        c = c.translate((0, -i * CORNER_PITCH, 0))
+        body = c if body is None else body.union(c)
+    # label flange, far from the holes, so it cannot change their walls
+    y1 = CORNER_REACH + (len(INSERT_TRIALS) - 1) * CORNER_PITCH
+    body = body.union(fc.box(CORNER_REACH - 0.5, CORNER_REACH + FLANGE_W, edge, y1, fc.Z_UNDER, fc.Z_UNDER + FLANGE_T))
+    for i, d in enumerate(INSERT_TRIALS):
+        y = (edge + CORNER_REACH) / 2 + i * CORNER_PITCH
+        body = body.union(text(f"{d:.1f}", CORNER_REACH + FLANGE_W / 2, -y, fc.Z_UNDER + FLANGE_T))
+    # clamp ring standing in for the Top plate, so an M3x16 reaches its real depth and can be tightened
+    ring = (cq.Workplane("XY").circle(4.0).circle(fc.SCREW_CLR / 2).extrude(CLAMP_T)
+            .translate((edge - 6.0, -(y1 + edge) / 2, fc.Z_UNDER)))
+    return centred(cq.Compound.makeCompound([fc.solid(body), ring.val()]))
 
 
 # ------------------------------------------------------------------ 3 pocket + USB
-def pocket(top: cq.Workplane) -> cq.Shape:
-    """Front-left corner of the Top around SW7, with the pocket walls stepped along both arms.
+def pocket(top: cq.Workplane, bottom: cq.Workplane) -> cq.Shape:
+    """Front-left corner around SW7 in one piece: real plate above, Bottom pocket wall stepped along both arms.
 
     The real switch cutout stays at its real distance from the walls. A switch clipped into it holds
     the PCB where the real case will, so the gaps at the steps mean something. An L alone has no
@@ -168,8 +158,8 @@ def pocket(top: cq.Workplane) -> cq.Shape:
     room = room.union(fc.box(px - 1, px + ARM + 1, py - ARM - 1, py - ARM, rim - 1, fc.PLATE_UNDER))
     body = body.cut(room)
     body = cut_switch(body, sw["x"], sw["y"], fc.CUTOUT)
-    window = fc.box(px - wall, px + STEP_LEN, py - STEP_LEN, py + wall, rim, fc.PLATE_TOP)
-    same_as_real("pocket corner", body, top, window)
+    same_as_real("plate at SW7", body, top, fc.box(px, px + STEP_LEN, py - STEP_LEN, py, fc.PLATE_UNDER, fc.PLATE_TOP))
+    same_as_real("pocket corner", body, bottom, fc.box(px - 0.6, px + STEP_LEN, py - STEP_LEN, py + 0.6, rim, fc.PLATE_UNDER))
     body = flip(body)
     lz = fc.PLATE_T
     for i, t in enumerate(STEPS):
@@ -187,30 +177,9 @@ def pocket(top: cq.Workplane) -> cq.Shape:
     return centred(fc.solid(body.union(block.cut(hole))))
 
 
-# ------------------------------------------------------------------ 4 glow
-def glow_band(band: cq.Workplane) -> tuple[cq.Shape, cq.Workplane]:
-    """A slice of the real GlowBand, cut by intersection, so it cannot differ. Real print orientation."""
-    cut = fc.box(-20, 20, BAND_Y0, BAND_Y1, fc.BAND_BOT - 1, 1)
-    section = band.intersect(cut)
-    return centred(fc.solid(section)), section
-
-
-def glow_cap() -> cq.Shape:
-    """PCB stand-in: holds one LED over the real pad spot, and doubles as a torch aperture."""
-    x0, x1, y0, y1 = -8.0, 11.0, 15.0, 36.0
-    cap = cq.Workplane("XY").box(x1 - x0, y1 - y0, CAP_T, centered=False).translate((x0, y0, 0))
-    window = (cq.Workplane("XY").box(6.3, 3.0, CAP_T + 2, centered=(True, True, False))
-              .translate((GLOW["x"], GLOW["y"], -1)))
-    cap = cap.cut(window)
-    for fy in (y0, y1 - 2.0):           # feet stand on the riser (x 0..2), away from the pad
-        cap = cap.union(cq.Workplane("XY").box(fc.RISER_T, 2.0, LED_GAP, centered=False)
-                        .translate((0, fy, CAP_T)))
-    return centred(fc.solid(cap))
-
-
 # ------------------------------------------------------------------ output
 def view(s: cq.Shape, az: float, el: float) -> cq.Shape:
-    return fc._view(s, az, el)
+    return fc.view(s, az, el)
 
 
 def export(name: str, s: cq.Shape, az: float = 30, el: float = 40) -> None:
@@ -228,14 +197,10 @@ def export(name: str, s: cq.Shape, az: float = 30, el: float = 40) -> None:
 
 def main() -> None:
     PV.mkdir(exist_ok=True)
-    top, band = fc.make_top(), fc.make_band()
+    top, bottom = fc.make_top(), fc.make_bottom()
     export("coupon1_plate", plate(top))
-    export("coupon2_inserts", inserts(top), az=-60)
-    export("coupon3_pocket_usb", pocket(top))
-    gb, section = glow_band(band)
-    export("coupon4_glow_band", gb)
-    export("coupon4_glow_cap", glow_cap())
-    print(f"LED gap in the cap {LED_GAP:.2f} mm (audit value; the CAD placeholder gives 0.82)")
+    export("coupon2_inserts", inserts(bottom), az=-60)
+    export("coupon3_pocket_usb", pocket(top, bottom))
 
 
 if __name__ == "__main__":

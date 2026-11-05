@@ -30,7 +30,6 @@ FREEROUTING = Path.home() / ".local/share/freerouting/freerouting-2.5.0.jar"
 
 W, H = D["pcb"]["w"], D["pcb"]["h"]
 CORNER_R = 1.0
-LED_KEY_DY = 5.08          # MX LED window: switch centre + (0, +5.08)
 ROUTE_CLEARANCE_UM = 300
 MIN_SIGNAL_TRACK = 0.2
 ENC_ROT = 90               # A/C/B row toward the keys (y = 20.5), clear of the OLED header J1
@@ -52,9 +51,6 @@ def targets():
         t[f"SW{k}"] = dict(x=x, y=y, rot=0, bottom=False)
         # diode footprint origin = pad 1 (cathode); rotated 90 deg pad 2 sits 7.62 above it
         t[f"D{k}"] = dict(x=x + 9.525, y=y + 3.81, rot=90, bottom=False)
-        t[f"LED{key['led'] + 1}"] = dict(x=x, y=y + LED_KEY_DY, rot=0, bottom=False)
-    for g in D["leds"]["glow"]:
-        t[f"LED{g['led'] + 1}"] = dict(x=g["x"], y=g["y"], rot=0, bottom=True)
     r = D["mcu"]["rect"]
     t["U1"] = dict(x=r["x"] + r["w"] / 2, y=r["y"] + r["h"] / 2, rot=0, bottom=True)
     e = D["encoder"]
@@ -146,25 +142,6 @@ def snowflake(board, layer, cx, cy, R, width=0.2):
                 seg(board, layer, (bx, by), (bx + bl * R * math.cos(b), by - bl * R * math.sin(b)), width)
 
 
-def lens_mark(board, layer, cx, cy):
-    """Ring and dot: the usual 'pointing at you' sign, here for the lens facing the viewer."""
-    c = pcbnew.PCB_SHAPE(board)
-    c.SetShape(pcbnew.SHAPE_T_CIRCLE)
-    c.SetCenter(pt(cx, cy))
-    c.SetEnd(pt(cx + 0.65, cy))
-    c.SetLayer(layer)
-    c.SetWidth(mm(0.2))
-    board.Add(c)
-    d = pcbnew.PCB_SHAPE(board)
-    d.SetShape(pcbnew.SHAPE_T_CIRCLE)
-    d.SetCenter(pt(cx, cy))
-    d.SetEnd(pt(cx + 0.2, cy))
-    d.SetLayer(layer)
-    d.SetWidth(mm(0.2))
-    d.SetFilled(True)
-    board.Add(d)
-
-
 def place():
     comps, nets = read_netlist()
     tg = targets()
@@ -205,24 +182,6 @@ def place():
         ref_t = fp.Reference()
         ref_t.SetTextSize(pcbnew.VECTOR2I(mm(1.0), mm(1.0)))
         ref_t.SetTextThickness(mm(0.15))
-        if ref.startswith("LED"):
-            # LEDs are soldered from the underside: label them on B.Silkscreen, clear of the
-            # switch holes (per-key: below the LED; glow: toward the board's centre line)
-            ref_t.SetLayer(pcbnew.B_SilkS)
-            ref_t.SetMirrored(True)
-            ref_t.SetTextAngleDegrees(0)
-            if p["bottom"]:
-                dy = 3.0 if p["y"] < H / 2 else -3.0
-                dx = 0.35 if ref == "LED12" else 0.0   # clear of LED9's pin-1 triangle
-                ref_t.SetPosition(pt(p["x"] + dx, p["y"] + dy))
-            else:
-                ref_t.SetPosition(pt(p["x"], p["y"] + 2.4))
-        if ref == "SW3":
-            # LED11's GND pad is 0.84 mm from this joint and neither part can move.  Pad 2 -> 2.0 mm
-            # (ring 0.24, JLCPCB minimum 0.20): +0.15 mm gap, and LED11's pin-1 mark keeps its silk.
-            for q in fp.Pads():
-                if q.GetNumber() == "2":
-                    q.SetSize(pcbnew.F_Cu, pcbnew.VECTOR2I(mm(2.0), mm(2.0)))
         fp.Value().SetVisible(False)
 
     F, B = pcbnew.F_SilkS, pcbnew.B_SilkS
@@ -245,22 +204,13 @@ def place():
         text(board, F, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15)
         text(board, B, name, h["pin_row_x"] - 3.15, y, size=1.0, thick=0.15, mirror=True)
 
-    # Glow LEDs are fitted the opposite way up to the key LEDs (see README). Pads and cut-outs are
-    # identical, so these marks are the only thing telling them apart.
-    for g in D["leds"]["glow"]:
-        gx, gy, inboard = g["x"], g["y"], (1 if g["x"] < W / 2 else -1)
-        lens_mark(board, B, gx + 5.0 * inboard, gy + 0.4)
-        text(board, B, "LENS OUT", gx + 9.9 * inboard, gy + 0.4, size=1.0, thick=0.15, mirror=True)
-    text(board, B, "LED1-9: LENS INTO HOLE", W / 2, 63.2, size=1.0, thick=0.15, mirror=True)
-    text(board, B, "LED10-13 FLIPPED: LENS OUT", W / 2, 64.6, size=1.0, thick=0.15, mirror=True)
-
     add_keepouts(board)
     pcbnew.SaveBoard(str(BOARD), board)
     BUILD.mkdir(exist_ok=True)
     dsn = BUILD / "frostbite.dsn"
     ok = pcbnew.ExportSpecctraDSN(board, str(dsn))
-    # Route with 0.3 mm clearance (DRC rule is 0.2): Freerouting treats board edges and the LED
-    # cut-outs with the net clearance, and the board's copper-to-edge rule is 0.3 mm.
+    # Route with 0.3 mm clearance (DRC rule is 0.2): Freerouting treats the board edge with the net
+    # clearance, and the board's copper-to-edge rule is 0.3 mm.
     dsn_text = dsn.read_text()
     dsn_text = re.sub(r"\(clearance (\d+)\)", lambda m: f"(clearance {max(int(m.group(1)), ROUTE_CLEARANCE_UM)})", dsn_text)
     dsn.write_text(dsn_text)
@@ -269,15 +219,11 @@ def place():
 
 
 def report_positions(board):
-    """Max deviation of switch / encoder / header / LED / XIAO positions from design.json."""
+    """Max deviation of switch / encoder / header / XIAO positions from design.json."""
     worst = 0.0
     rows = []
     want = {f"SW{k}": (key["x"], key["y"]) for k, key in enumerate(D["keys"], start=1)}
     want["ENC1"] = (D["encoder"]["x"], D["encoder"]["y"])
-    for g in D["leds"]["glow"]:
-        want[f"LED{g['led'] + 1}"] = (g["x"], g["y"])
-    for key in D["keys"]:
-        want[f"LED{key['led'] + 1}"] = (key["x"], key["y"] + LED_KEY_DY)
     r = D["mcu"]["rect"]
     want["U1"] = (r["x"] + r["w"] / 2, r["y"] + r["h"] / 2)
     for fp in board.GetFootprints():

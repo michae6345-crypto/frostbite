@@ -47,9 +47,6 @@ def test_oled_nonascii_never_reaches_firmware_as_high_bytes(fw):
     assert all(0x20 <= b <= 0x7e for b in rep[3:3 + rep[2]])
     assert "line0=[cafe-?-??]" in run(fw, PING, "R " + rep.hex(), "D")[-1]
 
-def test_glow(fw):
-    assert "glow=ffb020@160" in run(fw, PING, R(SetGlow(0xff, 0xb0, 0x20, 160)), "D")[-1]
-
 def test_selected(fw):
     assert "sel=4" in run(fw, PING, R(SetSelected(4)), "D")[-1]
 

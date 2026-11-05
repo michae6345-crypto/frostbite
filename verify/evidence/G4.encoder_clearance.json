@@ -1,26 +1,26 @@
 {
   "check": "G4.encoder_clearance",
   "gate": "G4",
-  "title": "Top clears the real EC11 body and bushing along the PCB's path, any opening shape",
+  "title": "Top clears the real EC11 body and bushing as it comes down over them, any opening shape",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
   "notes": [],
   "commands": [],
   "inputs_sha256": {
-    "design.json": "d2c41fc389b3e5fd0f968a2aa8581b8d8ba7c1e45ed08ef565acf62e066ba324",
-    "production/Top.stl": "2e2232084e0a3037edf6ba7ce76ec2661941715a86ffb3afc111b879a51d8b4e",
-    "CAD/positions.json": "826016317b191de9e05f1d37088d8696a9d24c2708e06ff0cd2d3fa377a16e00"
+    "design.json": "ccd4cc1052d1f30a0cc6ac4e849e59bea1471728b34232ef8fb91074396d90f8",
+    "production/Top.stl": "5e9c771e4283061e1ea169735118a935092f4452d4b641e70426cb1831190dc7",
+    "CAD/positions.json": "e2746619e7a863e1bf3c46849d3762b914e2367f368fb825d72f69d20d36c321"
   },
   "details": {
     "registration": {
       "plate_normal": [
-        0.0,
+        -0.0,
         -0.0,
         -1.0
       ],
       "outline_mm": [
-        79.15,
+        75.15,
         97.15
       ],
       "rotation_sign": 1,
@@ -35,14 +35,10 @@
         2.5,
         3.2,
         5.0,
-        5.43,
-        6.6,
-        12.0,
-        13.23,
-        16.0
+        5.43
       ],
-      "section_volume_mm3": 43176.4,
-      "mesh_volume_mm3": 43176.4
+      "section_volume_mm3": 11901.9,
+      "mesh_volume_mm3": 11901.9
     },
     "body_gap_mm": 0.49,
     "bushing_gap_mm": 2.99,
@@ -57,6 +53,6 @@
       "h": 16.0
     }
   },
-  "timestamp": "2026-11-04T04:54:36+00:00",
+  "timestamp": "2026-11-05T05:05:59+00:00",
   "duration_s": 0.0
 }

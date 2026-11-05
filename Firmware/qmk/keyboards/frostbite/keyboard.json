@@ -14,8 +14,7 @@
         "encoder": true,
         "extrakey": true,
         "oled": true,
-        "raw": true,
-        "rgb_matrix": true
+        "raw": true
     },
     "bootmagic": {
         "matrix": [2, 0]
@@ -28,34 +27,6 @@
     "encoder": {
         "rotary": [
             {"pin_a": "GP1", "pin_b": "GP2", "resolution": 4}
-        ]
-    },
-    "ws2812": {
-        "pin": "GP0",
-        "driver": "vendor"
-    },
-    "rgb_matrix": {
-        "driver": "ws2812",
-        "sleep": true,
-        "default": {
-            "animation": "solid_color",
-            "sat": 0,
-            "val": 0
-        },
-        "layout": [
-            {"matrix": [0, 0], "x": 42, "y": 30, "flags": 4},
-            {"matrix": [0, 1], "x": 112, "y": 30, "flags": 4},
-            {"matrix": [0, 2], "x": 182, "y": 30, "flags": 4},
-            {"matrix": [1, 2], "x": 182, "y": 44, "flags": 4},
-            {"matrix": [1, 1], "x": 112, "y": 44, "flags": 4},
-            {"matrix": [1, 0], "x": 42, "y": 44, "flags": 4},
-            {"matrix": [2, 0], "x": 42, "y": 59, "flags": 4},
-            {"matrix": [2, 1], "x": 112, "y": 59, "flags": 4},
-            {"matrix": [2, 2], "x": 182, "y": 59, "flags": 4},
-            {"x": 18, "y": 20, "flags": 2},
-            {"x": 206, "y": 20, "flags": 2},
-            {"x": 206, "y": 62, "flags": 2},
-            {"x": 18, "y": 62, "flags": 2}
         ]
     },
     "community_layouts": ["ortho_3x3"],

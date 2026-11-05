@@ -1,7 +1,7 @@
 {
-  "check": "G6.compile_ledtest",
+  "check": "G6.compile_bringup",
   "gate": "G6",
-  "title": "qmk compile -kb frostbite -km ledtest + UF2 parse",
+  "title": "qmk compile -kb frostbite -km bringup + UF2 parse",
   "status": "PASS",
   "fail_reasons": [],
   "not_run_reason": null,
@@ -14,11 +14,11 @@
         "-kb",
         "frostbite",
         "-km",
-        "ledtest"
+        "bringup"
       ],
       "cwd": "~/qmk_firmware",
       "exit_code": 0,
-      "duration_s": 2.72,
+      "duration_s": 1.44,
       "stdout_tail": [
         "",
         "",
@@ -27,12 +27,10 @@
         "This is free software; see the source for copying conditions.  There is NO",
         "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
         "",
-        "Generating: .build/obj_frostbite_ledtest/src/default_keyboard.c                                     \u001b[32;01m[OK]\u001b[0m",
-        "Generating: .build/obj_frostbite_ledtest/src/default_keyboard.h                                     \u001b[32;01m[OK]\u001b[0m",
-        "Copying frostbite_ledtest.uf2 to qmk_firmware folder                                                \u001b[32;01m[OK]\u001b[0m"
+        "Copying frostbite_bringup.uf2 to qmk_firmware folder                                                \u001b[32;01m[OK]\u001b[0m"
       ],
       "stderr_tail": [
-        "\u03a8 Compiling keymap with make -r -R -f builddefs/build_keyboard.mk KEYBOARD=frostbite KEYMAP=ledtest KEYBOARD_FILESAFE=frostbite TARGET=frostbite_ledtest VERBOSE=false COLOR=true SILENT=false QMK_BIN=\"qmk\""
+        "\u03a8 Compiling keymap with make -r -R -f builddefs/build_keyboard.mk KEYBOARD=frostbite KEYMAP=bringup KEYBOARD_FILESAFE=frostbite TARGET=frostbite_bringup VERBOSE=false COLOR=true SILENT=false QMK_BIN=\"qmk\""
       ]
     }
   ],
@@ -40,34 +38,34 @@
     "Firmware/qmk/keyboards/frostbite/config.h": "df982d23fc68072bf674aedf93d89850c405c611ddff5e792883162a6ddb4f0e",
     "Firmware/qmk/keyboards/frostbite/frostbite.c": "a9b3fc7a9957416c92cb126ecfbc2cfb9528500940b1a0943f4cc7d9904fcaa6",
     "Firmware/qmk/keyboards/frostbite/halconf.h": "c4dc51661d0426b5266e4bd8ae14b29877af6717108041ad119d19821cf556c2",
-    "Firmware/qmk/keyboards/frostbite/keyboard.json": "374b3af90756f13e276b292544878355222d3da26e12699d2880f25489a3203b",
-    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "aeeb5db67c073798662e2e4c7fac8ff165bfdb628b927b10d80a4435998c6894",
-    "Firmware/qmk/keyboards/frostbite/keymaps/ledtest/keymap.c": "34a0415f108ffc854d78f117b6fa7566de569fd300f999baa35601a526952245",
+    "Firmware/qmk/keyboards/frostbite/keyboard.json": "4446044294292f5011755f253763b87cdae913cc8c19b1ac78f16b5cf7803069",
+    "Firmware/qmk/keyboards/frostbite/keymaps/bringup/keymap.c": "7b60b1d098e084eceb4ac26519c4ac0d6b036a26b948d805360555ea42b4f274",
+    "Firmware/qmk/keyboards/frostbite/keymaps/default/keymap.c": "54a14e3adcbf16a8bbb8271935f654a34be0f7237daf72607c64649a55acb300",
     "Firmware/qmk/keyboards/frostbite/mcuconf.h": "ed196fe4bd634d2669843cbdfd76109b8e14c3b76e67c38db6128798bee33eb3"
   },
   "details": {
     "qmk_link": "~/Documents/frostbite/Firmware/qmk/keyboards/frostbite",
-    "uf2_path": "~/qmk_firmware/frostbite_ledtest.uf2",
-    "uf2_sha256": "65d02c7e5ee44db6a096a40c891d3fd0f851936f9c7ad0a9d518614c547ecc7b",
-    "uf2_frostbite_ledtest.uf2": {
+    "uf2_path": "~/qmk_firmware/frostbite_bringup.uf2",
+    "uf2_sha256": "730c49ca552107c6f451ac64b8db078e2f55bb13ef338e61c8647342641630df",
+    "uf2_frostbite_bringup.uf2": {
       "ok": true,
       "errors": [],
       "n_errors": 0,
-      "blocks": 163,
+      "blocks": 134,
       "declared_blocks": [
-        163
+        134
       ],
       "family_ids": [
         "0xe48bff56"
       ],
-      "payload_bytes": 41728,
-      "size": 83456,
+      "payload_bytes": 34304,
+      "size": 68608,
       "flash_range": [
         "0x10000000",
-        "0x1000a200"
+        "0x10008500"
       ]
     }
   },
-  "timestamp": "2026-11-04T04:55:30+00:00",
-  "duration_s": 2.72
+  "timestamp": "2026-11-05T05:06:04+00:00",
+  "duration_s": 1.44
 }
