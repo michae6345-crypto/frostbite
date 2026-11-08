@@ -59,7 +59,7 @@ About 2,650 lines in `host/frostbite_host/`, needing Python 3.12+ and `hidapi`.
 - `--watch-train PATH` tails a training log or JSONL file and reads epoch, step and loss from it.
 - `frostbite-ctl` sets, clears and selects slots by hand, adds log watches, and prints the hooks config.
 
-Tapping a session key selects it and focuses its terminal. Stop sends Escape to the selected session. Both use `osascript`, so they only
+Tapping a session key selects it and focuses its terminal. Stop sends Escape to the selected session, but only when its terminal is in front. Both use `osascript`, so they only
 work on macOS.
 
 ## Wiring and build
@@ -87,7 +87,7 @@ ln -s "$PWD" ~/qmk_firmware/keyboards/frostbite
 qmk compile -kb frostbite -km default
 ```
 
-To reach the RP2040 bootloader, double-tap reset on the XIAO or hold Approve and Stop while plugging it in. A prebuilt
+To reach the RP2040 bootloader, double-tap reset on the XIAO or hold Approve while plugging it in. A prebuilt
 image is at `production/firmware.uf2`.
 
 Run the host from the repo root:
