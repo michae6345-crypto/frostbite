@@ -5,7 +5,7 @@ qmk firmware for a 3x3 pad with an ec11 and a 0.91" oled on a xiao rp2040.
     ln -s "$PWD" ~/qmk_firmware/keyboards/frostbite
     qmk compile -kb frostbite -km default
 
-Hold approve and stop while plugging in to get to the bootloader, or double tap reset on the xiao.
+Hold approve while plugging in to get to the bootloader, or double tap reset on the xiao.
 
 | XIAO | GPIO | Net |
 |---|---|---|
